@@ -34,7 +34,7 @@ func (r *LocalResourceRepository) Save(_ context.Context, logicalPath string, co
 		return err
 	}
 	if normalizedPath == "/" {
-		return faults.NewValidationError("logical path must target a resource, not root", nil)
+		return faults.Invalid("logical path must target a resource, not root", nil)
 	}
 
 	targetInfo, existingFiles, err := r.resolvePayloadTarget(normalizedPath, content)
@@ -55,7 +55,7 @@ func (r *LocalResourceRepository) Save(_ context.Context, logicalPath string, co
 
 	encoded, err := resource.EncodeContentPretty(content)
 	if err != nil {
-		return internalError("failed to encode payload", err)
+		return faults.Internal("failed to encode payload", err)
 	}
 
 	if err := r.writeFileAtomically(targetInfo.Path, encoded, ".declarest-tmp-*", "resource"); err != nil {
@@ -80,7 +80,7 @@ func (r *LocalResourceRepository) SaveResourceWithArtifacts(
 		return err
 	}
 	if normalizedPath == "/" {
-		return faults.NewValidationError("logical path must target a resource, not root", nil)
+		return faults.Invalid("logical path must target a resource, not root", nil)
 	}
 
 	targetInfo, existingFiles, err := r.resolvePayloadTarget(normalizedPath, content)
@@ -104,7 +104,7 @@ func (r *LocalResourceRepository) SaveResourceWithArtifacts(
 			return err
 		}
 		if artifactPath == targetInfo.Path {
-			return faults.NewValidationError(
+			return faults.Invalid(
 				fmt.Sprintf("resource artifact %q conflicts with the canonical resource payload file", artifacts[idx].File),
 				nil,
 			)
@@ -120,7 +120,7 @@ func (r *LocalResourceRepository) SaveResourceWithArtifacts(
 
 	encoded, err := resource.EncodeContentPretty(content)
 	if err != nil {
-		return internalError("failed to encode payload", err)
+		return faults.Internal("failed to encode payload", err)
 	}
 
 	if err := r.writeFileAtomically(targetInfo.Path, encoded, ".declarest-tmp-*", "resource"); err != nil {
@@ -138,9 +138,9 @@ func validateReservedSidecarArtifactName(file string) error {
 	base := strings.ToLower(strings.TrimSpace(filepath.Base(file)))
 	switch {
 	case strings.HasPrefix(base, "resource."):
-		return faults.NewValidationError("resource artifacts cannot use the reserved prefix \"resource.\"", nil)
+		return faults.Invalid("resource artifacts cannot use the reserved prefix \"resource.\"", nil)
 	case strings.HasPrefix(base, "defaults"):
-		return faults.NewValidationError("resource artifacts cannot use the reserved prefix \"defaults\"", nil)
+		return faults.Invalid("resource artifacts cannot use the reserved prefix \"defaults\"", nil)
 	default:
 		return nil
 	}
@@ -152,7 +152,7 @@ func (r *LocalResourceRepository) Get(_ context.Context, logicalPath string) (re
 		return resource.Content{}, err
 	}
 	if normalizedPath == "/" {
-		return resource.Content{}, faults.NewValidationError("logical path must target a resource, not root", nil)
+		return resource.Content{}, faults.Invalid("logical path must target a resource, not root", nil)
 	}
 
 	files, err := r.discoverPayloadFiles(normalizedPath)
@@ -160,7 +160,7 @@ func (r *LocalResourceRepository) Get(_ context.Context, logicalPath string) (re
 		return resource.Content{}, err
 	}
 	if files.Resource == nil {
-		return resource.Content{}, notFoundError(fmt.Sprintf("resource %q not found", normalizedPath))
+		return resource.Content{}, faults.NotFound(fmt.Sprintf("resource %q not found", normalizedPath), nil)
 	}
 
 	overrideValue, err := r.readPayloadFile(files.Resource)
@@ -184,7 +184,7 @@ func (r *LocalResourceRepository) ReadResourceArtifact(_ context.Context, logica
 		return nil, err
 	}
 	if normalizedPath == "/" {
-		return nil, faults.NewValidationError("logical path must target a resource, not root", nil)
+		return nil, faults.Invalid("logical path must target a resource, not root", nil)
 	}
 
 	targetPath, err := r.resourceArtifactFilePath(normalizedPath, file)
@@ -195,9 +195,9 @@ func (r *LocalResourceRepository) ReadResourceArtifact(_ context.Context, logica
 	data, err := os.ReadFile(targetPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, notFoundError(fmt.Sprintf("resource artifact %q not found for %q", file, normalizedPath))
+			return nil, faults.NotFound(fmt.Sprintf("resource artifact %q not found for %q", file, normalizedPath), nil)
 		}
-		return nil, internalError("failed to read resource artifact", err)
+		return nil, faults.Internal("failed to read resource artifact", err)
 	}
 
 	return data, nil
@@ -210,28 +210,28 @@ func (r *LocalResourceRepository) writeFileAtomically(
 	kind string,
 ) error {
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-		return internalError(fmt.Sprintf("failed to create %s directory", kind), err)
+		return faults.Internal(fmt.Sprintf("failed to create %s directory", kind), err)
 	}
 
 	tempFile, err := os.CreateTemp(filepath.Dir(targetPath), tempPattern)
 	if err != nil {
-		return internalError(fmt.Sprintf("failed to create temporary %s file", kind), err)
+		return faults.Internal(fmt.Sprintf("failed to create temporary %s file", kind), err)
 	}
 	tempPath := tempFile.Name()
 
 	if _, err := tempFile.Write(data); err != nil {
 		_ = tempFile.Close()
 		_ = os.Remove(tempPath)
-		return internalError(fmt.Sprintf("failed to write temporary %s", kind), err)
+		return faults.Internal(fmt.Sprintf("failed to write temporary %s", kind), err)
 	}
 	if err := tempFile.Close(); err != nil {
 		_ = os.Remove(tempPath)
-		return internalError(fmt.Sprintf("failed to finalize temporary %s", kind), err)
+		return faults.Internal(fmt.Sprintf("failed to finalize temporary %s", kind), err)
 	}
 
 	if err := os.Rename(tempPath, targetPath); err != nil {
 		_ = os.Remove(tempPath)
-		return internalError(fmt.Sprintf("failed to replace %s file", kind), err)
+		return faults.Internal(fmt.Sprintf("failed to replace %s file", kind), err)
 	}
 
 	return nil
@@ -245,9 +245,9 @@ func (r *LocalResourceRepository) readPayloadFile(info *payloadFileInfo) (resour
 	data, err := os.ReadFile(info.Path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return resource.Content{}, notFoundError(fmt.Sprintf("resource payload %q not found", info.Path))
+			return resource.Content{}, faults.NotFound(fmt.Sprintf("resource payload %q not found", info.Path), nil)
 		}
-		return resource.Content{}, internalError("failed to read resource payload", err)
+		return resource.Content{}, faults.Internal("failed to read resource payload", err)
 	}
 
 	decoded, err := resource.DecodeContent(data, info.Descriptor)
@@ -262,7 +262,7 @@ func (r *LocalResourceRepository) removePayloadFile(info *payloadFileInfo) error
 		return nil
 	}
 	if err := os.Remove(info.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return internalError("failed to remove resource payload", err)
+		return faults.Internal("failed to remove resource payload", err)
 	}
 	rootDir := r.baseDir
 	if info.Shared {

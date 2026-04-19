@@ -64,14 +64,14 @@ func (deps Dependencies) SecretProvider() secretdomain.SecretProvider {
 
 func RequireOrchestrator(deps Dependencies) (orchestratordomain.Orchestrator, error) {
 	if deps.Orchestrator == nil {
-		return nil, faults.NewValidationError("orchestrator is not configured", nil)
+		return nil, faults.Invalid("orchestrator is not configured", nil)
 	}
 	return deps.Orchestrator, nil
 }
 
 func RequireContexts(deps Dependencies) (configdomain.ContextService, error) {
 	if deps.Contexts == nil {
-		return nil, faults.NewValidationError("context service is not configured", nil)
+		return nil, faults.Invalid("context service is not configured", nil)
 	}
 	return deps.Contexts, nil
 }
@@ -79,7 +79,7 @@ func RequireContexts(deps Dependencies) (configdomain.ContextService, error) {
 func RequireResourceStore(deps Dependencies) (repository.ResourceStore, error) {
 	store := deps.ResourceStore()
 	if store == nil {
-		return nil, faults.NewValidationError("resource repository is not configured", nil)
+		return nil, faults.Invalid("resource repository is not configured", nil)
 	}
 	return store, nil
 }
@@ -87,7 +87,7 @@ func RequireResourceStore(deps Dependencies) (repository.ResourceStore, error) {
 func RequireMetadataService(deps Dependencies) (metadatadomain.MetadataService, error) {
 	service := deps.MetadataService()
 	if service == nil {
-		return nil, faults.NewValidationError("metadata service is not configured", nil)
+		return nil, faults.Invalid("metadata service is not configured", nil)
 	}
 	return service, nil
 }
@@ -95,7 +95,7 @@ func RequireMetadataService(deps Dependencies) (metadatadomain.MetadataService, 
 func RequireSecretProvider(deps Dependencies) (secretdomain.SecretProvider, error) {
 	provider := deps.SecretProvider()
 	if provider == nil {
-		return nil, faults.NewValidationError("secret provider is not configured", nil)
+		return nil, faults.Invalid("secret provider is not configured", nil)
 	}
 	return provider, nil
 }

@@ -138,7 +138,7 @@ func TestMaskResolveAndDetect(t *testing.T) {
 		resolved, err := ResolvePayload(masked, func(key string) (string, error) {
 			value, ok := stored[key]
 			if !ok {
-				return "", faults.NewTypedError(faults.NotFoundError, "secret key not found", nil)
+				return "", faults.NotFound("secret key not found", nil)
 			}
 			return value, nil
 		})
@@ -175,7 +175,7 @@ func TestMaskResolveAndDetect(t *testing.T) {
 
 		input := map[string]any{"apiToken": "{{secret \"apiToken\"}}"}
 		_, err := ResolvePayload(input, func(string) (string, error) {
-			return "", faults.NewTypedError(faults.NotFoundError, "missing", nil)
+			return "", faults.NotFound("missing", nil)
 		})
 		assertTypedCategory(t, err, faults.NotFoundError)
 	})
@@ -213,7 +213,7 @@ func TestMaskResolveAndDetect(t *testing.T) {
 		resolved, err := ResolvePayload(masked, func(key string) (string, error) {
 			value, found := stored[key]
 			if !found {
-				return "", faults.NewTypedError(faults.NotFoundError, "missing", nil)
+				return "", faults.NotFound("missing", nil)
 			}
 			return value, nil
 		})
@@ -243,7 +243,7 @@ func TestResolvePayloadForResource(t *testing.T) {
 		case "/customers/acme:custom-auth":
 			return "custom-auth-value", nil
 		default:
-			return "", faults.NewTypedError(faults.NotFoundError, "missing", nil)
+			return "", faults.NotFound("missing", nil)
 		}
 	})
 	if err != nil {
@@ -290,7 +290,7 @@ func TestResolvePayloadDirectivesForResource(t *testing.T) {
 			resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeYAML}),
 			func(key string) (string, error) {
 				if key != "/customers/acme:/token" {
-					return "", faults.NewTypedError(faults.NotFoundError, "missing", nil)
+					return "", faults.NotFound("missing", nil)
 				}
 				return "secret-value", nil
 			},

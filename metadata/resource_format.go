@@ -55,7 +55,7 @@ func ValidateConcreteResourceFormat(value string) (string, error) {
 		return "", err
 	}
 	if format == ResourceFormatAny {
-		return "", faults.NewValidationError("resource format must be concrete", nil)
+		return "", faults.Invalid("resource format must be concrete", nil)
 	}
 	return format, nil
 }

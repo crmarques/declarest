@@ -105,7 +105,7 @@ type fakeEditMetadataService struct {
 func (f *fakeEditMetadataService) Get(_ context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
 	item, found := f.items[logicalPath]
 	if !found {
-		return metadatadomain.ResourceMetadata{}, faults.NewTypedError(faults.NotFoundError, "metadata not found", nil)
+		return metadatadomain.ResourceMetadata{}, faults.NotFound("metadata not found", nil)
 	}
 	return item, nil
 }

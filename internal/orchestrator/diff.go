@@ -62,11 +62,11 @@ func applyCompareJQ(value resource.Value, expression string) (resource.Value, er
 
 	query, err := gojq.Parse(trimmedExpression)
 	if err != nil {
-		return nil, faults.NewValidationError("invalid compare jq expression", err)
+		return nil, faults.Invalid("invalid compare jq expression", err)
 	}
 	code, err := gojq.Compile(query)
 	if err != nil {
-		return nil, faults.NewValidationError("invalid compare jq expression", err)
+		return nil, faults.Invalid("invalid compare jq expression", err)
 	}
 
 	iterator := code.Run(value)
@@ -77,7 +77,7 @@ func applyCompareJQ(value resource.Value, expression string) (resource.Value, er
 			break
 		}
 		if itemErr, isErr := item.(error); isErr {
-			return nil, faults.NewValidationError("failed to evaluate compare jq expression", itemErr)
+			return nil, faults.Invalid("failed to evaluate compare jq expression", itemErr)
 		}
 		results = append(results, item)
 	}

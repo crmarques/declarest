@@ -840,7 +840,7 @@ func TestBuildOrchestratorValidationAndErrors(t *testing.T) {
 	t.Run("context_service_error_is_propagated", func(t *testing.T) {
 		t.Parallel()
 
-		expected := faults.NewTypedError(faults.NotFoundError, "context not found", nil)
+		expected := faults.NotFound("context not found", nil)
 		contextService := &fakeContextService{resolveErr: expected}
 
 		_, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "missing"})

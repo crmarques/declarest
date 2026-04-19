@@ -323,7 +323,7 @@ func inferOpenAPIOperationValidationSpec(
 		return nil
 	}
 
-	operationValue, found := pathItem[strings.ToLower(strings.TrimSpace(method))]
+	operationValue, found := pathItem[NormalizeHTTPMethod(method)]
 	if !found {
 		return nil
 	}

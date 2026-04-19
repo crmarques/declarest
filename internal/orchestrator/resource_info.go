@@ -100,7 +100,7 @@ func (r *Orchestrator) buildResourceInfoForRemoteRead(
 		}, resolvedMetadata),
 	).(map[string]any)
 	if !ok {
-		return resource.Resource{}, metadata.ResourceMetadata{}, faults.NewValidationError(
+		return resource.Resource{}, metadata.ResourceMetadata{}, faults.Invalid(
 			"failed to merge payload fields into map for remote read", nil,
 		)
 	}

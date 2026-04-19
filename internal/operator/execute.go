@@ -49,7 +49,7 @@ type ReconcileResult struct {
 func ReconcileOnce(ctx context.Context, deps Dependencies, req ReconcileRequest) (ReconcileResult, error) {
 	logicalPath := strings.TrimSpace(req.LogicalPath)
 	if logicalPath == "" {
-		return ReconcileResult{}, faults.NewValidationError("logical path is required", nil)
+		return ReconcileResult{}, faults.Invalid("logical path is required", nil)
 	}
 	parsedPath, err := resource.ParseRawPathWithOptions(logicalPath, resource.RawPathParseOptions{
 		AllowMissingLeadingSlash: true,

@@ -44,7 +44,7 @@ func extractSaveListItems(value resource.Value) ([]any, bool, error) {
 		}
 		items, ok := itemsValue.([]any)
 		if !ok {
-			return nil, false, faults.NewValidationError(`list payload "items" must be an array`, nil)
+			return nil, false, faults.Invalid(`list payload "items" must be an array`, nil)
 		}
 		return items, true, nil
 	default:
@@ -77,7 +77,7 @@ func resolveSaveEntriesForItems(
 
 		itemMap, ok := normalizedItem.(map[string]any)
 		if !ok {
-			return nil, faults.NewValidationError("list payload entries must be JSON objects", nil)
+			return nil, faults.Invalid("list payload entries must be JSON objects", nil)
 		}
 
 		entry, usedResourceEntryShape, err := resolveSaveEntryFromResourceShape(itemMap)
@@ -102,7 +102,7 @@ func resolveSaveEntriesForItems(
 
 			alias, err := resolveSaveListItemAlias(itemMap, resolvedMetadata)
 			if err != nil {
-				return nil, faults.NewValidationError(
+				return nil, faults.Invalid(
 					"list item alias could not be resolved; configure metadata alias/id attributes or use --mode single",
 					err,
 				)
@@ -120,7 +120,7 @@ func resolveSaveEntriesForItems(
 		}
 
 		if _, exists := seenPaths[entry.LogicalPath]; exists {
-			return nil, faults.NewValidationError(
+			return nil, faults.Invalid(
 				fmt.Sprintf("list payload contains duplicate resource path %q", entry.LogicalPath),
 				nil,
 			)
@@ -171,7 +171,7 @@ func resolveSaveEntryFromResourceShape(item map[string]any) (saveEntry, bool, er
 		return saveEntry{}, false, nil
 	}
 	if !hasLogicalPath || !hasPayload {
-		return saveEntry{}, false, faults.NewValidationError(
+		return saveEntry{}, false, faults.Invalid(
 			`resource list entry must include both "LogicalPath" and "Payload"`,
 			nil,
 		)
@@ -179,7 +179,7 @@ func resolveSaveEntryFromResourceShape(item map[string]any) (saveEntry, bool, er
 
 	logicalPath, ok := logicalPathValue.(string)
 	if !ok || strings.TrimSpace(logicalPath) == "" {
-		return saveEntry{}, false, faults.NewValidationError(`resource list entry "LogicalPath" must be a non-empty string`, nil)
+		return saveEntry{}, false, faults.Invalid(`resource list entry "LogicalPath" must be a non-empty string`, nil)
 	}
 
 	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
@@ -208,7 +208,7 @@ func resolveSaveEntryPayloadDescriptor(item map[string]any) (resource.PayloadDes
 
 	descriptorMap, ok := rawDescriptor.(map[string]any)
 	if !ok {
-		return resource.PayloadDescriptor{}, faults.NewValidationError(
+		return resource.PayloadDescriptor{}, faults.Invalid(
 			`resource list entry "PayloadDescriptor" must be an object`,
 			nil,
 		)
@@ -245,7 +245,7 @@ func optionalSaveEntryDescriptorField(value map[string]any, key string) (string,
 
 	text, ok := raw.(string)
 	if !ok {
-		return "", faults.NewValidationError(
+		return "", faults.Invalid(
 			fmt.Sprintf(`resource list entry "PayloadDescriptor.%s" must be a string`, key),
 			nil,
 		)

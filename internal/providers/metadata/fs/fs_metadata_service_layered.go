@@ -83,14 +83,14 @@ func NewLayeredFSMetadataService(
 
 func (s *LayeredMetadataService) Get(ctx context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
 	if s == nil || s.writable == nil {
-		return metadatadomain.ResourceMetadata{}, notFoundError("metadata service is not configured")
+		return metadatadomain.ResourceMetadata{}, faults.NotFound("metadata service is not configured", nil)
 	}
 	return s.writable.Get(ctx, logicalPath)
 }
 
 func (s *LayeredMetadataService) Set(ctx context.Context, logicalPath string, metadata metadatadomain.ResourceMetadata) error {
 	if s == nil || s.writable == nil {
-		return faults.NewValidationError("metadata service is not configured", nil)
+		return faults.Invalid("metadata service is not configured", nil)
 	}
 	return s.writable.Set(ctx, logicalPath, metadata)
 }
@@ -231,14 +231,14 @@ func (s *LayeredMetadataService) RenderOperationSpecForResource(
 
 func (s *LayeredMetadataService) ReadDefaultsArtifact(ctx context.Context, logicalPath string, file string) (resource.Content, error) {
 	if s == nil || s.writable == nil {
-		return resource.Content{}, notFoundError("resource defaults artifacts are not configured")
+		return resource.Content{}, faults.NotFound("resource defaults artifacts are not configured", nil)
 	}
 	return s.writable.ReadDefaultsArtifact(ctx, logicalPath, file)
 }
 
 func (s *LayeredMetadataService) WriteDefaultsArtifact(ctx context.Context, logicalPath string, file string, content resource.Content) error {
 	if s == nil || s.writable == nil {
-		return faults.NewValidationError("resource defaults artifacts are not configured", nil)
+		return faults.Invalid("resource defaults artifacts are not configured", nil)
 	}
 	return s.writable.WriteDefaultsArtifact(ctx, logicalPath, file, content)
 }

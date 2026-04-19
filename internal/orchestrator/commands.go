@@ -423,7 +423,7 @@ func (r *Orchestrator) resolveComparedPayloads(
 	if !resource.IsStructuredPayloadType(payloadType) {
 		if len(compareSpec.Transforms) > 0 {
 			if !resourceMd.IsWholeResourceSecret() {
-				return nil, nil, faults.NewValidationError(
+				return nil, nil, faults.Invalid(
 					fmt.Sprintf("compare transforms require structured payloads, got %q", payloadType),
 					nil,
 				)

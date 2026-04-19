@@ -95,7 +95,7 @@ func (s *resolvedMetadataForGetService) Get(_ context.Context, logicalPath strin
 	if item, ok := s.explicit[logicalPath]; ok {
 		return item, nil
 	}
-	return metadatadomain.ResourceMetadata{}, faults.NewTypedError(faults.NotFoundError, "metadata not found", nil)
+	return metadatadomain.ResourceMetadata{}, faults.NotFound("metadata not found", nil)
 }
 
 func (s *resolvedMetadataForGetService) ResolveForPath(_ context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {

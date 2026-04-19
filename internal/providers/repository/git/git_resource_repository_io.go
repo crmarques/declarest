@@ -1,0 +1,62 @@
+// Copyright 2026 Carlos Marques
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package git
+
+import (
+	"context"
+
+	"github.com/crmarques/declarest/repository"
+	"github.com/crmarques/declarest/resource"
+)
+
+func (r *GitResourceRepository) Save(ctx context.Context, logicalPath string, content resource.Content) error {
+	if err := r.ensureInitializedForOperation(ctx); err != nil {
+		return err
+	}
+	return r.local.Save(ctx, logicalPath, content)
+}
+
+func (r *GitResourceRepository) SaveResourceWithArtifacts(
+	ctx context.Context,
+	logicalPath string,
+	content resource.Content,
+	artifacts []repository.ResourceArtifact,
+) error {
+	if err := r.ensureInitializedForOperation(ctx); err != nil {
+		return err
+	}
+	return r.local.SaveResourceWithArtifacts(ctx, logicalPath, content, artifacts)
+}
+
+func (r *GitResourceRepository) Get(ctx context.Context, logicalPath string) (resource.Content, error) {
+	if err := r.ensureInitializedForOperation(ctx); err != nil {
+		return resource.Content{}, err
+	}
+	return r.local.Get(ctx, logicalPath)
+}
+
+func (r *GitResourceRepository) ReadResourceArtifact(ctx context.Context, logicalPath string, file string) ([]byte, error) {
+	if err := r.ensureInitializedForOperation(ctx); err != nil {
+		return nil, err
+	}
+	return r.local.ReadResourceArtifact(ctx, logicalPath, file)
+}
+
+func (r *GitResourceRepository) Delete(ctx context.Context, logicalPath string, policy repository.DeletePolicy) error {
+	if err := r.ensureInitializedForOperation(ctx); err != nil {
+		return err
+	}
+	return r.local.Delete(ctx, logicalPath, policy)
+}

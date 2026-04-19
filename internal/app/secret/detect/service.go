@@ -65,13 +65,13 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 
 		if req.Fix {
 			if strings.TrimSpace(req.ResolvedPath) == "" {
-				return Result{}, faults.NewValidationError("path is required", nil)
+				return Result{}, faults.Invalid("path is required", nil)
 			}
 			if err := applyDetectedSecretAttributes(ctx, deps, req.ResolvedPath, appliedKeys); err != nil {
 				return Result{}, err
 			}
 		} else if strings.TrimSpace(req.ResolvedPath) != "" {
-			return Result{}, faults.NewValidationError("path input requires --fix when detecting from input payload", nil)
+			return Result{}, faults.Invalid("path input requires --fix when detecting from input payload", nil)
 		}
 
 		return Result{Output: appliedKeys}, nil
@@ -152,7 +152,7 @@ func detectSecretCandidatesFromRepository(
 	}
 
 	if requestedAttribute != "" && !requestedAttributeMatched {
-		return nil, faults.NewValidationError("requested --secret-attribute was not detected", nil)
+		return nil, faults.Invalid("requested --secret-attribute was not detected", nil)
 	}
 
 	return results, nil
@@ -184,7 +184,7 @@ func resolveDetectSecretAttributes(keys []string, secretAttribute string) ([]str
 	}
 
 	if strings.TrimSpace(secretAttribute) != "" {
-		return nil, faults.NewValidationError("requested --secret-attribute was not detected", nil)
+		return nil, faults.Invalid("requested --secret-attribute was not detected", nil)
 	}
 
 	return []string{}, nil

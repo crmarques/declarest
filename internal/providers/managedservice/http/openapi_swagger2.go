@@ -18,6 +18,8 @@ import (
 	"maps"
 	"slices"
 	"strings"
+
+	"github.com/crmarques/declarest/metadata"
 )
 
 func normalizeOpenAPIDocument(document map[string]any) map[string]any {
@@ -124,7 +126,7 @@ func augmentSwagger2PathOperations(document map[string]any) {
 }
 
 func isOpenAPIHTTPMethod(method string) bool {
-	switch strings.ToLower(strings.TrimSpace(method)) {
+	switch metadata.NormalizeHTTPMethod(method) {
 	case "get", "put", "post", "delete", "options", "head", "patch", "trace":
 		return true
 	default:

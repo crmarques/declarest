@@ -80,7 +80,7 @@ func ValidatePayloadType(value string) (string, error) {
 		return normalized, nil
 	}
 
-	return "", faults.NewValidationError(
+	return "", faults.Invalid(
 		fmt.Sprintf("unsupported payload type %q", strings.TrimSpace(value)),
 		nil,
 	)
@@ -180,7 +180,7 @@ func DecodePayload(data []byte, payloadType string) (Value, error) {
 	case codec.Binary:
 		return BinaryValue{Bytes: append([]byte(nil), data...)}, nil
 	default:
-		return nil, faults.NewValidationError(
+		return nil, faults.Invalid(
 			fmt.Sprintf("unsupported payload type %q", payloadType),
 			nil,
 		)
@@ -223,7 +223,7 @@ func encodePayload(value Value, payloadType string, pretty bool) ([]byte, error)
 	case codec.Binary:
 		return encodeBinaryPayload(value)
 	default:
-		return nil, faults.NewValidationError(
+		return nil, faults.Invalid(
 			fmt.Sprintf("unsupported payload type %q", payloadType),
 			nil,
 		)
@@ -266,7 +266,7 @@ func decodeStructuredPayload(data []byte, payloadType string) (Value, error) {
 	case PayloadTypeYAML:
 		var decoded any
 		if err := yaml.Unmarshal(data, &decoded); err != nil {
-			return nil, faults.NewValidationError("invalid yaml payload", err)
+			return nil, faults.Invalid("invalid yaml payload", err)
 		}
 		return Normalize(decoded)
 	case PayloadTypeINI:
@@ -287,7 +287,7 @@ func decodeStructuredPayload(data []byte, payloadType string) (Value, error) {
 
 		var decoded any
 		if err := decoder.Decode(&decoded); err != nil {
-			return nil, faults.NewValidationError("invalid json payload", err)
+			return nil, faults.Invalid("invalid json payload", err)
 		}
 		return Normalize(decoded)
 	}
@@ -303,7 +303,7 @@ func encodeStructuredPayload(value Value, payloadType string, pretty bool) ([]by
 	case PayloadTypeYAML:
 		encoded, err := yaml.Marshal(normalized)
 		if err != nil {
-			return nil, faults.NewValidationError("failed to encode yaml payload", err)
+			return nil, faults.Invalid("failed to encode yaml payload", err)
 		}
 		return encoded, nil
 	case PayloadTypeINI:
@@ -314,13 +314,13 @@ func encodeStructuredPayload(value Value, payloadType string, pretty bool) ([]by
 		if pretty {
 			encoded, err := json.MarshalIndent(normalized, "", "  ")
 			if err != nil {
-				return nil, faults.NewValidationError("failed to encode json payload", err)
+				return nil, faults.Invalid("failed to encode json payload", err)
 			}
 			return encoded, nil
 		}
 		encoded, err := json.Marshal(normalized)
 		if err != nil {
-			return nil, faults.NewValidationError("failed to encode json payload", err)
+			return nil, faults.Invalid("failed to encode json payload", err)
 		}
 		return encoded, nil
 	}
@@ -333,7 +333,7 @@ func encodeTextPayload(value Value, payloadType string) ([]byte, error) {
 	case []byte:
 		return append([]byte(nil), typed...), nil
 	default:
-		return nil, faults.NewValidationError(
+		return nil, faults.Invalid(
 			fmt.Sprintf("payload type %q requires string input", payloadType),
 			nil,
 		)
@@ -343,7 +343,7 @@ func encodeTextPayload(value Value, payloadType string) ([]byte, error) {
 func encodeBinaryPayload(value Value) ([]byte, error) {
 	bytesValue, ok := BinaryBytes(value)
 	if !ok {
-		return nil, faults.NewValidationError("payload type \"octet-stream\" requires resource.BinaryValue input", nil)
+		return nil, faults.Invalid("payload type \"octet-stream\" requires resource.BinaryValue input", nil)
 	}
 	return bytesValue, nil
 }

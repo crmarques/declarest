@@ -330,7 +330,7 @@ func (s *FSMetadataService) walkChildSelectors(
 			if errors.Is(readErr, os.ErrNotExist) {
 				continue
 			}
-			return internalError("failed to list metadata selector children", readErr)
+			return faults.Internal("failed to list metadata selector children", readErr)
 		}
 
 		for _, entry := range entries {
@@ -438,7 +438,7 @@ func (s *FSMetadataService) matchingCollectionCandidates(parentSelector string, 
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil, nil
 		}
-		return nil, nil, internalError("failed to list metadata selectors", err)
+		return nil, nil, faults.Internal("failed to list metadata selectors", err)
 	}
 
 	wildcards := make([]string, 0)
@@ -460,7 +460,7 @@ func (s *FSMetadataService) matchingCollectionCandidates(parentSelector string, 
 		if hasWildcardPattern(childName) {
 			matched, matchErr := path.Match(childName, segment)
 			if matchErr != nil {
-				return nil, nil, faults.NewValidationError(
+				return nil, nil, faults.Invalid(
 					fmt.Sprintf("invalid wildcard selector %q", childSelector),
 					matchErr,
 				)

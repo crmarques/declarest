@@ -17,8 +17,8 @@ package cliutil
 import (
 	"context"
 	"sort"
-	"strings"
 
+	"github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
 )
@@ -282,7 +282,7 @@ func normalizeOpenAPIMethods(value any) map[string]struct{} {
 
 	methods := make(map[string]struct{}, len(operations))
 	for method := range operations {
-		clean := strings.ToLower(strings.TrimSpace(method))
+		clean := metadata.NormalizeHTTPMethod(method)
 		if clean == "" {
 			continue
 		}

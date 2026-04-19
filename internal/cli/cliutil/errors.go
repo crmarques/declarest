@@ -19,5 +19,5 @@ import (
 )
 
 func ValidationError(message string, cause error) error {
-	return faults.NewTypedError(faults.ValidationError, message, cause)
+	return faults.Invalid(message, cause)
 }

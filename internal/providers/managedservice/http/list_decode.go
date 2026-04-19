@@ -126,7 +126,7 @@ func (g *Client) decodeListResponse(
 			return nil, err
 		}
 		if _, exists := seenAliases[alias]; exists {
-			return nil, faults.NewConflictError(fmt.Sprintf("remote list contains duplicate alias %q", alias), nil)
+			return nil, faults.Conflict(fmt.Sprintf("remote list contains duplicate alias %q", alias), nil)
 		}
 		seenAliases[alias] = struct{}{}
 

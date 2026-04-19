@@ -90,7 +90,7 @@ type fakeMetadata struct {
 }
 
 func (f *fakeMetadata) Get(context.Context, string) (metadatadomain.ResourceMetadata, error) {
-	return metadatadomain.ResourceMetadata{}, faults.NewTypedError(faults.NotFoundError, "not found", nil)
+	return metadatadomain.ResourceMetadata{}, faults.NotFound("not found", nil)
 }
 
 func (f *fakeMetadata) Set(_ context.Context, logicalPath string, metadata metadatadomain.ResourceMetadata) error {

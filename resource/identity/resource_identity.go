@@ -63,13 +63,13 @@ func ResolveAliasAndRemoteID(logicalPath string, md metadata.ResourceMetadata, p
 	}
 
 	if err := resource.ValidateLogicalPathSegment(alias); err != nil {
-		return "", "", faults.NewValidationError(
+		return "", "", faults.Invalid(
 			fmt.Sprintf("resource.alias rendered invalid logical path segment %q", alias),
 			err,
 		)
 	}
 	if err := resource.ValidateLogicalPathSegment(remoteID); err != nil {
-		return "", "", faults.NewValidationError(
+		return "", "", faults.Invalid(
 			fmt.Sprintf("resource.id rendered invalid logical path segment %q", remoteID),
 			err,
 		)
@@ -122,7 +122,7 @@ func resolveIdentityField(field string, rawTemplate string, payload any) (string
 	} else if ok {
 		value, found, lookupErr := lookupSimplePointer(payload, pointer)
 		if lookupErr != nil {
-			return "", false, faults.NewValidationError(field+" must resolve from payload data", lookupErr)
+			return "", false, faults.Invalid(field+" must resolve from payload data", lookupErr)
 		}
 		if found {
 			return value, true, nil
@@ -144,7 +144,7 @@ func RequiredAttributes(md metadata.ResourceMetadata) ([]string, error) {
 	if template := strings.TrimSpace(md.Alias); template != "" {
 		pointers, err := identitytemplate.ExtractPointers(template)
 		if err != nil {
-			return nil, faults.NewValidationError("resource.alias must be a valid identity template", err)
+			return nil, faults.Invalid("resource.alias must be a valid identity template", err)
 		}
 		for _, pointer := range pointers {
 			addPointer(pointer)
@@ -153,7 +153,7 @@ func RequiredAttributes(md metadata.ResourceMetadata) ([]string, error) {
 	if template := strings.TrimSpace(md.ID); template != "" {
 		pointers, err := identitytemplate.ExtractPointers(template)
 		if err != nil {
-			return nil, faults.NewValidationError("resource.id must be a valid identity template", err)
+			return nil, faults.Invalid("resource.id must be a valid identity template", err)
 		}
 		for _, pointer := range pointers {
 			addPointer(pointer)
@@ -182,11 +182,11 @@ func aliasForLogicalPath(logicalPath string) string {
 func renderIdentityTemplate(field string, raw string, payload any) (string, error) {
 	rendered, err := identitytemplate.Render(raw, payload)
 	if err != nil {
-		return "", faults.NewValidationError(field+" must resolve from payload data", err)
+		return "", faults.Invalid(field+" must resolve from payload data", err)
 	}
 	trimmed := strings.TrimSpace(rendered)
 	if trimmed == "" {
-		return "", faults.NewValidationError(field+" must not resolve to an empty value", nil)
+		return "", faults.Invalid(field+" must not resolve to an empty value", nil)
 	}
 	return trimmed, nil
 }
@@ -198,7 +198,7 @@ func simpleIdentityPointer(field string, raw string) (string, bool, error) {
 	}
 	pointer, ok, err := identitytemplate.SimplePointer(template)
 	if err != nil {
-		return "", false, faults.NewValidationError(field+" must be a valid identity template", err)
+		return "", false, faults.Invalid(field+" must be a valid identity template", err)
 	}
 	return pointer, ok, nil
 }

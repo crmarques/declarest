@@ -128,7 +128,7 @@ func (g *Client) resolveListJQResource(ctx context.Context, logicalPath string) 
 		return nil, err
 	}
 	if !found {
-		return nil, faults.NewValidationError("resource() requires list resolver context", nil)
+		return nil, faults.Invalid("resource() requires list resolver context", nil)
 	}
 	return resource.Normalize(resolved)
 }

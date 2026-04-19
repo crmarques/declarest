@@ -187,7 +187,7 @@ func describeRequestBodySchema(
 		return nil
 	}
 
-	method := strings.ToLower(strings.TrimSpace(spec.Method))
+	method := NormalizeHTTPMethod(spec.Method)
 	operationItem, found := pathItem[method]
 	if !found {
 		return nil
@@ -237,7 +237,7 @@ func describeResponseSchema(
 		return nil
 	}
 
-	method := strings.ToLower(strings.TrimSpace(spec.Method))
+	method := NormalizeHTTPMethod(spec.Method)
 	operationItem, found := pathItem[method]
 	if !found {
 		return nil

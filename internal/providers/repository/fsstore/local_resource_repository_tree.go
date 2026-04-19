@@ -31,7 +31,7 @@ func (r *LocalResourceRepository) Tree(ctx context.Context) ([]string, error) {
 
 	root := filepath.Clean(strings.TrimSpace(r.baseDir))
 	if root == "" || root == "." {
-		return nil, faults.NewValidationError("repository base directory is not configured", nil)
+		return nil, faults.Invalid("repository base directory is not configured", nil)
 	}
 
 	paths := make([]string, 0, 32)
@@ -59,7 +59,7 @@ func (r *LocalResourceRepository) Tree(ctx context.Context) ([]string, error) {
 		return nil
 	})
 	if walkErr != nil {
-		return nil, internalError("failed to walk repository directory tree", walkErr)
+		return nil, faults.Internal("failed to walk repository directory tree", walkErr)
 	}
 
 	sort.Strings(paths)

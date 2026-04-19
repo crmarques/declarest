@@ -135,7 +135,7 @@ func (f *fakeSaveMetadataStore) Get(_ context.Context, logicalPath string) (meta
 			return metadata, nil
 		}
 	}
-	return metadatadomain.ResourceMetadata{}, faults.NewTypedError(faults.NotFoundError, "metadata not found", nil)
+	return metadatadomain.ResourceMetadata{}, faults.NotFound("metadata not found", nil)
 }
 
 func (f *fakeSaveMetadataStore) Set(_ context.Context, logicalPath string, metadata metadatadomain.ResourceMetadata) error {

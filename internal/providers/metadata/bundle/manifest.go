@@ -59,7 +59,7 @@ type BundleDistribution struct {
 func DecodeBundleManifest(data []byte) (BundleManifest, error) {
 	var manifest BundleManifest
 	if err := yaml.Unmarshal(data, &manifest); err != nil {
-		return BundleManifest{}, faults.NewValidationError("invalid bundle.yaml", err)
+		return BundleManifest{}, faults.Invalid("invalid bundle.yaml", err)
 	}
 	if err := manifest.Validate(); err != nil {
 		return BundleManifest{}, err
@@ -69,55 +69,55 @@ func DecodeBundleManifest(data []byte) (BundleManifest, error) {
 
 func (m BundleManifest) Validate() error {
 	if strings.TrimSpace(m.APIVersion) == "" {
-		return faults.NewValidationError("bundle.yaml apiVersion is required", nil)
+		return faults.Invalid("bundle.yaml apiVersion is required", nil)
 	}
 	if strings.TrimSpace(m.Kind) == "" {
-		return faults.NewValidationError("bundle.yaml kind is required", nil)
+		return faults.Invalid("bundle.yaml kind is required", nil)
 	}
 	if strings.TrimSpace(m.Name) == "" {
-		return faults.NewValidationError("bundle.yaml name is required", nil)
+		return faults.Invalid("bundle.yaml name is required", nil)
 	}
 	if strings.TrimSpace(m.Version) == "" {
-		return faults.NewValidationError("bundle.yaml version is required", nil)
+		return faults.Invalid("bundle.yaml version is required", nil)
 	}
 	if strings.TrimSpace(m.Description) == "" {
-		return faults.NewValidationError("bundle.yaml description is required", nil)
+		return faults.Invalid("bundle.yaml description is required", nil)
 	}
 	if strings.TrimSpace(m.Declarest.MetadataRoot) == "" {
-		return faults.NewValidationError("bundle.yaml declarest.metadataRoot is required", nil)
+		return faults.Invalid("bundle.yaml declarest.metadataRoot is required", nil)
 	}
 
 	if strings.TrimSpace(m.APIVersion) != bundleManifestAPIVersion {
-		return faults.NewValidationError(
+		return faults.Invalid(
 			fmt.Sprintf("bundle.yaml apiVersion must be %q", bundleManifestAPIVersion),
 			nil,
 		)
 	}
 	if strings.TrimSpace(m.Kind) != bundleManifestKind {
-		return faults.NewValidationError(
+		return faults.Invalid(
 			fmt.Sprintf("bundle.yaml kind must be %q", bundleManifestKind),
 			nil,
 		)
 	}
 
 	if _, err := normalizeSemver(m.Version); err != nil {
-		return faults.NewValidationError("bundle.yaml version must be a valid semver", err)
+		return faults.Invalid("bundle.yaml version must be a valid semver", err)
 	}
 
 	if _, err := normalizeBundleRelativePath(m.Declarest.MetadataRoot); err != nil {
-		return faults.NewValidationError("bundle.yaml declarest.metadataRoot is invalid", err)
+		return faults.Invalid("bundle.yaml declarest.metadataRoot is invalid", err)
 	}
 
 	if openAPIRef := strings.TrimSpace(m.Declarest.OpenAPI); openAPIRef != "" {
 		if _, err := resolveBundleOpenAPIReference("", openAPIRef); err != nil {
-			return faults.NewValidationError("bundle.yaml declarest.openapi is invalid", err)
+			return faults.Invalid("bundle.yaml declarest.openapi is invalid", err)
 		}
 	}
 
 	if template := strings.TrimSpace(m.Distribution.ArtifactTemplate); template != "" {
 		expected := expectedArtifactTemplate(strings.TrimSpace(m.Name))
 		if template != expected {
-			return faults.NewValidationError(
+			return faults.Invalid(
 				fmt.Sprintf(
 					"bundle.yaml distribution.artifactTemplate must be %q",
 					expected,
@@ -140,7 +140,7 @@ func normalizeSemver(raw string) (string, error) {
 		value = after
 	}
 	if !semverPattern.MatchString(value) {
-		return "", faults.NewValidationError("invalid semver", nil)
+		return "", faults.Invalid("invalid semver", nil)
 	}
 	return value, nil
 }
@@ -148,18 +148,18 @@ func normalizeSemver(raw string) (string, error) {
 func normalizeBundleRelativePath(raw string) (string, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {
-		return "", faults.NewValidationError("path is empty", nil)
+		return "", faults.Invalid("path is empty", nil)
 	}
 
 	cleaned := filepath.Clean(filepath.FromSlash(value))
 	if cleaned == "." || cleaned == "" {
-		return "", faults.NewValidationError("path is empty", nil)
+		return "", faults.Invalid("path is empty", nil)
 	}
 	if filepath.IsAbs(cleaned) {
-		return "", faults.NewValidationError("path must be relative", nil)
+		return "", faults.Invalid("path must be relative", nil)
 	}
 	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
-		return "", faults.NewValidationError("path must not traverse parents", nil)
+		return "", faults.Invalid("path must not traverse parents", nil)
 	}
 	return cleaned, nil
 }
@@ -176,7 +176,7 @@ func resolveBundleOpenAPIReference(root string, raw string) (string, error) {
 
 	parsed, err := url.Parse(value)
 	if err != nil {
-		return "", faults.NewValidationError("OpenAPI reference is invalid", err)
+		return "", faults.Invalid("OpenAPI reference is invalid", err)
 	}
 
 	if parsed.Scheme == "" {
@@ -193,22 +193,10 @@ func resolveBundleOpenAPIReference(root string, raw string) (string, error) {
 	switch strings.ToLower(parsed.Scheme) {
 	case "http", "https":
 		if strings.TrimSpace(parsed.Host) == "" {
-			return "", faults.NewValidationError("OpenAPI URL host is required", nil)
+			return "", faults.Invalid("OpenAPI URL host is required", nil)
 		}
 		return parsed.String(), nil
 	default:
-		return "", faults.NewValidationError("OpenAPI reference must be a relative path or http/https URL", nil)
+		return "", faults.Invalid("OpenAPI reference must be a relative path or http/https URL", nil)
 	}
-}
-
-func transportError(message string, cause error) error {
-	return faults.NewTypedError(faults.TransportError, message, cause)
-}
-
-func notFoundError(message string, cause error) error {
-	return faults.NewTypedError(faults.NotFoundError, message, cause)
-}
-
-func internalError(message string, cause error) error {
-	return faults.NewTypedError(faults.InternalError, message, cause)
 }

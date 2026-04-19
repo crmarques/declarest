@@ -38,7 +38,7 @@ func decodeINIPayload(data []byte) (map[string]any, error) {
 		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
 			section := strings.TrimSpace(trimmed[1 : len(trimmed)-1])
 			if section == "" {
-				return nil, faults.NewValidationError("invalid ini payload", fmt.Errorf("empty section name"))
+				return nil, faults.Invalid("invalid ini payload", fmt.Errorf("empty section name"))
 			}
 			existing, found := root[section]
 			if !found {
@@ -49,7 +49,7 @@ func decodeINIPayload(data []byte) (map[string]any, error) {
 			}
 			sectionMap, ok := existing.(map[string]any)
 			if !ok {
-				return nil, faults.NewValidationError(
+				return nil, faults.Invalid(
 					"invalid ini payload",
 					fmt.Errorf("section %q conflicts with a scalar key", section),
 				)
@@ -60,7 +60,7 @@ func decodeINIPayload(data []byte) (map[string]any, error) {
 
 		key, value, err := parseINILine(trimmed)
 		if err != nil {
-			return nil, faults.NewValidationError("invalid ini payload", err)
+			return nil, faults.Invalid("invalid ini payload", err)
 		}
 		current[key] = value
 	}
@@ -94,7 +94,7 @@ func parseINILine(line string) (string, string, error) {
 func encodeINIPayload(value any) ([]byte, error) {
 	root, ok := value.(map[string]any)
 	if !ok {
-		return nil, faults.NewValidationError("failed to encode ini payload", fmt.Errorf("ini payload requires an object"))
+		return nil, faults.Invalid("failed to encode ini payload", fmt.Errorf("ini payload requires an object"))
 	}
 
 	rootKeys := make([]string, 0, len(root))
@@ -154,11 +154,11 @@ func decodePropertiesPayload(data []byte) (map[string]any, error) {
 		keyRaw, valueRaw := splitPropertiesKeyValue(trimmed)
 		key, err := unescapePropertiesString(keyRaw)
 		if err != nil {
-			return nil, faults.NewValidationError("invalid properties payload", err)
+			return nil, faults.Invalid("invalid properties payload", err)
 		}
 		value, err := unescapePropertiesString(valueRaw)
 		if err != nil {
-			return nil, faults.NewValidationError("invalid properties payload", err)
+			return nil, faults.Invalid("invalid properties payload", err)
 		}
 		values[key] = value
 	}
@@ -312,7 +312,7 @@ func unescapePropertiesString(value string) (string, error) {
 func encodePropertiesPayload(value any) ([]byte, error) {
 	root, ok := value.(map[string]any)
 	if !ok {
-		return nil, faults.NewValidationError("failed to encode properties payload", fmt.Errorf("properties payload requires an object"))
+		return nil, faults.Invalid("failed to encode properties payload", fmt.Errorf("properties payload requires an object"))
 	}
 
 	keys := slices.Sorted(maps.Keys(root))
@@ -400,12 +400,12 @@ func stringifyStructuredTextScalar(value any, payloadType string) (string, error
 	case float64:
 		return strconv.FormatFloat(typed, 'f', -1, 64), nil
 	case map[string]any:
-		return "", faults.NewValidationError(
+		return "", faults.Invalid(
 			fmt.Sprintf("failed to encode %s payload", payloadType),
 			fmt.Errorf("%s payloads support only root objects and scalar values", payloadType),
 		)
 	case []any:
-		return "", faults.NewValidationError(
+		return "", faults.Invalid(
 			fmt.Sprintf("failed to encode %s payload", payloadType),
 			fmt.Errorf("%s payloads do not support arrays", payloadType),
 		)

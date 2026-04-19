@@ -56,22 +56,22 @@ func Execute(
 		return err
 	}
 	if options.AsItems && options.AsOneResource {
-		return faults.NewValidationError("flag --mode must choose a single save mode", nil)
+		return faults.Invalid("flag --mode must choose a single save mode", nil)
 	}
 	if options.Secret && options.AsItems {
-		return faults.NewValidationError("flags --secret and --mode items cannot be used together", nil)
+		return faults.Invalid("flags --secret and --mode items cannot be used together", nil)
 	}
 	if options.AsOneResource && len(options.SkipItems) > 0 {
-		return faults.NewValidationError("flag --exclude is not supported with --mode single", nil)
+		return faults.Invalid("flag --exclude is not supported with --mode single", nil)
 	}
 	if options.Secret && len(options.SkipItems) > 0 {
-		return faults.NewValidationError("flag --exclude is not supported with --secret", nil)
+		return faults.Invalid("flag --exclude is not supported with --secret", nil)
 	}
 	if options.Secret && options.SecretAttributesEnabled {
-		return faults.NewValidationError("flags --secret and --secret-attributes cannot be used together", nil)
+		return faults.Invalid("flags --secret and --secret-attributes cannot be used together", nil)
 	}
 	if options.Secret && options.AllowPlaintext {
-		return faults.NewValidationError("flags --secret and --allow-plaintext cannot be used together", nil)
+		return faults.Invalid("flags --secret and --allow-plaintext cannot be used together", nil)
 	}
 
 	orchestratorService, err := appdeps.RequireOrchestrator(deps)
@@ -85,7 +85,7 @@ func Execute(
 
 	if hasWildcard {
 		if hasInput {
-			return faults.NewValidationError("wildcard save paths are supported only when reading from remote server", nil)
+			return faults.Invalid("wildcard save paths are supported only when reading from remote server", nil)
 		}
 
 		targets, err := expandSaveWildcardPaths(ctx, orchestratorService, normalizedPath)
@@ -182,7 +182,7 @@ func validateSecretAttributesPayloadType(
 		return nil
 	}
 
-	return faults.NewValidationError(
+	return faults.Invalid(
 		fmt.Sprintf(
 			"--secret-attributes requires structured payload (json, yaml); got %q; use --secret for whole-resource secrets",
 			resolved.PayloadType,
@@ -277,7 +277,7 @@ func saveResolvedPathPayload(
 		})
 	}
 	if !isListPayload {
-		return faults.NewValidationError("input payload is not a list; use --mode single to save a single resource", nil)
+		return faults.Invalid("input payload is not a list; use --mode single to save a single resource", nil)
 	}
 
 	entries, err := resolveSaveEntriesForItems(ctx, deps, resolvedPath, items)

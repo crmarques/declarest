@@ -27,7 +27,7 @@ func RenderSessionHook(shell string) (string, error) {
 	case "zsh":
 		return zshSessionHook, nil
 	default:
-		return "", faults.NewValidationError("context session-hook shell must be bash or zsh", nil)
+		return "", faults.Invalid("context session-hook shell must be bash or zsh", nil)
 	}
 }
 

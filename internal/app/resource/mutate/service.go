@@ -61,7 +61,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 
 	if req.HasExplicitInput {
 		if req.Recursive {
-			return Result{}, faults.NewValidationError(
+			return Result{}, faults.Invalid(
 				fmt.Sprintf(
 					"flag --recursive cannot be combined with explicit input; remove input to %s resources from repository",
 					strings.TrimSpace(string(req.Operation)),
@@ -109,7 +109,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 			}
 			return orchestratorService.Update(runCtx, logicalPath, localValue)
 		default:
-			return resource.Resource{}, faults.NewValidationError(
+			return resource.Resource{}, faults.Invalid(
 				fmt.Sprintf("unsupported resource mutation operation %q", req.Operation),
 				nil,
 			)
@@ -146,7 +146,7 @@ func runExplicitMutation(
 	case OperationUpdate:
 		return orchestratorService.Update(ctx, logicalPath, value)
 	default:
-		return resource.Resource{}, faults.NewValidationError(
+		return resource.Resource{}, faults.Invalid(
 			fmt.Sprintf("unsupported resource mutation operation %q", operation),
 			nil,
 		)
@@ -201,7 +201,7 @@ func ListLocalTargetsOrFallbackPath(
 	}
 	if isRepositoryNotConfiguredValidation(err) {
 		if recursive {
-			return nil, faults.NewValidationError(
+			return nil, faults.Invalid(
 				"flag --recursive requires a configured repository to resolve delete targets",
 				nil,
 			)

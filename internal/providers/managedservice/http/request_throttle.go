@@ -41,28 +41,28 @@ func buildRequestThrottle(cfg *config.HTTPRequestThrottling) (*requestThrottleGa
 		return nil, nil
 	}
 	if cfg.MaxConcurrentRequests <= 0 && cfg.RequestsPerSecond <= 0 {
-		return nil, faults.NewValidationError(
+		return nil, faults.Invalid(
 			"managed-service.http.request-throttling must define at least one of max-concurrent-requests or requests-per-second",
 			nil,
 		)
 	}
 	if cfg.MaxConcurrentRequests < 0 {
-		return nil, faults.NewValidationError("managed-service.http.request-throttling.max-concurrent-requests must be greater than zero when set", nil)
+		return nil, faults.Invalid("managed-service.http.request-throttling.max-concurrent-requests must be greater than zero when set", nil)
 	}
 	if cfg.QueueSize < 0 {
-		return nil, faults.NewValidationError("managed-service.http.request-throttling.queue-size must be greater than or equal to zero", nil)
+		return nil, faults.Invalid("managed-service.http.request-throttling.queue-size must be greater than or equal to zero", nil)
 	}
 	if cfg.QueueSize > 0 && cfg.MaxConcurrentRequests <= 0 {
-		return nil, faults.NewValidationError("managed-service.http.request-throttling.queue-size requires max-concurrent-requests", nil)
+		return nil, faults.Invalid("managed-service.http.request-throttling.queue-size requires max-concurrent-requests", nil)
 	}
 	if cfg.RequestsPerSecond < 0 {
-		return nil, faults.NewValidationError("managed-service.http.request-throttling.requests-per-second must be greater than zero when set", nil)
+		return nil, faults.Invalid("managed-service.http.request-throttling.requests-per-second must be greater than zero when set", nil)
 	}
 	if cfg.Burst < 0 {
-		return nil, faults.NewValidationError("managed-service.http.request-throttling.burst must be greater than zero when set", nil)
+		return nil, faults.Invalid("managed-service.http.request-throttling.burst must be greater than zero when set", nil)
 	}
 	if cfg.Burst > 0 && cfg.RequestsPerSecond <= 0 {
-		return nil, faults.NewValidationError("managed-service.http.request-throttling.burst requires requests-per-second", nil)
+		return nil, faults.Invalid("managed-service.http.request-throttling.burst requires requests-per-second", nil)
 	}
 
 	key := requestThrottleKey(cfg)
@@ -135,7 +135,7 @@ func (g *requestThrottleGate) execute(
 	defer release()
 	if g.limiter != nil {
 		if waitErr := g.limiter.Wait(ctx); waitErr != nil {
-			return nil, faults.NewTypedError(faults.TransportError, "managed-service request throttling wait failed", waitErr)
+			return nil, faults.Transport("managed-service request throttling wait failed", waitErr)
 		}
 	}
 	return invoke()
@@ -152,7 +152,7 @@ func (g *requestThrottleGate) acquire(ctx context.Context) (func(), error) {
 		case g.queue <- struct{}{}:
 			queued = true
 		default:
-			return nil, faults.NewConflictError("managed-service request queue is full", nil)
+			return nil, faults.Conflict("managed-service request queue is full", nil)
 		}
 	}
 
@@ -169,7 +169,7 @@ func (g *requestThrottleGate) acquire(ctx context.Context) (func(), error) {
 			if queued {
 				<-g.queue
 			}
-			return nil, faults.NewTypedError(faults.TransportError, "managed-service request throttling wait canceled", ctx.Err())
+			return nil, faults.Transport("managed-service request throttling wait canceled", ctx.Err())
 		}
 	}
 

@@ -64,7 +64,7 @@ func (s *FSMetadataService) Get(ctx context.Context, logicalPath string) (metada
 	}
 	if !found {
 		debugctx.Printf(ctx, "metadata fs get miss logical_path=%q file=%q", logicalPath, targetPath)
-		return metadatadomain.ResourceMetadata{}, notFoundError(fmt.Sprintf("metadata %q not found", logicalPath))
+		return metadatadomain.ResourceMetadata{}, faults.NotFound(fmt.Sprintf("metadata %q not found", logicalPath), nil)
 	}
 	debugctx.Printf(ctx, "metadata fs get hit logical_path=%q file=%q", logicalPath, targetPath)
 	return metadata, nil
@@ -154,7 +154,7 @@ func (s *FSMetadataService) Unset(ctx context.Context, logicalPath string) error
 				continue
 			}
 			debugctx.Printf(ctx, "metadata fs unset failed logical_path=%q file=%q error=%v", logicalPath, candidate.path, err)
-			return internalError("failed to remove metadata file", err)
+			return faults.Internal("failed to remove metadata file", err)
 		}
 		removedAny = true
 	}
@@ -216,29 +216,29 @@ func (s *FSMetadataService) writeMetadataFile(
 	}
 
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-		return internalError("failed to create metadata directory", err)
+		return faults.Internal("failed to create metadata directory", err)
 	}
 
 	tempFile, err := os.CreateTemp(filepath.Dir(targetPath), ".declarest-meta-*")
 	if err != nil {
-		return internalError("failed to create temporary metadata file", err)
+		return faults.Internal("failed to create temporary metadata file", err)
 	}
 	tempPath := tempFile.Name()
 
 	if _, err := tempFile.Write(encoded); err != nil {
 		_ = tempFile.Close()
 		_ = os.Remove(tempPath)
-		return internalError("failed to write temporary metadata file", err)
+		return faults.Internal("failed to write temporary metadata file", err)
 	}
 
 	if err := tempFile.Close(); err != nil {
 		_ = os.Remove(tempPath)
-		return internalError("failed to close temporary metadata file", err)
+		return faults.Internal("failed to close temporary metadata file", err)
 	}
 
 	if err := os.Rename(tempPath, targetPath); err != nil {
 		_ = os.Remove(tempPath)
-		return internalError("failed to replace metadata file", err)
+		return faults.Internal("failed to replace metadata file", err)
 	}
 
 	switch {
@@ -261,12 +261,12 @@ func (s *FSMetadataService) decodeMetadata(data []byte, yaml bool, kind metadata
 	case yaml:
 		decoded, err = metadatadomain.DecodeResourceMetadataYAML(data)
 		if err != nil {
-			return metadatadomain.ResourceMetadata{}, faults.NewValidationError("invalid yaml metadata", err)
+			return metadatadomain.ResourceMetadata{}, faults.Invalid("invalid yaml metadata", err)
 		}
 	default:
 		decoded, err = metadatadomain.DecodeResourceMetadataJSON(data)
 		if err != nil {
-			return metadatadomain.ResourceMetadata{}, faults.NewValidationError("invalid json metadata", err)
+			return metadatadomain.ResourceMetadata{}, faults.Invalid("invalid json metadata", err)
 		}
 	}
 
@@ -289,12 +289,12 @@ func (s *FSMetadataService) encodeMetadata(metadata metadatadomain.ResourceMetad
 	if yaml {
 		encoded, err = metadatadomain.EncodeResourceMetadataYAML(metadata)
 		if err != nil {
-			return nil, internalError("failed to encode yaml metadata", err)
+			return nil, faults.Internal("failed to encode yaml metadata", err)
 		}
 	} else {
 		encoded, err = metadatadomain.EncodeResourceMetadataJSON(metadata, true)
 		if err != nil {
-			return nil, internalError("failed to encode json metadata", err)
+			return nil, faults.Internal("failed to encode json metadata", err)
 		}
 	}
 	return ensureTrailingNewline(encoded), nil
@@ -307,7 +307,7 @@ func metadataPathUsesYAML(targetPath string) (bool, error) {
 	case ".json":
 		return false, nil
 	default:
-		return false, internalError("unsupported metadata file extension", nil)
+		return false, faults.Internal("unsupported metadata file extension", nil)
 	}
 }
 

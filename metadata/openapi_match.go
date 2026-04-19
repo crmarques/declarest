@@ -207,9 +207,9 @@ func openAPIPathMethods(value any) map[string]struct{} {
 
 	methods := make(map[string]struct{})
 	for method := range pathItem {
-		switch strings.ToLower(strings.TrimSpace(method)) {
+		switch NormalizeHTTPMethod(method) {
 		case "get", "post", "put", "patch", "delete":
-			methods[strings.ToLower(strings.TrimSpace(method))] = struct{}{}
+			methods[NormalizeHTTPMethod(method)] = struct{}{}
 		}
 	}
 	return methods
@@ -382,7 +382,7 @@ func hasOpenAPIMethod(methods map[string]struct{}, method string) bool {
 	if len(methods) == 0 {
 		return false
 	}
-	_, found := methods[strings.ToLower(strings.TrimSpace(method))]
+	_, found := methods[NormalizeHTTPMethod(method)]
 	return found
 }
 

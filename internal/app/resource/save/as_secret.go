@@ -29,7 +29,7 @@ import (
 func saveResolvedPathAsSecret(
 	ctx context.Context,
 	deps Dependencies,
-	writer orchestratordomain.RepositoryWriter,
+	writer orchestratordomain.ResourceSaver,
 	logicalPath string,
 	content resource.Content,
 ) error {

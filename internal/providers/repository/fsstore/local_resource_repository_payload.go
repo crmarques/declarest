@@ -67,7 +67,7 @@ func (r *LocalResourceRepository) payloadFilesInfoFromDir(logicalPath string, di
 		if errors.Is(err, os.ErrNotExist) {
 			return resourcePayloadFiles{}, nil
 		}
-		return resourcePayloadFiles{}, internalError("failed to inspect resource directory", err)
+		return resourcePayloadFiles{}, faults.Internal("failed to inspect resource directory", err)
 	}
 
 	resourceCandidates := make([]string, 0, 1)
@@ -143,7 +143,7 @@ func payloadFileInfoFromCandidates(
 		if baseName == "defaults" {
 			label = "defaults"
 		}
-		return nil, faults.NewConflictError(
+		return nil, faults.Conflict(
 			fmt.Sprintf("resource %q has multiple %s files: %s", logicalPath, label, strings.Join(candidates, ", ")),
 			nil,
 		)

@@ -77,10 +77,10 @@ func build(fieldPrefix string, proxy *config.HTTPProxy, runtime *promptauth.Runt
 	}
 	if auth != nil {
 		if httpURL != nil && httpURL.User != nil {
-			return Config{}, faults.NewValidationError(fieldPrefix+".auth cannot be combined with credentials embedded in proxy URL", nil)
+			return Config{}, faults.Invalid(fieldPrefix+".auth cannot be combined with credentials embedded in proxy URL", nil)
 		}
 		if httpsURL != nil && httpsURL.User != nil {
-			return Config{}, faults.NewValidationError(fieldPrefix+".auth cannot be combined with credentials embedded in proxy URL", nil)
+			return Config{}, faults.Invalid(fieldPrefix+".auth cannot be combined with credentials embedded in proxy URL", nil)
 		}
 		if auth.Basic != nil && !auth.Basic.UsesPrompt() {
 			if httpURL != nil {
@@ -376,14 +376,14 @@ func parseProxyURL(field string, raw string) (*url.URL, error) {
 
 	parsed, err := url.Parse(value)
 	if err != nil {
-		return nil, faults.NewValidationError(field+" is invalid", err)
+		return nil, faults.Invalid(field+" is invalid", err)
 	}
 	scheme := strings.ToLower(parsed.Scheme)
 	if scheme != "http" && scheme != "https" {
-		return nil, faults.NewValidationError(field+" must use http or https", nil)
+		return nil, faults.Invalid(field+" must use http or https", nil)
 	}
 	if parsed.Host == "" {
-		return nil, faults.NewValidationError(field+" host is required", nil)
+		return nil, faults.Invalid(field+" host is required", nil)
 	}
 	return parsed, nil
 }
@@ -404,10 +404,10 @@ func cloneProxyAuth(auth *config.ProxyAuth) (*config.ProxyAuth, error) {
 
 	hasBasic := cloned.Basic != nil
 	if countSet(hasBasic) != 1 {
-		return nil, faults.NewValidationError("proxy auth must define basic", nil)
+		return nil, faults.Invalid("proxy auth must define basic", nil)
 	}
 	if cloned.Basic.CredentialName() == "" && !cloned.Basic.HasResolvedCredentials() {
-		return nil, faults.NewValidationError("proxy auth basic.credentialsRef is required", nil)
+		return nil, faults.Invalid("proxy auth basic.credentialsRef is required", nil)
 	}
 	return cloned, nil
 }
@@ -436,7 +436,7 @@ func applyProxyAuth(fieldPrefix string, proxyURL *url.URL, username, password st
 	}
 
 	if proxyURL.User != nil {
-		return nil, faults.NewValidationError(fieldPrefix+" cannot be combined with credentials embedded in proxy URL", nil)
+		return nil, faults.Invalid(fieldPrefix+" cannot be combined with credentials embedded in proxy URL", nil)
 	}
 
 	clone := *proxyURL

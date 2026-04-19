@@ -998,7 +998,7 @@ func TestCheckWarnsForReachableManagedServiceProbeErrors(t *testing.T) {
 			store:    &testRepositoryService{},
 			sync:     &testRepositoryService{},
 			metadata: &testMetadataService{},
-			server:   &testManagedServiceClientService{requestErr: faults.NewTypedError(faults.NotFoundError, "probe not found", nil)},
+			server:   &testManagedServiceClientService{requestErr: faults.NotFound("probe not found", nil)},
 		},
 	}
 	globalFlags := &cliutil.GlobalFlags{Output: cliutil.OutputText}
@@ -1047,12 +1047,12 @@ func TestCheckFailsWhenConfiguredComponentsAreUnavailable(t *testing.T) {
 
 	deps := cliutil.CommandDependencies{
 		Contexts:     contextService,
-		Orchestrator: &testOrchestratorService{listRemoteErr: faults.NewTypedError(faults.AuthError, "managed service auth failed", nil)},
+		Orchestrator: &testOrchestratorService{listRemoteErr: faults.Auth("managed service auth failed", nil)},
 		Services: &testConfigServiceAccessor{
 			store:    &testRepositoryService{},
 			sync:     &testRepositoryService{},
 			metadata: &testMetadataService{},
-			secrets:  &testSecretProviderService{listErr: faults.NewTypedError(faults.TransportError, "secret store unavailable", nil)},
+			secrets:  &testSecretProviderService{listErr: faults.Transport("secret store unavailable", nil)},
 		},
 	}
 	globalFlags := &cliutil.GlobalFlags{Output: cliutil.OutputText}

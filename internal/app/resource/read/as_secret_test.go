@@ -37,7 +37,7 @@ func (f *fakeReadSecretProvider) Store(context.Context, string, string) error {
 func (f *fakeReadSecretProvider) Get(_ context.Context, key string) (string, error) {
 	value, found := f.values[key]
 	if !found {
-		return "", faults.NewTypedError(faults.NotFoundError, "secret not found", nil)
+		return "", faults.NotFound("secret not found", nil)
 	}
 	return value, nil
 }
@@ -183,7 +183,7 @@ type fakeReadMetadataService struct {
 }
 
 func (f fakeReadMetadataService) Get(context.Context, string) (metadatadomain.ResourceMetadata, error) {
-	return metadatadomain.ResourceMetadata{}, faults.NewTypedError(faults.NotFoundError, "metadata not found", nil)
+	return metadatadomain.ResourceMetadata{}, faults.NotFound("metadata not found", nil)
 }
 
 func (f fakeReadMetadataService) Set(context.Context, string, metadatadomain.ResourceMetadata) error {

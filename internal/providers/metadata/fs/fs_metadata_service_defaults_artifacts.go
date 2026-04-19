@@ -42,9 +42,9 @@ func (s *FSMetadataService) ReadDefaultsArtifact(
 	data, err := os.ReadFile(targetPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return resource.Content{}, notFoundError(fmt.Sprintf("resource defaults artifact %q not found", file))
+			return resource.Content{}, faults.NotFound(fmt.Sprintf("resource defaults artifact %q not found", file), nil)
 		}
-		return resource.Content{}, internalError("failed to read resource defaults artifact", err)
+		return resource.Content{}, faults.Internal("failed to read resource defaults artifact", err)
 	}
 
 	decoded, err := resource.DecodeContent(data, descriptor)
@@ -81,31 +81,31 @@ func (s *FSMetadataService) WriteDefaultsArtifact(
 		Descriptor: descriptor,
 	})
 	if err != nil {
-		return internalError("failed to encode resource defaults artifact", err)
+		return faults.Internal("failed to encode resource defaults artifact", err)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-		return internalError("failed to create defaults artifact directory", err)
+		return faults.Internal("failed to create defaults artifact directory", err)
 	}
 
 	tempFile, err := os.CreateTemp(filepath.Dir(targetPath), ".declarest-defaults-*")
 	if err != nil {
-		return internalError("failed to create temporary defaults artifact", err)
+		return faults.Internal("failed to create temporary defaults artifact", err)
 	}
 	tempPath := tempFile.Name()
 
 	if _, err := tempFile.Write(encoded); err != nil {
 		_ = tempFile.Close()
 		_ = os.Remove(tempPath)
-		return internalError("failed to write temporary defaults artifact", err)
+		return faults.Internal("failed to write temporary defaults artifact", err)
 	}
 	if err := tempFile.Close(); err != nil {
 		_ = os.Remove(tempPath)
-		return internalError("failed to close temporary defaults artifact", err)
+		return faults.Internal("failed to close temporary defaults artifact", err)
 	}
 	if err := os.Rename(tempPath, targetPath); err != nil {
 		_ = os.Remove(tempPath)
-		return internalError("failed to replace defaults artifact", err)
+		return faults.Internal("failed to replace defaults artifact", err)
 	}
 
 	baseName := strings.TrimSuffix(filepath.Base(targetPath), filepath.Ext(targetPath))
@@ -130,7 +130,7 @@ func (s *FSMetadataService) DeleteDefaultsArtifact(
 		return err
 	}
 	if err := os.Remove(targetPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return internalError("failed to delete resource defaults artifact", err)
+		return faults.Internal("failed to delete resource defaults artifact", err)
 	}
 	_ = cleanupEmptyParents(filepath.Dir(targetPath), s.baseDir)
 	return nil
@@ -151,7 +151,7 @@ func (s *FSMetadataService) defaultsArtifactPath(
 
 	trimmedFile := strings.TrimSpace(file)
 	if trimmedFile == "" || filepath.Base(trimmedFile) != trimmedFile {
-		return "", resource.PayloadDescriptor{}, faults.NewValidationError("resource defaults artifact file name is invalid", nil)
+		return "", resource.PayloadDescriptor{}, faults.Invalid("resource defaults artifact file name is invalid", nil)
 	}
 	includeRef := metadatadomain.DefaultsIncludePlaceholder(trimmedFile)
 	if strings.HasPrefix(trimmedFile, "defaults-") {
@@ -172,7 +172,7 @@ func (s *FSMetadataService) defaultsArtifactPath(
 
 	descriptor, ok := resource.PayloadDescriptorForFileName(trimmedFile)
 	if !ok || !metadatadomain.DefaultsSupportsFileBackedDescriptor(descriptor) {
-		return "", resource.PayloadDescriptor{}, faults.NewValidationError(
+		return "", resource.PayloadDescriptor{}, faults.Invalid(
 			fmt.Sprintf("resource defaults artifact %q is not supported", trimmedFile),
 			nil,
 		)
@@ -180,7 +180,7 @@ func (s *FSMetadataService) defaultsArtifactPath(
 
 	targetPath := filepath.Join(dirPath, trimmedFile)
 	if !isPathUnderRoot(s.baseDir, targetPath) {
-		return "", resource.PayloadDescriptor{}, faults.NewValidationError("defaults artifact path escapes metadata base directory", nil)
+		return "", resource.PayloadDescriptor{}, faults.Invalid("defaults artifact path escapes metadata base directory", nil)
 	}
 	return targetPath, descriptor, nil
 }

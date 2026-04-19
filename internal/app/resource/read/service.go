@@ -103,7 +103,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 	case SourceManagedService:
 		content, err = orchestratorService.GetRemote(ctx, req.LogicalPath)
 	default:
-		return Result{}, faults.NewValidationError("invalid source: use --source repository|managed-service", nil)
+		return Result{}, faults.Invalid("invalid source: use --source repository|managed-service", nil)
 	}
 	if err != nil {
 		debugctx.Printf(ctx, "resource read failed path=%q source=%q error=%v", req.LogicalPath, req.Source, err)
@@ -372,7 +372,7 @@ func resolveSecretsForOutput(
 	}
 
 	getSecret := func(string) (string, error) {
-		return "", faults.NewValidationError(
+		return "", faults.Invalid(
 			"flag --show-secrets requires a configured secret provider when payload includes placeholders",
 			nil,
 		)

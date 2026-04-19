@@ -48,7 +48,7 @@ func DecodeWholeResourceSecret(value string, descriptor resource.PayloadDescript
 	if strings.HasPrefix(value, wholeResourceSecretEncodingPrefix) {
 		decoded, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(value, wholeResourceSecretEncodingPrefix))
 		if err != nil {
-			return nil, faults.NewValidationError("stored whole-resource secret payload is invalid", err)
+			return nil, faults.Invalid("stored whole-resource secret payload is invalid", err)
 		}
 		data = decoded
 	}
@@ -130,10 +130,10 @@ func resolveWholeResourceSecretKey(logicalPath string, key string, isCurrent boo
 
 	resolved := strings.TrimSpace(key)
 	if resolved == "" {
-		return "", faults.NewValidationError("secret placeholder key must not be empty", nil)
+		return "", faults.Invalid("secret placeholder key must not be empty", nil)
 	}
 	if strings.HasPrefix(resolved, "/") {
-		return "", faults.NewValidationError("secret placeholder key must be relative to the resource path", nil)
+		return "", faults.Invalid("secret placeholder key must be relative to the resource path", nil)
 	}
 	return strings.TrimSpace(logicalPath) + ":" + resolved, nil
 }

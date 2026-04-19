@@ -61,7 +61,7 @@ func TestResolveEditSourceFallsBackToRemoteOnLocalMiss(t *testing.T) {
 	t.Parallel()
 
 	orch := &fakeEditSourceOrchestrator{
-		resolveLocalErr: faults.NewTypedError(faults.NotFoundError, "not found", nil),
+		resolveLocalErr: faults.NotFound("not found", nil),
 		remoteValue: map[string]any{
 			"name": "test",
 		},
@@ -90,7 +90,7 @@ func TestResolveEditSourceFallsBackToRemoteOnLocalMiss(t *testing.T) {
 func TestResolveEditSourcePreservesLocalResolutionErrors(t *testing.T) {
 	t.Parallel()
 
-	expectedErr := faults.NewTypedError(faults.ConflictError, "ambiguous local fallback", nil)
+	expectedErr := faults.Conflict("ambiguous local fallback", nil)
 	orch := &fakeEditSourceOrchestrator{
 		resolveLocalErr: expectedErr,
 	}

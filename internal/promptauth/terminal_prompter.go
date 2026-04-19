@@ -37,7 +37,7 @@ func (terminalPrompter) PromptValue(
 	persistentSession bool,
 ) (string, error) {
 	if !isInteractiveTerminal(os.Stdin, os.Stdout) {
-		return "", faults.NewValidationError(
+		return "", faults.Invalid(
 			fmt.Sprintf(
 				"credential %q %s requires an interactive terminal when no cached session value is available",
 				strings.TrimSpace(credentialName),
@@ -82,7 +82,7 @@ func runField(field huh.Field) error {
 
 	err := form.Run()
 	if errors.Is(err, huh.ErrUserAborted) {
-		return faults.NewValidationError("interactive prompt interrupted", nil)
+		return faults.Invalid("interactive prompt interrupted", nil)
 	}
 	return err
 }

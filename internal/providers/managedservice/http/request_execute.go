@@ -38,12 +38,12 @@ func (g *Client) Request(
 ) (resource.Content, error) {
 	resolvedMethod := strings.ToUpper(strings.TrimSpace(requestSpec.Method))
 	if resolvedMethod == "" {
-		return resource.Content{}, faults.NewValidationError("request method is required", nil)
+		return resource.Content{}, faults.Invalid("request method is required", nil)
 	}
 
 	resolvedPath := managedservicedomain.NormalizeRequestPath(requestSpec.Path)
 	if resolvedPath == "" {
-		return resource.Content{}, faults.NewValidationError("request path is required", nil)
+		return resource.Content{}, faults.Invalid("request path is required", nil)
 	}
 
 	bodyDescriptor := g.genericRequestBodyDescriptor(requestSpec)
@@ -117,7 +117,7 @@ func (g *Client) execute(ctx context.Context, spec metadata.OperationSpec) ([]by
 
 	response, err := g.doRequest(ctx, "resource", request)
 	if err != nil {
-		return nil, nil, transportError("remote request failed", err)
+		return nil, nil, faults.Transport("remote request failed", err)
 	}
 	defer func() {
 		_ = response.Body.Close()
@@ -125,7 +125,7 @@ func (g *Client) execute(ctx context.Context, spec metadata.OperationSpec) ([]by
 
 	body, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
 	if err != nil {
-		return nil, nil, transportError("failed to read remote response body", err)
+		return nil, nil, faults.Transport("failed to read remote response body", err)
 	}
 
 	if response.StatusCode >= http.StatusBadRequest {
@@ -228,7 +228,7 @@ func (g *Client) newRequest(ctx context.Context, spec metadata.OperationSpec) (*
 
 	request, err := http.NewRequestWithContext(ctx, spec.Method, targetURL, bodyReader)
 	if err != nil {
-		return nil, internalError("failed to create remote request", err)
+		return nil, faults.Internal("failed to create remote request", err)
 	}
 
 	if strings.TrimSpace(spec.Accept) != "" {
@@ -258,7 +258,7 @@ func (g *Client) newRequest(ctx context.Context, spec metadata.OperationSpec) (*
 
 func (g *Client) resolveRequestURL(requestPath string, query map[string]string) (string, error) {
 	if parsed, err := url.Parse(requestPath); err == nil && parsed.Scheme != "" {
-		return "", faults.NewValidationError("operation path must be relative to managed-service.http.base-url", nil)
+		return "", faults.Invalid("operation path must be relative to managed-service.http.base-url", nil)
 	}
 
 	target := *g.baseURL

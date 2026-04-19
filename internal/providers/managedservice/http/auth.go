@@ -74,7 +74,7 @@ func (c authConfig) shouldRedactHeader(name string) bool {
 
 func buildAuthConfig(cfg *config.HTTPAuth, runtime *promptauth.Runtime) (authConfig, error) {
 	if cfg == nil {
-		return authConfig{}, faults.NewValidationError("managed-service.http.auth is required", nil)
+		return authConfig{}, faults.Invalid("managed-service.http.auth is required", nil)
 	}
 
 	setCount := 0
@@ -88,7 +88,7 @@ func buildAuthConfig(cfg *config.HTTPAuth, runtime *promptauth.Runtime) (authCon
 		setCount++
 	}
 	if setCount != 1 {
-		return authConfig{}, faults.NewValidationError("managed-service.http.auth must define exactly one auth mode", nil)
+		return authConfig{}, faults.Invalid("managed-service.http.auth must define exactly one auth mode", nil)
 	}
 
 	switch {
@@ -98,21 +98,21 @@ func buildAuthConfig(cfg *config.HTTPAuth, runtime *promptauth.Runtime) (authCon
 			strings.TrimSpace(oauth.GrantType) == "" ||
 			strings.TrimSpace(oauth.ClientID) == "" ||
 			strings.TrimSpace(oauth.ClientSecret) == "" {
-			return authConfig{}, faults.NewValidationError("managed-service.http.auth.oauth2 requires token-url, grant-type, client-id, client-secret", nil)
+			return authConfig{}, faults.Invalid("managed-service.http.auth.oauth2 requires token-url, grant-type, client-id, client-secret", nil)
 		}
 		if strings.TrimSpace(oauth.GrantType) != config.OAuthClientCreds {
-			return authConfig{}, faults.NewValidationError("managed-service.http.auth.oauth2.grant-type supports only client_credentials", nil)
+			return authConfig{}, faults.Invalid("managed-service.http.auth.oauth2.grant-type supports only client_credentials", nil)
 		}
 		tokenURL, err := url.Parse(oauth.TokenURL)
 		if err != nil || tokenURL.Scheme == "" || tokenURL.Host == "" {
-			return authConfig{}, faults.NewValidationError("managed-service.http.auth.oauth2.token-url is invalid", err)
+			return authConfig{}, faults.Invalid("managed-service.http.auth.oauth2.token-url is invalid", err)
 		}
 
 		return authConfig{mode: authModeOAuth2, oauth2: oauth}, nil
 	case cfg.Basic != nil:
 		basic := *cfg.Basic
 		if basic.CredentialName() == "" && !basic.HasResolvedCredentials() {
-			return authConfig{}, faults.NewValidationError("managed-service.http.auth.basic.credentials-ref is required", nil)
+			return authConfig{}, faults.Invalid("managed-service.http.auth.basic.credentials-ref is required", nil)
 		}
 		return authConfig{mode: authModeBasic, basicAuth: basic, runtime: runtime}, nil
 	case len(cfg.CustomHeaders) > 0:
@@ -122,7 +122,7 @@ func buildAuthConfig(cfg *config.HTTPAuth, runtime *promptauth.Runtime) (authCon
 			custom.Prefix = strings.TrimSpace(custom.Prefix)
 			custom.Value = strings.TrimSpace(custom.Value)
 			if custom.Header == "" || custom.Value == "" {
-				return authConfig{}, faults.NewValidationError(
+				return authConfig{}, faults.Invalid(
 					fmt.Sprintf("managed-service.http.auth.custom-headers[%d] requires header and value", idx),
 					nil,
 				)
@@ -131,7 +131,7 @@ func buildAuthConfig(cfg *config.HTTPAuth, runtime *promptauth.Runtime) (authCon
 		}
 		return authConfig{mode: authModeCustomHeaders, customHeaders: customHeaders}, nil
 	default:
-		return authConfig{}, faults.NewValidationError("managed-service.http.auth is invalid", nil)
+		return authConfig{}, faults.Invalid("managed-service.http.auth is invalid", nil)
 	}
 }
 
@@ -179,7 +179,7 @@ func (g *Client) applyAuth(ctx context.Context, request *http.Request) error {
 			request.Header.Set(customHeader.Header, value)
 		}
 	default:
-		return faults.NewValidationError("managed-service.http.auth mode is not configured", nil)
+		return faults.Invalid("managed-service.http.auth mode is not configured", nil)
 	}
 	return nil
 }
@@ -213,14 +213,14 @@ func (g *Client) oauthToken(ctx context.Context) (string, error) {
 		strings.NewReader(formValues.Encode()),
 	)
 	if err != nil {
-		return "", internalError("failed to create oauth2 token request", err)
+		return "", faults.Internal("failed to create oauth2 token request", err)
 	}
 	request.Header.Set("Accept", defaultMediaType)
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	response, err := g.doRequest(ctx, "oauth2-token", request)
 	if err != nil {
-		return "", transportError("oauth2 token request failed", err)
+		return "", faults.Transport("oauth2 token request failed", err)
 	}
 	defer func() {
 		_ = response.Body.Close()
@@ -228,7 +228,7 @@ func (g *Client) oauthToken(ctx context.Context) (string, error) {
 
 	body, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
 	if err != nil {
-		return "", transportError("failed to read oauth2 token response", err)
+		return "", faults.Transport("failed to read oauth2 token response", err)
 	}
 
 	if response.StatusCode >= http.StatusBadRequest {
@@ -238,7 +238,7 @@ func (g *Client) oauthToken(ctx context.Context) (string, error) {
 			response.StatusCode,
 			summarizeBodyForLevel(body, debugctx.Level(ctx)),
 		)
-		return "", authError(
+		return "", faults.Auth(
 			fmt.Sprintf("oauth2 token request failed with status %d: %s", response.StatusCode, summarizeBody(body)),
 			nil,
 		)
@@ -249,10 +249,10 @@ func (g *Client) oauthToken(ctx context.Context) (string, error) {
 		ExpiresIn   int64  `json:"expires_in"`
 	}
 	if err := json.Unmarshal(body, &tokenResponse); err != nil {
-		return "", authError("oauth2 token response is not valid JSON", err)
+		return "", faults.Auth("oauth2 token response is not valid JSON", err)
 	}
 	if strings.TrimSpace(tokenResponse.AccessToken) == "" {
-		return "", authError("oauth2 token response does not include access_token", nil)
+		return "", faults.Auth("oauth2 token response does not include access_token", nil)
 	}
 
 	expiresAt := time.Now().Add(time.Hour)

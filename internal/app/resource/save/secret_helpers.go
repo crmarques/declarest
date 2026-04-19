@@ -105,7 +105,7 @@ func handleSaveSecrets(
 
 	payload, ok := normalizedValue.(map[string]any)
 	if !ok {
-		return nil, nil, faults.NewValidationError("--secret-attributes requires structured payload (json, yaml)", nil)
+		return nil, nil, faults.Invalid("--secret-attributes requires structured payload (json, yaml)", nil)
 	}
 
 	secretProvider, err := appdeps.RequireSecretProvider(deps)
@@ -260,7 +260,7 @@ func applySaveSecretCandidates(
 
 	payload, ok := normalizedValue.(map[string]any)
 	if !ok {
-		return nil, nil, faults.NewValidationError("--secret-attributes requires structured payload (json, yaml)", nil)
+		return nil, nil, faults.Invalid("--secret-attributes requires structured payload (json, yaml)", nil)
 	}
 
 	attributes := resolveSaveSecretAttributes(payload, selectedCandidates)
@@ -334,7 +334,7 @@ func selectSaveSecretCandidates(candidates []string, requested []string, allowMi
 			if allowMissingRequested {
 				continue
 			}
-			return nil, nil, faults.NewValidationError(
+			return nil, nil, faults.Invalid(
 				fmt.Sprintf("requested --secret-attributes attribute %q was not detected", requestedCandidate),
 				nil,
 			)
@@ -395,7 +395,7 @@ func filterSaveSecretCandidatesForSafety(candidates []string, declared []string,
 }
 
 func saveSecretSafetyError(logicalPath string, candidates []string) error {
-	return faults.NewValidationError(
+	return faults.Invalid(
 		fmt.Sprintf(
 			"warning: potential plaintext secrets detected for %q at attributes [%s]; refusing to save without --allow-plaintext",
 			logicalPath,

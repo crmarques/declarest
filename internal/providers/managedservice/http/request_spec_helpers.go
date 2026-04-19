@@ -70,11 +70,11 @@ func (g *Client) metadataPayloadDescriptor(md metadata.ResourceMetadata) resourc
 
 func (g *Client) defaultResourceMediaType(descriptor resource.PayloadDescriptor) (string, error) {
 	if !resource.IsPayloadDescriptorExplicit(descriptor) {
-		return "", faults.NewValidationError("payload descriptor is not concrete", nil)
+		return "", faults.Invalid("payload descriptor is not concrete", nil)
 	}
 	mediaType := resource.NormalizePayloadDescriptor(descriptor).MediaType
 	if strings.TrimSpace(mediaType) == "" {
-		return "", faults.NewValidationError("invalid payload media type", nil)
+		return "", faults.Invalid("invalid payload media type", nil)
 	}
 	return mediaType, nil
 }

@@ -134,7 +134,7 @@ func expandSaveWildcardPaths(
 ) ([]string, error) {
 	segments := resource.SplitRawPathSegments(wildcardPath)
 	if len(segments) == 0 {
-		return nil, faults.NewValidationError("wildcard save path must target a collection or resource", nil)
+		return nil, faults.Invalid("wildcard save path must target a collection or resource", nil)
 	}
 
 	currentPaths := []string{"/"}
@@ -187,7 +187,7 @@ func expandSaveWildcardPaths(
 func appendSavePathSegment(parentPath string, segment string) (string, error) {
 	trimmedSegment := strings.TrimSpace(segment)
 	if trimmedSegment == "" {
-		return "", faults.NewValidationError("wildcard path contains an empty segment", nil)
+		return "", faults.Invalid("wildcard path contains an empty segment", nil)
 	}
 	return resource.JoinLogicalPath(parentPath, trimmedSegment)
 }

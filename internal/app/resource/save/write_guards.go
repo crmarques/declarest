@@ -37,7 +37,7 @@ func ensureSaveTargetAllowed(
 		return err
 	}
 	if exists {
-		return faults.NewValidationError(
+		return faults.Invalid(
 			fmt.Sprintf("resource %q already exists; rerun with --force to overwrite", logicalPath),
 			nil,
 		)

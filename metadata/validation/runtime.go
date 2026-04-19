@@ -38,10 +38,10 @@ func NormalizeAttributePointers(field string, attributes []string) ([]string, er
 	for _, raw := range attributes {
 		pointer := strings.TrimSpace(raw)
 		if pointer == "" {
-			return nil, faults.NewValidationError("payload "+field+" contains an empty JSON pointer", nil)
+			return nil, faults.Invalid("payload "+field+" contains an empty JSON pointer", nil)
 		}
 		if _, err := resource.ParseJSONPointer(pointer); err != nil {
-			return nil, faults.NewValidationError("payload "+field+" contains an invalid JSON pointer", err)
+			return nil, faults.Invalid("payload "+field+" contains an invalid JSON pointer", err)
 		}
 		if _, exists := seen[pointer]; exists {
 			continue
@@ -150,7 +150,7 @@ func ValidateRequiredAttributes(
 		return nil
 	}
 
-	return faults.NewValidationError(
+	return faults.Invalid(
 		fmt.Sprintf("%s failed: missing required attributes [%s]", scope, strings.Join(missing, ", ")),
 		nil,
 	)
@@ -187,7 +187,7 @@ func appendIdentityTemplatePointers(
 
 	pointers, err := identitytemplate.ExtractPointers(trimmed)
 	if err != nil {
-		return faults.NewValidationError(field+" must be a valid identity template", err)
+		return faults.Invalid(field+" must be a valid identity template", err)
 	}
 	for _, pointer := range pointers {
 		addPointer(pointer)

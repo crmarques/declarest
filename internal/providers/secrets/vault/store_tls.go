@@ -18,9 +18,9 @@ import (
 	"crypto/tls"
 
 	"github.com/crmarques/declarest/config"
-	"github.com/crmarques/declarest/internal/providers/tlsconfig"
+	"github.com/crmarques/declarest/internal/httpclient"
 )
 
 func buildTLSConfig(tlsSettings *config.TLS) (*tls.Config, error) {
-	return tlsconfig.BuildTLSConfig(tlsSettings, "secret-store.vault")
+	return httpclient.BuildTLSConfig(tlsSettings, "secret-store.vault")
 }

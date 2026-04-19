@@ -109,7 +109,7 @@ func TestExecuteWithResolveTargetsFallsBackToRequestedPath(t *testing.T) {
 	t.Parallel()
 
 	orch := &fakeRequestOrchestrator{
-		listLocalErr: faults.NewTypedError(faults.NotFoundError, "missing", nil),
+		listLocalErr: faults.NotFound("missing", nil),
 		requestValue: resource.Content{Value: "fallback"},
 	}
 
@@ -139,7 +139,7 @@ type fakeRequestOrchestrator struct {
 }
 
 func (f *fakeRequestOrchestrator) GetLocal(context.Context, string) (resource.Content, error) {
-	return resource.Content{}, faults.NewTypedError(faults.NotFoundError, "missing", nil)
+	return resource.Content{}, faults.NotFound("missing", nil)
 }
 
 func (f *fakeRequestOrchestrator) ListLocal(context.Context, string, orchestratordomain.ListPolicy) ([]resource.Resource, error) {

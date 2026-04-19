@@ -517,7 +517,7 @@ func TestInferManagedServiceRetriesCleanupDeleteAfterAuthError(t *testing.T) {
 	}
 
 	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
-	orch.deleteErr = faults.NewTypedError(faults.AuthError, "remote request failed with status 403: forbidden", nil)
+	orch.deleteErr = faults.Auth("remote request failed with status 403: forbidden", nil)
 
 	managedServiceClient := &fakeDefaultsManagedServiceClient{}
 	serviceAccessor := deps.Services.(*fakeDefaultsServiceAccessor)
@@ -1022,7 +1022,7 @@ type savedResource struct {
 func (f *fakeDefaultsOrchestrator) ResolveLocalResource(_ context.Context, logicalPath string) (resource.Resource, error) {
 	content, found := f.localContent[logicalPath]
 	if !found {
-		return resource.Resource{}, faults.NewTypedError(faults.NotFoundError, "not found", nil)
+		return resource.Resource{}, faults.NotFound("not found", nil)
 	}
 	return resource.Resource{
 		LogicalPath:       logicalPath,
@@ -1036,7 +1036,7 @@ func (f *fakeDefaultsOrchestrator) ResolveLocalResource(_ context.Context, logic
 func (f *fakeDefaultsOrchestrator) GetLocal(_ context.Context, logicalPath string) (resource.Content, error) {
 	content, found := f.localContent[logicalPath]
 	if !found {
-		return resource.Content{}, faults.NewTypedError(faults.NotFoundError, "not found", nil)
+		return resource.Content{}, faults.NotFound("not found", nil)
 	}
 	return content, nil
 }
@@ -1082,7 +1082,7 @@ func (f *fakeDefaultsOrchestrator) GetRemote(_ context.Context, logicalPath stri
 			Descriptor: item.content.Descriptor,
 		}, nil
 	}
-	return resource.Content{}, faults.NewTypedError(faults.NotFoundError, "not found", nil)
+	return resource.Content{}, faults.NotFound("not found", nil)
 }
 
 func (f *fakeDefaultsOrchestrator) Delete(_ context.Context, logicalPath string, _ orchestratordomain.DeletePolicy) error {
@@ -1131,7 +1131,7 @@ func (f *fakeDefaultsRepository) Save(_ context.Context, logicalPath string, con
 func (f *fakeDefaultsRepository) Get(_ context.Context, logicalPath string) (resource.Content, error) {
 	content, found := f.content[logicalPath]
 	if !found {
-		return resource.Content{}, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
+		return resource.Content{}, faults.NotFound(fmt.Sprintf("resource %q not found", logicalPath), nil)
 	}
 	return content, nil
 }
@@ -1153,7 +1153,7 @@ func (f *fakeDefaultsRepository) Exists(context.Context, string) (bool, error) {
 func (f *fakeDefaultsRepository) GetDefaults(_ context.Context, logicalPath string) (resource.Content, error) {
 	content, found := f.defaults[logicalPath]
 	if !found {
-		return resource.Content{}, faults.NewTypedError(faults.NotFoundError, "defaults not found", nil)
+		return resource.Content{}, faults.NotFound("defaults not found", nil)
 	}
 	return content, nil
 }

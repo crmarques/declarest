@@ -17,7 +17,6 @@ package fsmetadata
 import (
 	"path/filepath"
 
-	"github.com/crmarques/declarest/faults"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 )
 
@@ -40,14 +39,6 @@ func NewFSMetadataService(baseDir string) *FSMetadataService {
 	return &FSMetadataService{
 		baseDir: filepath.Clean(baseDir),
 	}
-}
-
-func notFoundError(message string) error {
-	return faults.NewTypedError(faults.NotFoundError, message, nil)
-}
-
-func internalError(message string, cause error) error {
-	return faults.NewTypedError(faults.InternalError, message, cause)
 }
 
 func metadataPathKindName(kind metadataPathKind) string {

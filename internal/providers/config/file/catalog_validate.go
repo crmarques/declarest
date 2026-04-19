@@ -36,7 +36,7 @@ func validateCatalog(contextCatalog config.ContextCatalog) error {
 
 	if len(contextCatalog.Contexts) == 0 {
 		if contextCatalog.CurrentContext != "" {
-			return faults.NewValidationError("currentContext must be empty when contexts list is empty", nil)
+			return faults.Invalid("currentContext must be empty when contexts list is empty", nil)
 		}
 		return nil
 	}
@@ -44,10 +44,10 @@ func validateCatalog(contextCatalog config.ContextCatalog) error {
 	seen := map[string]struct{}{}
 	for _, item := range contextCatalog.Contexts {
 		if item.Name == "" {
-			return faults.NewValidationError("context name must not be empty", nil)
+			return faults.Invalid("context name must not be empty", nil)
 		}
 		if _, exists := seen[item.Name]; exists {
-			return faults.NewValidationError(fmt.Sprintf("duplicate context name %q", item.Name), nil)
+			return faults.Invalid(fmt.Sprintf("duplicate context name %q", item.Name), nil)
 		}
 		seen[item.Name] = struct{}{}
 
@@ -57,11 +57,11 @@ func validateCatalog(contextCatalog config.ContextCatalog) error {
 	}
 
 	if contextCatalog.CurrentContext == "" {
-		return faults.NewValidationError("currentContext must be set when contexts are defined", nil)
+		return faults.Invalid("currentContext must be set when contexts are defined", nil)
 	}
 
 	if _, exists := seen[contextCatalog.CurrentContext]; !exists {
-		return faults.NewValidationError(fmt.Sprintf("currentContext %q does not match any context", contextCatalog.CurrentContext), nil)
+		return faults.Invalid(fmt.Sprintf("currentContext %q does not match any context", contextCatalog.CurrentContext), nil)
 	}
 
 	return nil
@@ -75,10 +75,10 @@ func validateConfig(cfg config.Context, credentials map[string]config.Credential
 	cfg = normalizeConfig(cfg)
 
 	if cfg.Name == "" {
-		return faults.NewValidationError("context name must not be empty", nil)
+		return faults.Invalid("context name must not be empty", nil)
 	}
 	if cfg.Repository.Git == nil && cfg.Repository.Filesystem == nil && cfg.ManagedService == nil {
-		return faults.NewValidationError("context must define at least one of repository or managedService", nil)
+		return faults.Invalid("context must define at least one of repository or managedService", nil)
 	}
 
 	if err := validateRepository(cfg.Repository, credentials, strictCredentialRefs); err != nil {
@@ -293,16 +293,16 @@ func validateRepository(
 	}
 
 	if countSet(repository.Git != nil, repository.Filesystem != nil) != 1 {
-		return faults.NewValidationError("repository must define exactly one of git or filesystem", nil)
+		return faults.Invalid("repository must define exactly one of git or filesystem", nil)
 	}
 
 	if repository.Git != nil {
 		if repository.Git.Local.BaseDir == "" {
-			return faults.NewValidationError("repository.git.local.baseDir is required", nil)
+			return faults.Invalid("repository.git.local.baseDir is required", nil)
 		}
 		if repository.Git.Remote != nil {
 			if repository.Git.Remote.URL == "" {
-				return faults.NewValidationError("repository.git.remote.url is required", nil)
+				return faults.Invalid("repository.git.remote.url is required", nil)
 			}
 			if repository.Git.Remote.Auth != nil {
 				if countSet(
@@ -310,7 +310,7 @@ func validateRepository(
 					repository.Git.Remote.Auth.SSH != nil,
 					repository.Git.Remote.Auth.AccessKey != nil,
 				) != 1 {
-					return faults.NewValidationError("repository.git.remote.auth must define exactly one of basic, ssh, accessKey", nil)
+					return faults.Invalid("repository.git.remote.auth must define exactly one of basic, ssh, accessKey", nil)
 				}
 				if repository.Git.Remote.Auth.Basic != nil {
 					if err := validateCredentialRef(
@@ -330,7 +330,7 @@ func validateRepository(
 	}
 
 	if repository.Filesystem != nil && repository.Filesystem.BaseDir == "" {
-		return faults.NewValidationError("repository.filesystem.baseDir is required", nil)
+		return faults.Invalid("repository.filesystem.baseDir is required", nil)
 	}
 
 	return nil
@@ -345,13 +345,13 @@ func validateManagedService(
 		return nil
 	}
 	if resourceServer.HTTP == nil {
-		return faults.NewValidationError("managedService must define http", nil)
+		return faults.Invalid("managedService must define http", nil)
 	}
 	if resourceServer.HTTP.BaseURL == "" {
-		return faults.NewValidationError("managedService.http.url is required", nil)
+		return faults.Invalid("managedService.http.url is required", nil)
 	}
 	if resourceServer.HTTP.Auth == nil {
-		return faults.NewValidationError("managedService.http.auth is required", nil)
+		return faults.Invalid("managedService.http.auth is required", nil)
 	}
 
 	if countSet(
@@ -359,13 +359,13 @@ func validateManagedService(
 		resourceServer.HTTP.Auth.Basic != nil,
 		len(resourceServer.HTTP.Auth.CustomHeaders) > 0,
 	) != 1 {
-		return faults.NewValidationError("managedService.http.auth must define exactly one of oauth2, basic, customHeaders", nil)
+		return faults.Invalid("managedService.http.auth must define exactly one of oauth2, basic, customHeaders", nil)
 	}
 
 	if resourceServer.HTTP.Auth.OAuth2 != nil {
 		oauth := resourceServer.HTTP.Auth.OAuth2
 		if oauth.TokenURL == "" || oauth.GrantType == "" || oauth.ClientID == "" || oauth.ClientSecret == "" {
-			return faults.NewValidationError("managedService.http.auth.oauth2 requires tokenURL, grantType, clientID, clientSecret", nil)
+			return faults.Invalid("managedService.http.auth.oauth2 requires tokenURL, grantType, clientID, clientSecret", nil)
 		}
 	}
 
@@ -383,7 +383,7 @@ func validateManagedService(
 
 	for idx, head := range resourceServer.HTTP.Auth.CustomHeaders {
 		if head.Header == "" || head.Value == "" {
-			return faults.NewValidationError(
+			return faults.Invalid(
 				fmt.Sprintf("managedService.http.auth.customHeaders[%d] requires header and value", idx),
 				nil,
 			)
@@ -416,25 +416,25 @@ func validateManagedServiceRequestThrottling(throttling *config.HTTPRequestThrot
 		return nil
 	}
 	if throttling.MaxConcurrentRequests <= 0 && throttling.RequestsPerSecond <= 0 {
-		return faults.NewValidationError("managedService.http.requestThrottling must define at least one of maxConcurrentRequests or requestsPerSecond", nil)
+		return faults.Invalid("managedService.http.requestThrottling must define at least one of maxConcurrentRequests or requestsPerSecond", nil)
 	}
 	if throttling.MaxConcurrentRequests < 0 {
-		return faults.NewValidationError("managedService.http.requestThrottling.maxConcurrentRequests must be greater than zero when set", nil)
+		return faults.Invalid("managedService.http.requestThrottling.maxConcurrentRequests must be greater than zero when set", nil)
 	}
 	if throttling.QueueSize < 0 {
-		return faults.NewValidationError("managedService.http.requestThrottling.queueSize must be greater than or equal to zero", nil)
+		return faults.Invalid("managedService.http.requestThrottling.queueSize must be greater than or equal to zero", nil)
 	}
 	if throttling.QueueSize > 0 && throttling.MaxConcurrentRequests <= 0 {
-		return faults.NewValidationError("managedService.http.requestThrottling.queueSize requires maxConcurrentRequests", nil)
+		return faults.Invalid("managedService.http.requestThrottling.queueSize requires maxConcurrentRequests", nil)
 	}
 	if throttling.RequestsPerSecond < 0 {
-		return faults.NewValidationError("managedService.http.requestThrottling.requestsPerSecond must be greater than zero when set", nil)
+		return faults.Invalid("managedService.http.requestThrottling.requestsPerSecond must be greater than zero when set", nil)
 	}
 	if throttling.Burst < 0 {
-		return faults.NewValidationError("managedService.http.requestThrottling.burst must be greater than zero when set", nil)
+		return faults.Invalid("managedService.http.requestThrottling.burst must be greater than zero when set", nil)
 	}
 	if throttling.Burst > 0 && throttling.RequestsPerSecond <= 0 {
-		return faults.NewValidationError("managedService.http.requestThrottling.burst requires requestsPerSecond", nil)
+		return faults.Invalid("managedService.http.requestThrottling.burst requires requestsPerSecond", nil)
 	}
 	return nil
 }
@@ -447,30 +447,30 @@ func validateManagedServiceHealthCheck(value string) error {
 
 	parsed, err := url.Parse(healthCheck)
 	if err != nil {
-		return faults.NewValidationError("managedService.http.healthCheck is invalid", err)
+		return faults.Invalid("managedService.http.healthCheck is invalid", err)
 	}
 	if strings.TrimSpace(parsed.RawQuery) != "" {
-		return faults.NewValidationError("managedService.http.healthCheck must not include query parameters", nil)
+		return faults.Invalid("managedService.http.healthCheck must not include query parameters", nil)
 	}
 
 	// Relative paths are interpreted against managedService.http.url.
 	if parsed.Scheme == "" && parsed.Host == "" {
 		if strings.TrimSpace(parsed.Path) == "" {
-			return faults.NewValidationError("managedService.http.healthCheck is invalid", nil)
+			return faults.Invalid("managedService.http.healthCheck is invalid", nil)
 		}
 		return nil
 	}
 
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return faults.NewValidationError("managedService.http.healthCheck URL must use http or https", nil)
+		return faults.Invalid("managedService.http.healthCheck URL must use http or https", nil)
 	}
 	if parsed.Host == "" {
-		return faults.NewValidationError("managedService.http.healthCheck URL host is required", nil)
+		return faults.Invalid("managedService.http.healthCheck URL host is required", nil)
 	}
 
 	_, err = filepath.Rel("/", parsed.Path)
 	if err != nil {
-		return faults.NewValidationError("managedService.http.healthCheck URL path is invalid", err)
+		return faults.Invalid("managedService.http.healthCheck URL path is invalid", err)
 	}
 
 	return nil
@@ -486,12 +486,12 @@ func validateSecretStore(
 	}
 
 	if countSet(secretStore.File != nil, secretStore.Vault != nil) != 1 {
-		return faults.NewValidationError("secretStore must define exactly one of file or vault", nil)
+		return faults.Invalid("secretStore must define exactly one of file or vault", nil)
 	}
 
 	if secretStore.File != nil {
 		if secretStore.File.Path == "" {
-			return faults.NewValidationError("secretStore.file.path is required", nil)
+			return faults.Invalid("secretStore.file.path is required", nil)
 		}
 		if countSet(
 			secretStore.File.Key != "",
@@ -499,23 +499,23 @@ func validateSecretStore(
 			secretStore.File.Passphrase != "",
 			secretStore.File.PassphraseFile != "",
 		) != 1 {
-			return faults.NewValidationError("secretStore.file must define exactly one of key, keyFile, passphrase, passphraseFile", nil)
+			return faults.Invalid("secretStore.file must define exactly one of key, keyFile, passphrase, passphraseFile", nil)
 		}
 	}
 
 	if secretStore.Vault != nil {
 		if secretStore.Vault.Address == "" {
-			return faults.NewValidationError("secretStore.vault.address is required", nil)
+			return faults.Invalid("secretStore.vault.address is required", nil)
 		}
 		if secretStore.Vault.Auth == nil {
-			return faults.NewValidationError("secretStore.vault.auth is required", nil)
+			return faults.Invalid("secretStore.vault.auth is required", nil)
 		}
 		if countSet(
 			secretStore.Vault.Auth.Token != "",
 			secretStore.Vault.Auth.Password != nil,
 			secretStore.Vault.Auth.AppRole != nil,
 		) != 1 {
-			return faults.NewValidationError("secretStore.vault.auth must define exactly one of token, password, appRole", nil)
+			return faults.Invalid("secretStore.vault.auth must define exactly one of token, password, appRole", nil)
 		}
 		if secretStore.Vault.Auth.Password != nil {
 			if err := validateCredentialRef(
@@ -541,7 +541,7 @@ func validateMetadata(metadata config.Metadata) error {
 	bundleFile := strings.TrimSpace(metadata.BundleFile)
 
 	if countSet(baseDir != "", bundle != "", bundleFile != "") > 1 {
-		return faults.NewValidationError("metadata must define at most one of baseDir, bundle, or bundleFile", nil)
+		return faults.Invalid("metadata must define at most one of baseDir, bundle, or bundleFile", nil)
 	}
 	if err := validateProxy("metadata.proxy", metadata.Proxy, nil, false); err != nil {
 		return err
@@ -578,7 +578,7 @@ func validateProxyAuth(
 ) error {
 	hasBasic := auth.Basic != nil
 	if countSet(hasBasic) != 1 {
-		return faults.NewValidationError(field+" must define basic", nil)
+		return faults.Invalid(field+" must define basic", nil)
 	}
 	if hasBasic {
 		if err := validateCredentialRef(field+".basic.credentialsRef", auth.Basic.CredentialsRef, credentials, strictCredentialRefs); err != nil {
@@ -593,10 +593,10 @@ func validateCredentials(items []config.Credential) (map[string]config.Credentia
 	for idx, item := range items {
 		name := strings.TrimSpace(item.Name)
 		if name == "" {
-			return nil, faults.NewValidationError(fmt.Sprintf("credentials[%d].name is required", idx), nil)
+			return nil, faults.Invalid(fmt.Sprintf("credentials[%d].name is required", idx), nil)
 		}
 		if _, exists := index[name]; exists {
-			return nil, faults.NewValidationError(fmt.Sprintf("duplicate credential name %q", name), nil)
+			return nil, faults.Invalid(fmt.Sprintf("duplicate credential name %q", name), nil)
 		}
 		if err := validateCredentialValue("credentials["+fmt.Sprint(idx)+"].username", item.Username); err != nil {
 			return nil, err
@@ -614,10 +614,10 @@ func validateCredentialValue(field string, value config.CredentialValue) error {
 	switch {
 	case value.Prompt == nil:
 		if value.Literal() == "" {
-			return faults.NewValidationError(field+" is required", nil)
+			return faults.Invalid(field+" is required", nil)
 		}
 	case !value.Prompt.Prompt:
-		return faults.NewValidationError(field+".prompt must be true when prompt configuration is used", nil)
+		return faults.Invalid(field+".prompt must be true when prompt configuration is used", nil)
 	}
 	return nil
 }
@@ -629,11 +629,11 @@ func validateCredentialRef(
 	strictCredentialRefs bool,
 ) error {
 	if ref == nil || strings.TrimSpace(ref.Name) == "" {
-		return faults.NewValidationError(field+" is required", nil)
+		return faults.Invalid(field+" is required", nil)
 	}
 	if strictCredentialRefs {
 		if _, ok := credentials[strings.TrimSpace(ref.Name)]; !ok {
-			return faults.NewValidationError(field+fmt.Sprintf(" references undefined credential %q", strings.TrimSpace(ref.Name)), nil)
+			return faults.Invalid(field+fmt.Sprintf(" references undefined credential %q", strings.TrimSpace(ref.Name)), nil)
 		}
 	}
 	return nil
@@ -645,27 +645,27 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 		switch key {
 		case "repository.git.local.baseDir":
 			if cfg.Repository.Git == nil {
-				return config.Context{}, faults.NewValidationError("override repository.git.local.baseDir requires repository.git to be configured", nil)
+				return config.Context{}, faults.Invalid("override repository.git.local.baseDir requires repository.git to be configured", nil)
 			}
 			cfg.Repository.Git.Local.BaseDir = value
 		case "repository.filesystem.baseDir":
 			if cfg.Repository.Filesystem == nil {
-				return config.Context{}, faults.NewValidationError("override repository.filesystem.baseDir requires repository.filesystem to be configured", nil)
+				return config.Context{}, faults.Invalid("override repository.filesystem.baseDir requires repository.filesystem to be configured", nil)
 			}
 			cfg.Repository.Filesystem.BaseDir = value
 		case "managedService.http.url":
 			if cfg.ManagedService == nil || cfg.ManagedService.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedService.http.url requires managedService.http to be configured", nil)
+				return config.Context{}, faults.Invalid("override managedService.http.url requires managedService.http to be configured", nil)
 			}
 			cfg.ManagedService.HTTP.BaseURL = value
 		case "managedService.http.healthCheck":
 			if cfg.ManagedService == nil || cfg.ManagedService.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedService.http.healthCheck requires managedService.http to be configured", nil)
+				return config.Context{}, faults.Invalid("override managedService.http.healthCheck requires managedService.http to be configured", nil)
 			}
 			cfg.ManagedService.HTTP.HealthCheck = value
 		case "managedService.http.proxy.http":
 			if cfg.ManagedService == nil || cfg.ManagedService.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedService.http.proxy.http requires managedService.http to be configured", nil)
+				return config.Context{}, faults.Invalid("override managedService.http.proxy.http requires managedService.http to be configured", nil)
 			}
 			if cfg.ManagedService.HTTP.Proxy == nil {
 				cfg.ManagedService.HTTP.Proxy = &config.HTTPProxy{}
@@ -673,7 +673,7 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 			cfg.ManagedService.HTTP.Proxy.HTTPURL = value
 		case "managedService.http.proxy.https":
 			if cfg.ManagedService == nil || cfg.ManagedService.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedService.http.proxy.https requires managedService.http to be configured", nil)
+				return config.Context{}, faults.Invalid("override managedService.http.proxy.https requires managedService.http to be configured", nil)
 			}
 			if cfg.ManagedService.HTTP.Proxy == nil {
 				cfg.ManagedService.HTTP.Proxy = &config.HTTPProxy{}
@@ -681,7 +681,7 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 			cfg.ManagedService.HTTP.Proxy.HTTPSURL = value
 		case "managedService.http.proxy.noProxy":
 			if cfg.ManagedService == nil || cfg.ManagedService.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedService.http.proxy.noProxy requires managedService.http to be configured", nil)
+				return config.Context{}, faults.Invalid("override managedService.http.proxy.noProxy requires managedService.http to be configured", nil)
 			}
 			if cfg.ManagedService.HTTP.Proxy == nil {
 				cfg.ManagedService.HTTP.Proxy = &config.HTTPProxy{}

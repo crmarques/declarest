@@ -45,7 +45,7 @@ func buildOrchestrator(
 	selection config.ContextSelection,
 ) (*internalorchestrator.Orchestrator, error) {
 	if contextService == nil {
-		return nil, faults.NewTypedError(faults.ValidationError, "context service must not be nil", nil)
+		return nil, faults.Invalid("context service must not be nil", nil)
 	}
 
 	resolvedContext, err := contextService.ResolveContext(ctx, selection)
@@ -105,7 +105,7 @@ func buildOrchestratorFromResolvedContext(
 	var srv managedservice.ManagedServiceClient
 	if resolvedContext.ManagedService != nil {
 		if resolvedContext.ManagedService.HTTP == nil {
-			return nil, faults.NewTypedError(faults.InternalError, "managed service provider is invalid", nil)
+			return nil, faults.Internal("managed service provider is invalid", nil)
 		}
 
 		serverConfig := *resolvedContext.ManagedService.HTTP
@@ -145,7 +145,7 @@ func buildOrchestratorFromResolvedContext(
 			}
 			sec = secretService
 		default:
-			return nil, faults.NewTypedError(faults.InternalError, "secret store provider is invalid", nil)
+			return nil, faults.Internal("secret store provider is invalid", nil)
 		}
 	}
 

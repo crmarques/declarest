@@ -140,8 +140,7 @@ func (g *Client) executeWithThrottle(
 		return nil, err
 	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		return nil, faults.NewTypedError(
-			faults.TransportError,
+		return nil, faults.Transport(
 			fmt.Sprintf("managed-service request canceled while waiting for throttling (%s %s %s)", purpose, request.Method, request.URL.Path),
 			ctxErr,
 		)

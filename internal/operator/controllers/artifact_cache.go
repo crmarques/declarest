@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/crmarques/declarest/config"
-	proxyhelper "github.com/crmarques/declarest/internal/proxy"
+	"github.com/crmarques/declarest/internal/httpclient"
 )
 
 const maxArtifactDownloadSize = 256 << 20 // 256 MB
@@ -129,7 +129,7 @@ func artifactPathExtension(path string) string {
 }
 
 func newArtifactHTTPClient(proxy *config.HTTPProxy) (*http.Client, error) {
-	transport := &http.Transport{
+	baseTransport := &http.Transport{
 		DialContext: (&net.Dialer{
 			Timeout:   10 * time.Second,
 			KeepAlive: 30 * time.Second,
@@ -137,19 +137,11 @@ func newArtifactHTTPClient(proxy *config.HTTPProxy) (*http.Client, error) {
 		MaxIdleConns:        20,
 		MaxIdleConnsPerHost: 5,
 		IdleConnTimeout:     90 * time.Second,
-		Proxy:               nil,
 	}
-
-	proxyConfig, disabled, err := proxyhelper.Resolve("managedService.http.proxy", proxy)
-	if err != nil {
-		return nil, err
-	}
-	if !disabled {
-		transport.Proxy = proxyConfig.Resolver()
-	}
-
-	return &http.Client{
-		Timeout:   60 * time.Second,
-		Transport: transport,
-	}, nil
+	return httpclient.Build(httpclient.Options{
+		Timeout:       60 * time.Second,
+		Proxy:         proxy,
+		ProxyScope:    "managedService.http.proxy",
+		BaseTransport: baseTransport,
+	})
 }

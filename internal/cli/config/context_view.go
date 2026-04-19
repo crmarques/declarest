@@ -57,7 +57,7 @@ func selectContextForView(contexts []configdomain.Context, name string) (configd
 		}
 		return configdomain.CompactContext(item), idx, nil
 	}
-	return configdomain.Context{}, -1, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("context %q not found", name), nil)
+	return configdomain.Context{}, -1, faults.NotFound(fmt.Sprintf("context %q not found", name), nil)
 }
 
 func selectSingleContextEditView(

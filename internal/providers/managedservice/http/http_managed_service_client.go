@@ -26,8 +26,8 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/httpclient"
 	"github.com/crmarques/declarest/internal/promptauth"
-	"github.com/crmarques/declarest/internal/providers/tlsconfig"
 	"github.com/crmarques/declarest/managedservice"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
@@ -224,7 +224,7 @@ func (g *Client) Exists(ctx context.Context, resolvedResource resource.Resource,
 	if err == nil {
 		return true, nil
 	}
-	if faults.IsCategory(err, NotFoundError) {
+	if faults.IsCategory(err, faults.NotFoundError) {
 		return false, nil
 	}
 	return false, err
@@ -232,10 +232,10 @@ func (g *Client) Exists(ctx context.Context, resolvedResource resource.Resource,
 
 func (g *Client) GetAccessToken(ctx context.Context) (string, error) {
 	if g == nil {
-		return "", faults.NewValidationError("managed service is not configured", nil)
+		return "", faults.Invalid("managed service is not configured", nil)
 	}
 	if g.auth.mode != authModeOAuth2 {
-		return "", faults.NewValidationError("managed-service.http.auth.oauth2 is not configured", nil)
+		return "", faults.Invalid("managed-service.http.auth.oauth2 is not configured", nil)
 	}
 	return g.oauthToken(ctx)
 }
@@ -243,18 +243,18 @@ func (g *Client) GetAccessToken(ctx context.Context) (string, error) {
 func parseBaseURL(raw string) (*url.URL, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {
-		return nil, faults.NewValidationError("managed-service.http.base-url is required", nil)
+		return nil, faults.Invalid("managed-service.http.base-url is required", nil)
 	}
 
 	parsed, err := url.Parse(value)
 	if err != nil {
-		return nil, faults.NewValidationError("managed-service.http.base-url is invalid", err)
+		return nil, faults.Invalid("managed-service.http.base-url is invalid", err)
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return nil, faults.NewValidationError("managed-service.http.base-url must use http or https", nil)
+		return nil, faults.Invalid("managed-service.http.base-url must use http or https", nil)
 	}
 	if parsed.Host == "" {
-		return nil, faults.NewValidationError("managed-service.http.base-url host is required", nil)
+		return nil, faults.Invalid("managed-service.http.base-url host is required", nil)
 	}
 
 	if parsed.Path == "" {
@@ -265,5 +265,5 @@ func parseBaseURL(raw string) (*url.URL, error) {
 }
 
 func buildTLSConfig(tlsSettings *config.TLS) (*tls.Config, error) {
-	return tlsconfig.BuildTLSConfig(tlsSettings, "managed-service.http")
+	return httpclient.BuildTLSConfig(tlsSettings, "managed-service.http")
 }

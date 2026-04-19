@@ -64,14 +64,6 @@ func NewTypedError(category ErrorCategory, message string, cause error) *TypedEr
 	}
 }
 
-func NewValidationError(message string, cause error) *TypedError {
-	return NewTypedError(ValidationError, message, cause)
-}
-
-func NewConflictError(message string, cause error) *TypedError {
-	return NewTypedError(ConflictError, message, cause)
-}
-
 func IsCategory(err error, category ErrorCategory) bool {
 	if err == nil {
 		return false

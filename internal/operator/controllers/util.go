@@ -175,16 +175,16 @@ func readSecretValueFromClient(ctx context.Context, reader client.Reader, namesp
 	secret := &corev1.Secret{}
 	if err := reader.Get(ctx, types.NamespacedName{Namespace: namespace, Name: strings.TrimSpace(ref.Name)}, secret); err != nil {
 		if apierrors.IsNotFound(err) {
-			return "", faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("secret %q not found", ref.Name), err)
+			return "", faults.NotFound(fmt.Sprintf("secret %q not found", ref.Name), err)
 		}
 		return "", err
 	}
 	value, ok := secret.Data[strings.TrimSpace(ref.Key)]
 	if !ok {
-		return "", faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("secret key %q not found in %s/%s", ref.Key, namespace, ref.Name), nil)
+		return "", faults.NotFound(fmt.Sprintf("secret key %q not found in %s/%s", ref.Key, namespace, ref.Name), nil)
 	}
 	if len(value) == 0 {
-		return "", faults.NewValidationError(fmt.Sprintf("secret key %q in %s/%s is empty", ref.Key, namespace, ref.Name), nil)
+		return "", faults.Invalid(fmt.Sprintf("secret key %q in %s/%s is empty", ref.Key, namespace, ref.Name), nil)
 	}
 	return string(value), nil
 }

@@ -42,7 +42,7 @@ func (e *ListPayloadShapeError) Unwrap() error {
 
 func NewListPayloadShapeError(message string, cause error) error {
 	return &ListPayloadShapeError{
-		err: faults.NewTypedError(faults.ValidationError, message, cause),
+		err: faults.Invalid(message, cause),
 	}
 }
 

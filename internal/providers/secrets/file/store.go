@@ -16,20 +16,11 @@ package file
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
-	"encoding/base64"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
-
-	"golang.org/x/crypto/argon2"
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
@@ -61,38 +52,10 @@ type Store struct {
 	cachedSnapshot *secretSnapshot
 }
 
-type kdfSettings struct {
-	Time    uint32
-	Memory  uint32
-	Threads uint8
-}
-
-type encryptedStore struct {
-	Version    int    `json:"version"`
-	Salt       string `json:"salt,omitempty"`
-	Nonce      string `json:"nonce"`
-	Ciphertext string `json:"ciphertext"`
-	KDFTime    uint32 `json:"kdf_time,omitempty"`
-	KDFMemory  uint32 `json:"kdf_memory,omitempty"`
-	KDFThreads uint8  `json:"kdf_threads,omitempty"`
-}
-
-type secretSnapshot struct {
-	Secrets map[string]string `json:"secrets"`
-}
-
-func cloneSnapshot(src secretSnapshot) secretSnapshot {
-	clone := secretSnapshot{Secrets: make(map[string]string, len(src.Secrets))}
-	for k, v := range src.Secrets {
-		clone.Secrets[k] = v
-	}
-	return clone
-}
-
 func New(cfg config.FileSecretStore) (*Store, error) {
 	path := strings.TrimSpace(cfg.Path)
 	if path == "" {
-		return nil, faults.NewValidationError("secret-store.file.path is required", nil)
+		return nil, faults.Invalid("secret-store.file.path is required", nil)
 	}
 
 	setCount := countSet(
@@ -102,7 +65,7 @@ func New(cfg config.FileSecretStore) (*Store, error) {
 		strings.TrimSpace(cfg.PassphraseFile) != "",
 	)
 	if setCount != 1 {
-		return nil, faults.NewValidationError("secret-store.file must define exactly one of key, key-file, passphrase, passphrase-file", nil)
+		return nil, faults.Invalid("secret-store.file must define exactly one of key, key-file, passphrase, passphrase-file", nil)
 	}
 
 	kdf, err := resolveKDFSettings(cfg.KDF)
@@ -125,7 +88,7 @@ func New(cfg config.FileSecretStore) (*Store, error) {
 	case strings.TrimSpace(cfg.KeyFile) != "":
 		keyFileData, err := os.ReadFile(strings.TrimSpace(cfg.KeyFile))
 		if err != nil {
-			return nil, faults.NewValidationError("secret-store.file.key-file could not be read", err)
+			return nil, faults.Invalid("secret-store.file.key-file could not be read", err)
 		}
 		key, err := parseEncryptionKey(string(keyFileData))
 		if err != nil {
@@ -137,15 +100,15 @@ func New(cfg config.FileSecretStore) (*Store, error) {
 	case strings.TrimSpace(cfg.PassphraseFile) != "":
 		passphraseData, err := os.ReadFile(strings.TrimSpace(cfg.PassphraseFile))
 		if err != nil {
-			return nil, faults.NewValidationError("secret-store.file.passphrase-file could not be read", err)
+			return nil, faults.Invalid("secret-store.file.passphrase-file could not be read", err)
 		}
 		passphrase := strings.TrimSpace(string(passphraseData))
 		if passphrase == "" {
-			return nil, faults.NewValidationError("secret-store.file.passphrase-file must not be empty", nil)
+			return nil, faults.Invalid("secret-store.file.passphrase-file must not be empty", nil)
 		}
 		service.passphrase = []byte(passphrase)
 	default:
-		return nil, faults.NewValidationError("secret-store.file key material is invalid", nil)
+		return nil, faults.Invalid("secret-store.file key material is invalid", nil)
 	}
 
 	return service, nil
@@ -156,97 +119,6 @@ func (s *Store) Init(context.Context) error {
 	defer s.mu.Unlock()
 
 	return s.initLocked()
-}
-
-func (s *Store) Store(_ context.Context, key string, value string) error {
-	normalizedKey, err := secretdomain.NormalizeKey(key)
-	if err != nil {
-		return err
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if err := s.initLocked(); err != nil {
-		return err
-	}
-
-	snapshot, err := s.readSnapshotLocked()
-	if err != nil {
-		return err
-	}
-	snapshot.Secrets[normalizedKey] = value
-
-	return s.writeSnapshotLocked(snapshot)
-}
-
-func (s *Store) Get(_ context.Context, key string) (string, error) {
-	normalizedKey, err := secretdomain.NormalizeKey(key)
-	if err != nil {
-		return "", err
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if err := s.initLocked(); err != nil {
-		return "", err
-	}
-
-	snapshot, err := s.readSnapshotLocked()
-	if err != nil {
-		return "", err
-	}
-
-	value, found := snapshot.Secrets[normalizedKey]
-	if !found {
-		return "", notFoundError("secret key not found")
-	}
-	return value, nil
-}
-
-func (s *Store) Delete(_ context.Context, key string) error {
-	normalizedKey, err := secretdomain.NormalizeKey(key)
-	if err != nil {
-		return err
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if err := s.initLocked(); err != nil {
-		return err
-	}
-
-	snapshot, err := s.readSnapshotLocked()
-	if err != nil {
-		return err
-	}
-	delete(snapshot.Secrets, normalizedKey)
-
-	return s.writeSnapshotLocked(snapshot)
-}
-
-func (s *Store) List(context.Context) ([]string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if err := s.initLocked(); err != nil {
-		return nil, err
-	}
-
-	snapshot, err := s.readSnapshotLocked()
-	if err != nil {
-		return nil, err
-	}
-
-	keys := make([]string, 0, len(snapshot.Secrets))
-	for key := range snapshot.Secrets {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-
-	return keys, nil
 }
 
 func (s *Store) MaskPayload(ctx context.Context, value resource.Value) (resource.Value, error) {
@@ -271,18 +143,18 @@ func (s *Store) DetectSecretCandidates(_ context.Context, value resource.Value) 
 
 func (s *Store) initLocked() error {
 	if s == nil {
-		return faults.NewValidationError("file secret service must not be nil", nil)
+		return faults.Invalid("file secret service must not be nil", nil)
 	}
 	if strings.TrimSpace(s.path) == "" {
-		return faults.NewValidationError("secret store path must not be empty", nil)
+		return faults.Invalid("secret store path must not be empty", nil)
 	}
 
 	if len(s.key) == 0 && len(s.passphrase) == 0 {
-		return faults.NewValidationError("secret store key material is missing", nil)
+		return faults.Invalid("secret store key material is missing", nil)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
-		return internalError("failed to prepare secret store directory", err)
+		return faults.Internal("failed to prepare secret store directory", err)
 	}
 
 	if _, err := os.Stat(s.path); err != nil {
@@ -293,7 +165,7 @@ func (s *Store) initLocked() error {
 			s.initialized = true
 			return nil
 		}
-		return internalError("failed to inspect secret store file", err)
+		return faults.Internal("failed to inspect secret store file", err)
 	}
 
 	if !s.initialized {
@@ -304,292 +176,4 @@ func (s *Store) initLocked() error {
 
 	s.initialized = true
 	return nil
-}
-
-func (s *Store) readSnapshotLocked() (secretSnapshot, error) {
-	if s.cachedSnapshot != nil {
-		return cloneSnapshot(*s.cachedSnapshot), nil
-	}
-
-	data, err := os.ReadFile(s.path)
-	if err != nil {
-		return secretSnapshot{}, internalError("failed to read encrypted secret store", err)
-	}
-
-	var envelope encryptedStore
-	if err := json.Unmarshal(data, &envelope); err != nil {
-		return secretSnapshot{}, internalError("failed to decode encrypted secret store", err)
-	}
-
-	if envelope.Version != encryptedStoreVersion {
-		return secretSnapshot{}, faults.NewValidationError("secret store format version is unsupported", nil)
-	}
-
-	nonce, err := base64.StdEncoding.DecodeString(envelope.Nonce)
-	if err != nil {
-		return secretSnapshot{}, faults.NewValidationError("secret store nonce is invalid", err)
-	}
-
-	ciphertext, err := base64.StdEncoding.DecodeString(envelope.Ciphertext)
-	if err != nil {
-		return secretSnapshot{}, faults.NewValidationError("secret store ciphertext is invalid", err)
-	}
-
-	salt := []byte(nil)
-	if envelope.Salt != "" {
-		salt, err = base64.StdEncoding.DecodeString(envelope.Salt)
-		if err != nil {
-			return secretSnapshot{}, faults.NewValidationError("secret store salt is invalid", err)
-		}
-	}
-
-	readKDF := s.kdf
-	if len(salt) > 0 {
-		if envelope.KDFTime == 0 || envelope.KDFMemory == 0 || envelope.KDFThreads == 0 {
-			return secretSnapshot{}, faults.NewValidationError("secret store KDF parameters are missing", nil)
-		}
-		readKDF = kdfSettings{
-			Time:    envelope.KDFTime,
-			Memory:  envelope.KDFMemory,
-			Threads: envelope.KDFThreads,
-		}
-	}
-
-	key, err := s.deriveKeyWithSettings(salt, readKDF)
-	if err != nil {
-		return secretSnapshot{}, err
-	}
-
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return secretSnapshot{}, internalError("failed to initialize secret cipher", err)
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return secretSnapshot{}, internalError("failed to initialize secret cipher mode", err)
-	}
-
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
-	if err != nil {
-		return secretSnapshot{}, authError("failed to decrypt secret store with provided key material", err)
-	}
-
-	var snapshot secretSnapshot
-	if err := json.Unmarshal(plaintext, &snapshot); err != nil {
-		return secretSnapshot{}, internalError("failed to decode decrypted secret store", err)
-	}
-	if snapshot.Secrets == nil {
-		snapshot.Secrets = make(map[string]string)
-	}
-
-	s.cachedSnapshot = &snapshot
-	return cloneSnapshot(snapshot), nil
-}
-
-func (s *Store) writeSnapshotLocked(snapshot secretSnapshot) error {
-	if snapshot.Secrets == nil {
-		snapshot.Secrets = make(map[string]string)
-	}
-
-	plaintext, err := json.Marshal(snapshot)
-	if err != nil {
-		return internalError("failed to encode secret snapshot", err)
-	}
-
-	nonce, err := randomBytes(nonceLengthBytes)
-	if err != nil {
-		return internalError("failed to generate secret nonce", err)
-	}
-
-	salt := []byte(nil)
-	if len(s.passphrase) > 0 {
-		salt, err = randomBytes(saltLengthBytes)
-		if err != nil {
-			return internalError("failed to generate secret salt", err)
-		}
-	}
-
-	key, err := s.deriveKey(salt)
-	if err != nil {
-		return err
-	}
-
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return internalError("failed to initialize secret cipher", err)
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return internalError("failed to initialize secret cipher mode", err)
-	}
-
-	ciphertext := gcm.Seal(nil, nonce, plaintext, nil)
-
-	envelope := encryptedStore{
-		Version:    encryptedStoreVersion,
-		Nonce:      base64.StdEncoding.EncodeToString(nonce),
-		Ciphertext: base64.StdEncoding.EncodeToString(ciphertext),
-	}
-	if len(salt) > 0 {
-		envelope.Salt = base64.StdEncoding.EncodeToString(salt)
-		envelope.KDFTime = s.kdf.Time
-		envelope.KDFMemory = s.kdf.Memory
-		envelope.KDFThreads = s.kdf.Threads
-	}
-
-	encoded, err := json.Marshal(envelope)
-	if err != nil {
-		return internalError("failed to encode encrypted secret store", err)
-	}
-
-	if err := writeAtomicFile(s.path, encoded, 0o600); err != nil {
-		return err
-	}
-	s.cachedSnapshot = &snapshot
-	return nil
-}
-
-func (s *Store) deriveKey(salt []byte) ([]byte, error) {
-	return s.deriveKeyWithSettings(salt, s.kdf)
-}
-
-func (s *Store) deriveKeyWithSettings(salt []byte, kdf kdfSettings) ([]byte, error) {
-	if len(s.key) > 0 {
-		return s.key, nil
-	}
-
-	if len(s.passphrase) == 0 {
-		return nil, faults.NewValidationError("secret store passphrase is missing", nil)
-	}
-
-	if len(salt) == 0 {
-		return nil, faults.NewValidationError("secret store salt is missing", nil)
-	}
-
-	key := argon2.IDKey(s.passphrase, salt, kdf.Time, kdf.Memory, kdf.Threads, keyLengthBytes)
-	return key, nil
-}
-
-func resolveKDFSettings(kdf *config.KDF) (kdfSettings, error) {
-	settings := kdfSettings{
-		Time:    defaultKDFTime,
-		Memory:  defaultKDFMemory,
-		Threads: defaultKDFThreads,
-	}
-
-	if kdf == nil {
-		return settings, nil
-	}
-
-	if kdf.Time < 0 || kdf.Memory < 0 || kdf.Threads < 0 {
-		return kdfSettings{}, faults.NewValidationError("secret-store.file.kdf values must be non-negative", nil)
-	}
-
-	if kdf.Time > 0 {
-		settings.Time = uint32(kdf.Time)
-	}
-	if kdf.Memory > 0 {
-		settings.Memory = uint32(kdf.Memory)
-	}
-	if kdf.Threads > 0 {
-		settings.Threads = uint8(kdf.Threads)
-	}
-
-	if settings.Time == 0 || settings.Memory == 0 || settings.Threads == 0 {
-		return kdfSettings{}, faults.NewValidationError("secret-store.file.kdf values must be greater than zero", nil)
-	}
-
-	return settings, nil
-}
-
-func parseEncryptionKey(raw string) ([]byte, error) {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return nil, faults.NewValidationError("secret-store.file.key must not be empty", nil)
-	}
-
-	if decoded, err := hex.DecodeString(trimmed); err == nil && len(decoded) == keyLengthBytes {
-		return decoded, nil
-	}
-	if decoded, err := base64.StdEncoding.DecodeString(trimmed); err == nil && len(decoded) == keyLengthBytes {
-		return decoded, nil
-	}
-	if decoded, err := base64.RawStdEncoding.DecodeString(trimmed); err == nil && len(decoded) == keyLengthBytes {
-		return decoded, nil
-	}
-
-	if len(trimmed) == keyLengthBytes {
-		return []byte(trimmed), nil
-	}
-
-	return nil, faults.NewValidationError("secret-store.file.key must be 32-byte raw, base64, or hex", nil)
-}
-
-func countSet(values ...bool) int {
-	count := 0
-	for _, value := range values {
-		if value {
-			count++
-		}
-	}
-	return count
-}
-
-func randomBytes(length int) ([]byte, error) {
-	buffer := make([]byte, length)
-	if _, err := rand.Read(buffer); err != nil {
-		return nil, err
-	}
-	return buffer, nil
-}
-
-func writeAtomicFile(path string, data []byte, mode os.FileMode) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return internalError("failed to create secret store directory", err)
-	}
-
-	tempFile, err := os.CreateTemp(dir, ".declarest-secret-*")
-	if err != nil {
-		return internalError("failed to create temporary secret file", err)
-	}
-	tempPath := tempFile.Name()
-
-	if _, err := tempFile.Write(data); err != nil {
-		_ = tempFile.Close()
-		_ = os.Remove(tempPath)
-		return internalError("failed to write temporary secret file", err)
-	}
-
-	if err := tempFile.Chmod(mode); err != nil {
-		_ = tempFile.Close()
-		_ = os.Remove(tempPath)
-		return internalError("failed to set secret file permissions", err)
-	}
-
-	if err := tempFile.Close(); err != nil {
-		_ = os.Remove(tempPath)
-		return internalError("failed to close temporary secret file", err)
-	}
-
-	if err := os.Rename(tempPath, path); err != nil {
-		_ = os.Remove(tempPath)
-		return internalError("failed to replace secret store file", err)
-	}
-
-	return nil
-}
-
-func notFoundError(message string) error {
-	return faults.NewTypedError(faults.NotFoundError, message, nil)
-}
-
-func authError(message string, cause error) error {
-	return faults.NewTypedError(faults.AuthError, message, cause)
-}
-
-func internalError(message string, cause error) error {
-	return faults.NewTypedError(faults.InternalError, message, cause)
 }

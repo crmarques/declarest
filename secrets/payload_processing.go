@@ -41,7 +41,7 @@ func NormalizePlaceholders(value resource.Value) (resource.Value, error) {
 
 func MaskPayload(value resource.Value, storeFn func(key string, value string) error) (resource.Value, error) {
 	if storeFn == nil {
-		return nil, faults.NewValidationError("secret store function must not be nil", nil)
+		return nil, faults.Invalid("secret store function must not be nil", nil)
 	}
 
 	normalized, err := resource.Normalize(value)
@@ -134,7 +134,7 @@ func resolvePayloadWithResourceScope(
 	getFn func(key string) (string, error),
 ) (resource.Value, error) {
 	if getFn == nil {
-		return nil, faults.NewValidationError("secret get function must not be nil", nil)
+		return nil, faults.Invalid("secret get function must not be nil", nil)
 	}
 
 	normalized, err := resource.Normalize(value)
@@ -156,7 +156,7 @@ func resolvePayloadDescriptorDirectivesValue(
 	depth int,
 ) (any, error) {
 	if depth > maxPayloadDepth {
-		return nil, faults.NewValidationError("secret payload exceeds maximum nesting depth", nil)
+		return nil, faults.Invalid("secret payload exceeds maximum nesting depth", nil)
 	}
 	switch typed := value.(type) {
 	case map[string]any:
@@ -215,7 +215,7 @@ func DetectSecretCandidates(value resource.Value) ([]string, error) {
 
 func normalizePlaceholdersValue(value any, currentPath string, depth int) (any, error) {
 	if depth > maxPayloadDepth {
-		return nil, faults.NewValidationError("secret payload exceeds maximum nesting depth", nil)
+		return nil, faults.Invalid("secret payload exceeds maximum nesting depth", nil)
 	}
 	switch typed := value.(type) {
 	case map[string]any:
@@ -268,7 +268,7 @@ func collectMaskCandidates(
 	depth int,
 ) error {
 	if depth > maxPayloadDepth {
-		return faults.NewValidationError("secret payload exceeds maximum nesting depth", nil)
+		return faults.Invalid("secret payload exceeds maximum nesting depth", nil)
 	}
 	switch typed := value.(type) {
 	case map[string]any:
@@ -279,7 +279,7 @@ func collectMaskCandidates(
 				stringValue, isString := field.(string)
 				if !isString {
 					if field != nil {
-						return faults.NewValidationError("secret masking supports only string values for detected keys", nil)
+						return faults.Invalid("secret masking supports only string values for detected keys", nil)
 					}
 				} else {
 					_, _, isPlaceholder, err := parseSecretPlaceholder(stringValue)
@@ -288,12 +288,12 @@ func collectMaskCandidates(
 					}
 					if !isPlaceholder {
 						if existingPath, found := scopeByKey[key]; found && existingPath != attributePath {
-							return faults.NewValidationError("secret masking key scope is ambiguous", nil)
+							return faults.Invalid("secret masking key scope is ambiguous", nil)
 						}
 						scopeByKey[key] = attributePath
 
 						if _, found := candidates[attributePath]; found {
-							return faults.NewValidationError("secret masking key scope is ambiguous", nil)
+							return faults.Invalid("secret masking key scope is ambiguous", nil)
 						}
 						candidates[attributePath] = stringValue
 					}
@@ -323,7 +323,7 @@ func collectMaskCandidates(
 
 func applyMask(value any, currentPath string, candidates map[string]string, depth int) (any, error) {
 	if depth > maxPayloadDepth {
-		return nil, faults.NewValidationError("secret payload exceeds maximum nesting depth", nil)
+		return nil, faults.Invalid("secret payload exceeds maximum nesting depth", nil)
 	}
 	switch typed := value.(type) {
 	case map[string]any:
@@ -376,7 +376,7 @@ func resolvePayloadValue(
 	depth int,
 ) (any, error) {
 	if depth > maxPayloadDepth {
-		return nil, faults.NewValidationError("secret payload exceeds maximum nesting depth", nil)
+		return nil, faults.Invalid("secret payload exceeds maximum nesting depth", nil)
 	}
 	switch typed := value.(type) {
 	case map[string]any:
@@ -439,7 +439,7 @@ func resolvePayloadValue(
 
 func collectDetectedCandidates(value any, currentPath string, candidates map[string]struct{}, depth int) error {
 	if depth > maxPayloadDepth {
-		return faults.NewValidationError("secret payload exceeds maximum nesting depth", nil)
+		return faults.Invalid("secret payload exceeds maximum nesting depth", nil)
 	}
 	switch typed := value.(type) {
 	case map[string]any:
@@ -494,7 +494,7 @@ func parseSecretPlaceholder(value string) (key string, isCurrent bool, isPlaceho
 
 	argument := strings.TrimSpace(strings.TrimPrefix(inner, "secret"))
 	if argument == "" {
-		return "", false, true, faults.NewValidationError("secret placeholder argument is required", nil)
+		return "", false, true, faults.Invalid("secret placeholder argument is required", nil)
 	}
 
 	if argument == "." {
@@ -504,18 +504,18 @@ func parseSecretPlaceholder(value string) (key string, isCurrent bool, isPlaceho
 	if strings.HasPrefix(argument, "\"") {
 		parsed, parseErr := strconv.Unquote(argument)
 		if parseErr != nil {
-			return "", false, true, faults.NewValidationError("secret placeholder key is invalid", parseErr)
+			return "", false, true, faults.Invalid("secret placeholder key is invalid", parseErr)
 		}
 
 		parsed = strings.TrimSpace(parsed)
 		if parsed == "" {
-			return "", false, true, faults.NewValidationError("secret placeholder key must not be empty", nil)
+			return "", false, true, faults.Invalid("secret placeholder key must not be empty", nil)
 		}
 		return parsed, false, true, nil
 	}
 
 	if strings.ContainsAny(argument, " \t\r\n") {
-		return "", false, true, faults.NewValidationError("secret placeholder key with spaces must be quoted", nil)
+		return "", false, true, faults.Invalid("secret placeholder key with spaces must be quoted", nil)
 	}
 
 	return argument, false, true, nil
@@ -551,10 +551,10 @@ func resolvePayloadDescriptorPlaceholder(
 
 	argument := strings.TrimSpace(strings.TrimPrefix(inner, name))
 	if argument == "" {
-		return "", true, faults.NewValidationError(name+" placeholder argument is required", nil)
+		return "", true, faults.Invalid(name+" placeholder argument is required", nil)
 	}
 	if argument != "." {
-		return "", true, faults.NewValidationError(name+" placeholder supports only {{"+name+" .}}", nil)
+		return "", true, faults.Invalid(name+" placeholder supports only {{"+name+" .}}", nil)
 	}
 
 	switch name {
@@ -591,17 +591,17 @@ func resolvePlaceholderAttribute(key string, isCurrent bool, currentPath string)
 	if !isCurrent {
 		resolved := strings.TrimSpace(key)
 		if resolved == "" {
-			return "", faults.NewValidationError("secret placeholder key must not be empty", nil)
+			return "", faults.Invalid("secret placeholder key must not be empty", nil)
 		}
 		if strings.HasPrefix(resolved, "/") {
-			return "", faults.NewValidationError("secret placeholder key must be relative to the resource path", nil)
+			return "", faults.Invalid("secret placeholder key must be relative to the resource path", nil)
 		}
 		return resolved, nil
 	}
 
 	resolved := strings.TrimSpace(currentPath)
 	if resolved == "" {
-		return "", faults.NewValidationError("secret placeholder {{secret .}} requires map field scope", nil)
+		return "", faults.Invalid("secret placeholder {{secret .}} requires map field scope", nil)
 	}
 
 	return resolved, nil

@@ -347,7 +347,7 @@ func TestOrchestratorGetRemoteNormalizesCollectionPath(t *testing.T) {
 
 	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
-			resolveErr: faults.NewTypedError(faults.NotFoundError, "metadata not found", nil),
+			resolveErr: faults.NotFound("metadata not found", nil),
 		},
 		server: &fakeServer{
 			getValue: map[string]any{"realm": "master"},
@@ -387,7 +387,7 @@ func TestOrchestratorApplyExpandsExternalizedAttributesFromRepository(t *testing
 		},
 	}
 	server := &fakeServer{
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 	}
 	orchestrator := &Orchestrator{
 		repository: repo,
@@ -438,7 +438,7 @@ func TestOrchestratorApplyExpandsWildcardArrayExternalizedAttributes(t *testing.
 		},
 	}
 	server := &fakeServer{
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 	}
 	orchestrator := &Orchestrator{
 		repository: repo,
@@ -517,7 +517,7 @@ func TestOrchestratorGetRemoteFallsBackToCollectionListByAlias(t *testing.T) {
 			},
 		},
 		server: &fakeServer{
-			getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+			getErr: faults.NotFound("resource not found", nil),
 			listValue: []resource.Resource{
 				{
 					LogicalPath: "/admin/realms/master/clients/account",
@@ -865,7 +865,7 @@ func TestOrchestratorGetRemoteUsesSingleJQFilteredCandidateFallback(t *testing.T
 	resolvedIDPath := "/admin/realms/publico-br/13de4420-7c8d-4db7-b8f7-2d2a26f2053e"
 
 	serverManager := &fakeServer{
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 		getValues: map[string]resource.Value{
 			resolvedIDPath: map[string]any{
 				"id":         "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
@@ -940,7 +940,7 @@ func TestOrchestratorGetRemoteDoesNotCollapseExplicitChildToSingletonJQCandidate
 	expectedSingletonAliasPath := "/admin/realms/publico-br/user-registry/AD PRD"
 
 	serverManager := &fakeServer{
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 		listValues: map[string][]resource.Resource{
 			"/admin/realms/publico-br/user-registry": {
 				{
@@ -989,7 +989,7 @@ func TestOrchestratorGetRemoteDoesNotUseSingleCandidateFallbackWithoutJQ(t *test
 	requestPath := "/admin/realms/publico-br/user-registry"
 
 	serverManager := &fakeServer{
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 		listValues: map[string][]resource.Resource{
 			"/admin/realms/publico-br": {
 				{
@@ -1028,7 +1028,7 @@ func TestOrchestratorGetRemoteResolvesAliasPathToMetadataIDBeforeCollectionFallb
 	resolvedIDPath := "/admin/realms/publico-br/organizations/71ba388d-9f95-4a4d-b674-a632f697b732"
 
 	serverManager := &fakeServer{
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 		getValues: map[string]resource.Value{
 			resolvedIDPath: map[string]any{
 				"id":    "71ba388d-9f95-4a4d-b674-a632f697b732",
@@ -1050,7 +1050,7 @@ func TestOrchestratorGetRemoteResolvesAliasPathToMetadataIDBeforeCollectionFallb
 			},
 		},
 		listErrs: map[string]error{
-			aliasPath: faults.NewTypedError(faults.NotFoundError, "collection not found", nil),
+			aliasPath: faults.NotFound("collection not found", nil),
 		},
 		openAPISpec: map[string]any{
 			"paths": map[string]any{
@@ -1111,7 +1111,7 @@ func TestOrchestratorGetRemoteRecursivelyResolvesParentMetadataIdentity(t *testi
 	resolvedResourcePath := "/admin/realms/realm-1/organizations/org-1"
 
 	serverManager := &fakeServer{
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 		getValues: map[string]resource.Value{
 			resolvedResourcePath: map[string]any{
 				"id":    "org-1",
@@ -1207,10 +1207,10 @@ func TestOrchestratorGetRemoteKeepsOriginalNotFoundWhenRecursiveFallbackProbeRes
 	requestPath := "/admin/realms/xxxxx/organizations"
 
 	serverManager := &fakeServer{
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 		listErrs: map[string]error{
-			"/admin/realms/xxxxx": faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
-			"/admin/realms":       faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+			"/admin/realms/xxxxx": faults.NotFound("resource not found", nil),
+			"/admin/realms":       faults.NotFound("resource not found", nil),
 			"/admin": faults.NewTypedError(
 				faults.ValidationError,
 				`response body is not valid JSON: invalid character '<' looking for beginning of value`,
@@ -1253,7 +1253,7 @@ func TestOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenOpenAPIHintsCol
 				"realm": "master",
 			},
 		},
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 		listErr: faults.NewTypedError(
 			faults.NotFoundError,
 			"collection not found",
@@ -1298,7 +1298,7 @@ func TestOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenRepositoryHints
 	t.Parallel()
 
 	repositoryManager := &fakeRepository{
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 		existsValues: map[string]bool{
 			"/admin/realms/master/organizations": true,
 		},
@@ -1309,7 +1309,7 @@ func TestOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenRepositoryHints
 				"realm": "master",
 			},
 		},
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 		listErr: faults.NewTypedError(
 			faults.NotFoundError,
 			"collection not found",
@@ -1346,7 +1346,7 @@ func TestOrchestratorGetRemoteDoesNotTreatNotFoundAsEmptyWithoutOpenAPIOrReposit
 	t.Parallel()
 
 	serverManager := &fakeServer{
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 		listErr: faults.NewTypedError(
 			faults.NotFoundError,
 			"collection not found",
@@ -1379,7 +1379,7 @@ func TestOrchestratorGetRemoteKeepsNotFoundForConcreteResourcePathWithOpenAPIChi
 	t.Parallel()
 
 	serverManager := &fakeServer{
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 		listErr: faults.NewTypedError(
 			faults.NotFoundError,
 			"collection not found",
@@ -1425,7 +1425,7 @@ func TestOrchestratorGetRemoteKeepsNotFoundForCollectionWhenParentResourceIsMiss
 	t.Parallel()
 
 	serverManager := &fakeServer{
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 		listErr: faults.NewTypedError(
 			faults.NotFoundError,
 			"collection not found",
@@ -1469,7 +1469,7 @@ func TestOrchestratorGetRemoteKeepsNotFoundWhenParentFallbackListPayloadIsInvali
 	t.Parallel()
 
 	serverManager := &fakeServer{
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 		listErr: managedservicedomain.NewListPayloadShapeError(
 			`list response object is ambiguous: expected an "items" array or a single array field`,
 			nil,
@@ -1683,10 +1683,10 @@ func TestOrchestratorDeleteRetriesWithResolvedRemoteIdentityAfterNotFound(t *tes
 
 	serverManager := &fakeServer{
 		deleteErrs: []error{
-			faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+			faults.NotFound("resource not found", nil),
 			nil,
 		},
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 		listValue: []resource.Resource{
 			{
 				LogicalPath: "/admin/realms/master/clients/account",
@@ -1847,8 +1847,8 @@ func TestOrchestratorRequestGetFallsBackToMetadataAwareRemoteReadAfterNotFound(t
 	t.Parallel()
 
 	serverManager := &fakeServer{
-		requestErr: faults.NewTypedError(faults.NotFoundError, "request path not found", nil),
-		getErr:     faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		requestErr: faults.NotFound("request path not found", nil),
+		getErr:     faults.NotFound("resource not found", nil),
 		listValue: []resource.Resource{
 			{
 				LogicalPath: "/admin/realms/master/clients/account",
@@ -1896,11 +1896,11 @@ func TestOrchestratorRequestDeleteRetriesWithResolvedRemoteIdentityAfterNotFound
 
 	serverManager := &fakeServer{
 		requestErrs: []error{
-			faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+			faults.NotFound("resource not found", nil),
 			nil,
 		},
 		requestValue: nil,
-		getErr:       faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr:       faults.NotFound("resource not found", nil),
 		listValue: []resource.Resource{
 			{
 				LogicalPath: "/admin/realms/acme/organizations/alpha",
@@ -1947,7 +1947,7 @@ func TestOrchestratorRequestPutCollectionPathRetriesLiteralAfterResolvedNotFound
 
 	serverManager := &fakeServer{
 		requestErrs: []error{
-			faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+			faults.NotFound("resource not found", nil),
 			nil,
 		},
 		requestValue: map[string]any{"ok": true},
@@ -2084,7 +2084,7 @@ func (f *fakeRepository) Get(_ context.Context, logicalPath string) (resource.Co
 		if value, found := f.getValues[logicalPath]; found {
 			return testContent(value), nil
 		}
-		return resource.Content{}, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
+		return resource.Content{}, faults.NotFound(fmt.Sprintf("resource %q not found", logicalPath), nil)
 	}
 
 	return testContent(f.getValue), nil
@@ -2360,7 +2360,7 @@ func (f *fakeSecretProvider) Store(_ context.Context, key string, value string) 
 func (f *fakeSecretProvider) Get(_ context.Context, key string) (string, error) {
 	value, found := f.values[key]
 	if !found {
-		return "", faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("secret %q not found", key), nil)
+		return "", faults.NotFound(fmt.Sprintf("secret %q not found", key), nil)
 	}
 	return value, nil
 }
@@ -2485,7 +2485,7 @@ func TestOrchestratorApplyUsesResolvedRemoteIDForUpdateAfterRemoteFallback(t *te
 	metadataService := &fakeMetadata{resolveValue: md}
 
 	serverManager := &fakeServer{
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 		listValue: []resource.Resource{
 			{
 				LogicalPath:    "/admin/realms/test/clients/testA",
@@ -2690,8 +2690,8 @@ func TestOrchestratorApplyRetriesUpdateWhenCreateConflicts(t *testing.T) {
 	}
 
 	serverManager := &fakeServer{
-		getErr:    faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
-		createErr: faults.NewConflictError("remote request failed with status 409: realm already exists", nil),
+		getErr:    faults.NotFound("resource not found", nil),
+		createErr: faults.Conflict("remote request failed with status 409: realm already exists", nil),
 		updateValue: map[string]any{
 			"realm": "test2",
 		},
@@ -2752,7 +2752,7 @@ func TestOrchestratorDiffUsesFallbackAndCompareSuppressRules(t *testing.T) {
 
 	metadataService := &fakeMetadata{resolveValue: md}
 	serverManager := &fakeServer{
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 		listValue: []resource.Resource{
 			{
 				LogicalPath: "/customers/acme",
@@ -2865,7 +2865,7 @@ func TestOrchestratorDiffTreatsMissingRemoteResourceAsDrift(t *testing.T) {
 
 	metadataService := &fakeMetadata{resolveValue: md}
 	serverManager := &fakeServer{
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 	}
 
 	orchestrator := &Orchestrator{
@@ -2920,7 +2920,7 @@ func TestOrchestratorDiffReturnsConflictOnAmbiguousFallback(t *testing.T) {
 
 	metadataService := &fakeMetadata{resolveValue: md}
 	serverManager := &fakeServer{
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 		listValue: []resource.Resource{
 			{LogicalPath: "/customers/acme-1", LocalAlias: "acme", RemoteID: "42", Payload: map[string]any{"id": "42"}},
 			{LogicalPath: "/customers/acme-2", LocalAlias: "acme", RemoteID: "42", Payload: map[string]any{"id": "42"}},
@@ -3044,7 +3044,7 @@ func TestOrchestratorListRemoteProvidesListJQResourceResolver(t *testing.T) {
 	}
 
 	serverManager := &fakeServer{
-		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getErr: faults.NotFound("resource not found", nil),
 		listFunc: func(ctx context.Context, logicalPath string, _ metadatadomain.ResourceMetadata) ([]resource.Resource, error) {
 			switch logicalPath {
 			case "/admin/realms/publico-br/user-registry/ldap-test/mappers":
@@ -3110,7 +3110,7 @@ func TestOrchestratorListRemoteProvidesListJQResourceResolver(t *testing.T) {
 					},
 				}, nil
 			default:
-				return nil, faults.NewTypedError(faults.NotFoundError, "list not found", nil)
+				return nil, faults.NotFound("list not found", nil)
 			}
 		},
 	}

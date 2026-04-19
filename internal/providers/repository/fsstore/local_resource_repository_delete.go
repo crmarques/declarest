@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
 )
@@ -61,7 +62,7 @@ func (r *LocalResourceRepository) deleteCollectionDirect(collectionPath string) 
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
-		return internalError("failed to list collection for delete", err)
+		return faults.Internal("failed to list collection for delete", err)
 	}
 
 	for _, entry := range entries {
@@ -73,7 +74,7 @@ func (r *LocalResourceRepository) deleteCollectionDirect(collectionPath string) 
 			resourceDir := filepath.Join(collectionPath, entry.Name())
 			relativeDir, relErr := filepath.Rel(r.baseDir, resourceDir)
 			if relErr != nil {
-				return internalError("failed to resolve collection resource path", relErr)
+				return faults.Internal("failed to resolve collection resource path", relErr)
 			}
 			logicalPath := "/" + strings.TrimPrefix(filepath.ToSlash(relativeDir), "/")
 			files, infoErr := r.discoverPayloadFiles(logicalPath)
@@ -123,7 +124,7 @@ func (r *LocalResourceRepository) deleteCollectionRecursive(collectionPath strin
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
-		return internalError("failed to recursively delete collection resources", err)
+		return faults.Internal("failed to recursively delete collection resources", err)
 	}
 	return nil
 }

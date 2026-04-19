@@ -28,7 +28,7 @@ func buildVaultAuthConfig(cfg config.VaultAuth) (vaultAuthConfig, error) {
 		cfg.AppRole != nil,
 	)
 	if setCount != 1 {
-		return vaultAuthConfig{}, faults.NewValidationError("secret-store.vault.auth must define exactly one of token, password, approle", nil)
+		return vaultAuthConfig{}, faults.Invalid("secret-store.vault.auth must define exactly one of token, password, approle", nil)
 	}
 
 	if strings.TrimSpace(cfg.Token) != "" {
@@ -40,7 +40,7 @@ func buildVaultAuthConfig(cfg config.VaultAuth) (vaultAuthConfig, error) {
 
 	if cfg.Password != nil {
 		if cfg.Password.CredentialName() == "" && !cfg.Password.HasResolvedCredentials() {
-			return vaultAuthConfig{}, faults.NewValidationError("secret-store.vault.auth.password.credentials-ref is required", nil)
+			return vaultAuthConfig{}, faults.Invalid("secret-store.vault.auth.password.credentials-ref is required", nil)
 		}
 		copied := *cfg.Password
 		return vaultAuthConfig{
@@ -51,7 +51,7 @@ func buildVaultAuthConfig(cfg config.VaultAuth) (vaultAuthConfig, error) {
 
 	if cfg.AppRole != nil {
 		if strings.TrimSpace(cfg.AppRole.RoleID) == "" || strings.TrimSpace(cfg.AppRole.SecretID) == "" {
-			return vaultAuthConfig{}, faults.NewValidationError("secret-store.vault.auth.approle requires role-id and secret-id", nil)
+			return vaultAuthConfig{}, faults.Invalid("secret-store.vault.auth.approle requires role-id and secret-id", nil)
 		}
 		copied := *cfg.AppRole
 		return vaultAuthConfig{
@@ -60,7 +60,7 @@ func buildVaultAuthConfig(cfg config.VaultAuth) (vaultAuthConfig, error) {
 		}, nil
 	}
 
-	return vaultAuthConfig{}, faults.NewValidationError("secret-store.vault.auth is invalid", nil)
+	return vaultAuthConfig{}, faults.Invalid("secret-store.vault.auth is invalid", nil)
 }
 
 func countSet(values ...bool) int {

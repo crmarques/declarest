@@ -65,7 +65,7 @@ func (g *Client) BuildRequestFromMetadata(ctx context.Context, resolvedResource 
 	}
 	spec.Path = managedservice.NormalizeRequestPath(spec.Path)
 	if spec.Path == "" {
-		return metadata.OperationSpec{}, faults.NewValidationError("resolved operation path is empty", nil)
+		return metadata.OperationSpec{}, faults.Invalid("resolved operation path is empty", nil)
 	}
 
 	spec.Query = maps.Clone(spec.Query)
@@ -80,7 +80,7 @@ func (g *Client) BuildRequestFromMetadata(ctx context.Context, resolvedResource 
 	}
 	spec.Method = strings.ToUpper(strings.TrimSpace(spec.Method))
 	if spec.Method == "" {
-		return metadata.OperationSpec{}, faults.NewValidationError(fmt.Sprintf("operation %q has no HTTP method", operation), nil)
+		return metadata.OperationSpec{}, faults.Invalid(fmt.Sprintf("operation %q has no HTTP method", operation), nil)
 	}
 
 	bodyDescriptor := g.requestBodyDescriptor(resolvedResource, md)

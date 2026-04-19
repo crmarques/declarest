@@ -131,7 +131,7 @@ func (g *Client) applyPayloadJQ(ctx context.Context, payload resource.Value, exp
 
 	code, err := g.compileListJQCode(ctx, trimmedExpression)
 	if err != nil {
-		return nil, faults.NewValidationError("invalid payload jq expression", err)
+		return nil, faults.Invalid("invalid payload jq expression", err)
 	}
 
 	runCtx := ctx
@@ -147,7 +147,7 @@ func (g *Client) applyPayloadJQ(ctx context.Context, payload resource.Value, exp
 			break
 		}
 		if valueErr, isErr := value.(error); isErr {
-			return nil, faults.NewValidationError("failed to evaluate payload jq expression", valueErr)
+			return nil, faults.Invalid("failed to evaluate payload jq expression", valueErr)
 		}
 		results = append(results, value)
 	}

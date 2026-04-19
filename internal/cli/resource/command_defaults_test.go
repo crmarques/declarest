@@ -394,7 +394,7 @@ func (f *fakeDefaultsCommandOrchestrator) ResolveLocalResource(
 	if f.localContent != nil {
 		content, found := f.localContent[logicalPath]
 		if !found {
-			return resourcedomain.Resource{}, faults.NewTypedError(faults.NotFoundError, "not found", nil)
+			return resourcedomain.Resource{}, faults.NotFound("not found", nil)
 		}
 		return resourcedomain.Resource{
 			LogicalPath:       logicalPath,
@@ -415,7 +415,7 @@ func (f *fakeDefaultsCommandOrchestrator) GetLocal(_ context.Context, logicalPat
 	if f.localContent != nil {
 		content, found := f.localContent[logicalPath]
 		if !found {
-			return resourcedomain.Content{}, faults.NewTypedError(faults.NotFoundError, "not found", nil)
+			return resourcedomain.Content{}, faults.NotFound("not found", nil)
 		}
 		return content, nil
 	}
@@ -445,7 +445,7 @@ type fakeDefaultsCommandRepository struct {
 func (f *fakeDefaultsCommandRepository) GetDefaults(_ context.Context, logicalPath string) (resourcedomain.Content, error) {
 	content, found := f.defaults[logicalPath]
 	if !found {
-		return resourcedomain.Content{}, faults.NewTypedError(faults.NotFoundError, "defaults not found", nil)
+		return resourcedomain.Content{}, faults.NotFound("defaults not found", nil)
 	}
 	return content, nil
 }
@@ -466,7 +466,7 @@ func (fakeDefaultsCommandRepository) Save(context.Context, string, resourcedomai
 	return nil
 }
 func (fakeDefaultsCommandRepository) Get(context.Context, string) (resourcedomain.Content, error) {
-	return resourcedomain.Content{}, faults.NewTypedError(faults.NotFoundError, "not found", nil)
+	return resourcedomain.Content{}, faults.NotFound("not found", nil)
 }
 func (fakeDefaultsCommandRepository) Delete(context.Context, string, repository.DeletePolicy) error {
 	return nil
@@ -486,7 +486,7 @@ func (f *fakeDefaultsCommandMetadata) Get(_ context.Context, logicalPath string)
 	if item, found := f.items[logicalPath]; found {
 		return item, nil
 	}
-	return metadatadomain.ResourceMetadata{}, faults.NewTypedError(faults.NotFoundError, "metadata not found", nil)
+	return metadatadomain.ResourceMetadata{}, faults.NotFound("metadata not found", nil)
 }
 
 func (f *fakeDefaultsCommandMetadata) Set(_ context.Context, logicalPath string, item metadatadomain.ResourceMetadata) error {
@@ -515,7 +515,7 @@ func (f *fakeDefaultsCommandMetadata) ReadDefaultsArtifact(_ context.Context, lo
 			return content, nil
 		}
 	}
-	return resourcedomain.Content{}, faults.NewTypedError(faults.NotFoundError, "defaults artifact not found", nil)
+	return resourcedomain.Content{}, faults.NotFound("defaults artifact not found", nil)
 }
 
 func (f *fakeDefaultsCommandMetadata) WriteDefaultsArtifact(_ context.Context, logicalPath string, file string, content resourcedomain.Content) error {

@@ -57,7 +57,7 @@ func (g *Client) applyOpenAPIFallback(
 
 	operationItem, found := openAPIPathMethod(pathItem, method)
 	if !found {
-		return faults.NewValidationError(fmt.Sprintf("OpenAPI path %q does not support method %s", requestPath, method), nil)
+		return faults.Invalid(fmt.Sprintf("OpenAPI path %q does not support method %s", requestPath, method), nil)
 	}
 
 	if !explicitAccept && strings.TrimSpace(spec.Accept) == "" {
@@ -90,7 +90,7 @@ func (g *Client) validateOpenAPIMethodSupport(ctx context.Context, requestPath s
 	}
 
 	if _, found := openAPIPathMethod(pathItem, method); !found {
-		return faults.NewValidationError(fmt.Sprintf("OpenAPI path %q does not support method %s", requestPath, strings.ToUpper(method)), nil)
+		return faults.Invalid(fmt.Sprintf("OpenAPI path %q does not support method %s", requestPath, strings.ToUpper(method)), nil)
 	}
 	return nil
 }

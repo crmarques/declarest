@@ -57,18 +57,18 @@ func (s *Store) fullSecretPath(key string) string {
 func normalizeVaultAddress(raw string) (string, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {
-		return "", faults.NewValidationError("secret-store.vault.address is required", nil)
+		return "", faults.Invalid("secret-store.vault.address is required", nil)
 	}
 
 	parsed, err := url.Parse(value)
 	if err != nil {
-		return "", faults.NewValidationError("secret-store.vault.address is invalid", err)
+		return "", faults.Invalid("secret-store.vault.address is invalid", err)
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "", faults.NewValidationError("secret-store.vault.address must use http or https", nil)
+		return "", faults.Invalid("secret-store.vault.address must use http or https", nil)
 	}
 	if strings.TrimSpace(parsed.Host) == "" {
-		return "", faults.NewValidationError("secret-store.vault.address host is required", nil)
+		return "", faults.Invalid("secret-store.vault.address host is required", nil)
 	}
 
 	return strings.TrimRight(parsed.String(), "/"), nil
@@ -81,13 +81,13 @@ func normalizeVaultPath(value string, allowEmpty bool) (string, error) {
 		if allowEmpty {
 			return "", nil
 		}
-		return "", faults.NewValidationError("vault path must not be empty", nil)
+		return "", faults.Invalid("vault path must not be empty", nil)
 	}
 
 	parts := strings.Split(trimmed, "/")
 	for _, part := range parts {
 		if part == "" || part == "." || part == ".." {
-			return "", faults.NewValidationError("vault path contains invalid segments", nil)
+			return "", faults.Invalid("vault path contains invalid segments", nil)
 		}
 	}
 

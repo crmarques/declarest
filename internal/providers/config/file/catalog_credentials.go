@@ -132,12 +132,12 @@ func referencedCredential(
 	credentials map[string]config.Credential,
 ) (config.Credential, error) {
 	if ref == nil || strings.TrimSpace(ref.Name) == "" {
-		return config.Credential{}, faults.NewValidationError(field+" is required", nil)
+		return config.Credential{}, faults.Invalid(field+" is required", nil)
 	}
 	name := strings.TrimSpace(ref.Name)
 	item, ok := credentials[name]
 	if !ok {
-		return config.Credential{}, faults.NewValidationError(
+		return config.Credential{}, faults.Invalid(
 			fmt.Sprintf("%s references undefined credential %q", field, name),
 			nil,
 		)
@@ -176,7 +176,7 @@ func mergeContextCredentials(
 		for name, normalized := range singleIndex {
 			if existing, ok := index[name]; ok {
 				if !credentialsEqual(existing, normalized) {
-					return config.ContextCatalog{}, faults.NewValidationError(
+					return config.ContextCatalog{}, faults.Invalid(
 						fmt.Sprintf("credential %q already exists with different content", name),
 						nil,
 					)

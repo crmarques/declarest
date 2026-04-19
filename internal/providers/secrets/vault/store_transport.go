@@ -37,7 +37,7 @@ func (s *Store) request(
 	if payload != nil {
 		encoded, err := json.Marshal(payload)
 		if err != nil {
-			return vaultResponse{}, 0, internalError("failed to encode vault request payload", err)
+			return vaultResponse{}, 0, faults.Internal("failed to encode vault request payload", err)
 		}
 		body = strings.NewReader(string(encoded))
 	}
@@ -45,7 +45,7 @@ func (s *Store) request(
 	requestURL := s.address + endpoint
 	req, err := http.NewRequestWithContext(ctx, method, requestURL, body)
 	if err != nil {
-		return vaultResponse{}, 0, internalError("failed to build vault request", err)
+		return vaultResponse{}, 0, faults.Internal("failed to build vault request", err)
 	}
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -56,7 +56,7 @@ func (s *Store) request(
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return vaultResponse{}, 0, transportError("vault request failed", err)
+		return vaultResponse{}, 0, faults.Transport("vault request failed", err)
 	}
 	defer func() {
 		_ = resp.Body.Close()
@@ -64,7 +64,7 @@ func (s *Store) request(
 
 	data, err := readVaultResponseBody(resp.Body)
 	if err != nil {
-		return vaultResponse{}, 0, transportError("failed to read vault response body", err)
+		return vaultResponse{}, 0, faults.Transport("failed to read vault response body", err)
 	}
 
 	if len(data) == 0 {
@@ -73,7 +73,7 @@ func (s *Store) request(
 
 	var decoded vaultResponse
 	if err := json.Unmarshal(data, &decoded); err != nil {
-		return vaultResponse{}, 0, transportError("failed to decode vault response body", err)
+		return vaultResponse{}, 0, faults.Transport("failed to decode vault response body", err)
 	}
 
 	return decoded, resp.StatusCode, nil
@@ -102,13 +102,13 @@ func mapVaultStatus(status int, response vaultResponse, allowNotFound bool, notF
 		if message == "" {
 			message = "vault resource not found"
 		}
-		return notFoundError(message)
+		return faults.NotFound(message, nil)
 	case status == http.StatusUnauthorized || status == http.StatusForbidden:
-		return authError(firstVaultError(response, "vault authentication failed"), nil)
+		return faults.Auth(firstVaultError(response, "vault authentication failed"), nil)
 	case status >= 500:
-		return transportError(firstVaultError(response, "vault service is unavailable"), nil)
+		return faults.Transport(firstVaultError(response, "vault service is unavailable"), nil)
 	default:
-		return faults.NewValidationError(firstVaultError(response, "vault request failed"), nil)
+		return faults.Invalid(firstVaultError(response, "vault request failed"), nil)
 	}
 }
 

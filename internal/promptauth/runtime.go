@@ -99,7 +99,7 @@ func New(opts ...Option) (*Runtime, error) {
 	if runtime.store == nil {
 		store, persistentSession, err := newDefaultSessionStore()
 		if err != nil {
-			return nil, internalError("failed to initialize prompt auth session store", err)
+			return nil, faults.Internal("failed to initialize prompt auth session store", err)
 		}
 		runtime.store = store
 		runtime.persistentSession = persistentSession
@@ -119,7 +119,7 @@ func (r *Runtime) Resolve(
 	password config.CredentialValue,
 ) (Credentials, error) {
 	if r == nil {
-		return Credentials{}, faults.NewValidationError("credential runtime is not configured", nil)
+		return Credentials{}, faults.Invalid("credential runtime is not configured", nil)
 	}
 	if err := r.ensureSessionLoaded(); err != nil {
 		return Credentials{}, err
@@ -127,7 +127,7 @@ func (r *Runtime) Resolve(
 
 	credentialName = strings.TrimSpace(credentialName)
 	if credentialName == "" {
-		return Credentials{}, faults.NewValidationError("credential name is required", nil)
+		return Credentials{}, faults.Invalid("credential name is required", nil)
 	}
 
 	r.mu.Lock()
@@ -154,7 +154,7 @@ func (r *Runtime) Resolve(
 		Password: strings.TrimSpace(resolvedPassword),
 	}
 	if creds.Username == "" || creds.Password == "" {
-		return Credentials{}, faults.NewValidationError(
+		return Credentials{}, faults.Invalid(
 			fmt.Sprintf("credential %q requires username and password", credentialName),
 			nil,
 		)
@@ -181,7 +181,7 @@ func ResolveCredentials(
 		}, nil
 	}
 	if runtime == nil {
-		return Credentials{}, faults.NewValidationError(
+		return Credentials{}, faults.Invalid(
 			fmt.Sprintf("credential %q requires prompt runtime support", strings.TrimSpace(credentialName)),
 			nil,
 		)
@@ -194,10 +194,10 @@ func ClearSessionCredentials() (int, error) {
 
 	runtimePath, err := defaultSessionFilePath()
 	if err != nil {
-		return 0, internalError("failed to resolve prompt auth runtime session path", err)
+		return 0, faults.Internal("failed to resolve prompt auth runtime session path", err)
 	}
 	if deleted, err := removeSessionCacheFile(runtimePath); err != nil {
-		return 0, internalError("failed to clear prompt auth runtime session cache", err)
+		return 0, faults.Internal("failed to clear prompt auth runtime session cache", err)
 	} else if deleted {
 		removed++
 	}
@@ -205,11 +205,11 @@ func ClearSessionCredentials() (int, error) {
 	legacySessionID := detectSessionID()
 	legacyPath, err := legacySessionFilePathForSessionID(legacySessionID)
 	if err != nil {
-		return 0, internalError("failed to resolve prompt auth legacy session path", err)
+		return 0, faults.Internal("failed to resolve prompt auth legacy session path", err)
 	}
 	if legacyPath != "" && legacyPath != runtimePath {
 		if deleted, err := removeSessionCacheFile(legacyPath); err != nil {
-			return 0, internalError("failed to clear prompt auth legacy session cache", err)
+			return 0, faults.Internal("failed to clear prompt auth legacy session cache", err)
 		} else if deleted {
 			removed++
 		}
@@ -253,7 +253,7 @@ func (r *Runtime) resolveField(
 	}
 	prompted = strings.TrimSpace(prompted)
 	if prompted == "" {
-		return "", faults.NewValidationError(
+		return "", faults.Invalid(
 			fmt.Sprintf("credential %q %s is required", credentialName, field),
 			nil,
 		)
@@ -279,7 +279,7 @@ func (r *Runtime) ensureSessionLoaded() error {
 	if store != nil {
 		loaded, err := store.Load()
 		if err != nil {
-			return internalError("failed to load prompt auth session credentials", err)
+			return faults.Internal("failed to load prompt auth session credentials", err)
 		}
 		values = loaded
 	}
@@ -309,7 +309,7 @@ func (r *Runtime) persistField(key string, value string) error {
 		return nil
 	}
 	if err := store.Save(values); err != nil {
-		return internalError("failed to persist prompt auth session value", err)
+		return faults.Internal("failed to persist prompt auth session value", err)
 	}
 	return nil
 }
@@ -341,7 +341,7 @@ func (r *Runtime) registerEnvKeyOwner(credentialName string) error {
 	usernameKey, passwordKey := credentialEnvKeys(credentialName)
 	for _, key := range []string{usernameKey, passwordKey} {
 		if owner, exists := r.envKeyOwners[key]; exists && owner != credentialName {
-			return faults.NewValidationError(
+			return faults.Invalid(
 				fmt.Sprintf(
 					"credential %q and %q produce the same session key; use distinct credential names to avoid cross-contamination",
 					credentialName,
@@ -407,8 +407,4 @@ func removeSessionCacheFile(path string) (bool, error) {
 		return false, err
 	}
 	return true, nil
-}
-
-func internalError(message string, cause error) error {
-	return faults.NewTypedError(faults.InternalError, message, cause)
 }

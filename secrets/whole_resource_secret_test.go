@@ -110,7 +110,7 @@ func TestResolveWholeResourcePlaceholderForResourceStructuredPayload(t *testing.
 		descriptor,
 		func(key string) (string, error) {
 			if key != "/customers/acme:." {
-				return "", faults.NewTypedError(faults.NotFoundError, "missing", nil)
+				return "", faults.NotFound("missing", nil)
 			}
 			return secretValue, nil
 		},
@@ -151,7 +151,7 @@ func TestResolveWholeResourcePlaceholderForResourceBinaryPayload(t *testing.T) {
 		descriptor,
 		func(key string) (string, error) {
 			if key != "/projects/platform/secrets/private-key:." {
-				return "", faults.NewTypedError(faults.NotFoundError, "missing", nil)
+				return "", faults.NotFound("missing", nil)
 			}
 			return secretValue, nil
 		},

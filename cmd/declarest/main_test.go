@@ -440,12 +440,12 @@ func TestExitCodeForError(t *testing.T) {
 	}{
 		{name: "nil", err: nil, want: 0},
 		{name: "plain error", err: errors.New("boom"), want: 1},
-		{name: "validation", err: faults.NewTypedError(faults.ValidationError, "invalid", nil), want: 2},
-		{name: "not found", err: faults.NewTypedError(faults.NotFoundError, "missing", nil), want: 3},
-		{name: "auth", err: faults.NewTypedError(faults.AuthError, "auth", nil), want: 4},
-		{name: "conflict", err: faults.NewTypedError(faults.ConflictError, "conflict", nil), want: 5},
-		{name: "transport", err: faults.NewTypedError(faults.TransportError, "net", nil), want: 6},
-		{name: "internal", err: faults.NewTypedError(faults.InternalError, "internal", nil), want: 1},
+		{name: "validation", err: faults.Invalid("invalid", nil), want: 2},
+		{name: "not found", err: faults.NotFound("missing", nil), want: 3},
+		{name: "auth", err: faults.Auth("auth", nil), want: 4},
+		{name: "conflict", err: faults.Conflict("conflict", nil), want: 5},
+		{name: "transport", err: faults.Transport("net", nil), want: 6},
+		{name: "internal", err: faults.Internal("internal", nil), want: 1},
 	}
 
 	for _, testCase := range testCases {

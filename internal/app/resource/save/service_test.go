@@ -151,7 +151,7 @@ func TestResolveSaveRemoteValue(t *testing.T) {
 		t.Parallel()
 
 		remoteReader := &fakeSaveRemoteReader{
-			getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+			getErr: faults.NotFound("resource not found", nil),
 			listValue: []resourcedomain.Resource{
 				{
 					LogicalPath: "/admin/realms/master/user-registry/AD PRD/mappers/alpha",
@@ -202,7 +202,7 @@ func TestResolveSaveRemoteValue(t *testing.T) {
 	t.Run("not_found_get_keeps_not_found_when_non_empty_list_is_not_metadata_collection_branch", func(t *testing.T) {
 		t.Parallel()
 
-		notFoundErr := faults.NewTypedError(faults.NotFoundError, "resource not found", nil)
+		notFoundErr := faults.NotFound("resource not found", nil)
 		remoteReader := &fakeSaveRemoteReader{
 			getErr: notFoundErr,
 			listValue: []resourcedomain.Resource{
@@ -227,7 +227,7 @@ func TestResolveSaveRemoteValue(t *testing.T) {
 	t.Run("not_found_get_keeps_not_found_when_parent_only_has_wildcard_item_child", func(t *testing.T) {
 		t.Parallel()
 
-		notFoundErr := faults.NewTypedError(faults.NotFoundError, "resource not found", nil)
+		notFoundErr := faults.NotFound("resource not found", nil)
 		remoteReader := &fakeSaveRemoteReader{
 			getErr: notFoundErr,
 			listValue: []resourcedomain.Resource{
@@ -732,7 +732,7 @@ func TestDetectSaveSecretCandidates(t *testing.T) {
 	t.Run("secret_provider_error_is_returned", func(t *testing.T) {
 		t.Parallel()
 
-		expectedErr := faults.NewTypedError(faults.TransportError, "detect failed", nil)
+		expectedErr := faults.Transport("detect failed", nil)
 		deps := Dependencies{
 			Secrets: &fakeSaveSecretProvider{detectErr: expectedErr},
 		}
@@ -1251,7 +1251,7 @@ func TestEnsureSaveEntriesWritable(t *testing.T) {
 func TestResourceExistsPropagatesErrors(t *testing.T) {
 	t.Parallel()
 
-	expectedErr := faults.NewTypedError(faults.TransportError, "backend", nil)
+	expectedErr := faults.Transport("backend", nil)
 	repo := &fakeSaveRepository{err: expectedErr}
 
 	_, err := resourceExists(context.Background(), repo, "/customers/acme")
@@ -1271,7 +1271,7 @@ func TestIsTypedErrorCategory(t *testing.T) {
 		t.Fatal("expected non-typed error to not match typed category")
 	}
 
-	typedErr := faults.NewTypedError(faults.ValidationError, "bad input", nil)
+	typedErr := faults.Invalid("bad input", nil)
 	if !faults.IsCategory(typedErr, faults.ValidationError) {
 		t.Fatal("expected typed error to match category")
 	}
@@ -1295,7 +1295,7 @@ func (f *fakeSaveMetadataService) Get(_ context.Context, logicalPath string) (me
 			return metadata, nil
 		}
 	}
-	return metadatadomain.ResourceMetadata{}, faults.NewTypedError(faults.NotFoundError, "metadata not found", nil)
+	return metadatadomain.ResourceMetadata{}, faults.NotFound("metadata not found", nil)
 }
 
 func (f *fakeSaveMetadataService) Set(_ context.Context, logicalPath string, metadata metadatadomain.ResourceMetadata) error {
@@ -1404,7 +1404,7 @@ func (f *fakeSaveSecretProvider) Store(_ context.Context, key string, value stri
 func (f *fakeSaveSecretProvider) Get(_ context.Context, key string) (string, error) {
 	value, found := f.values[key]
 	if !found {
-		return "", faults.NewTypedError(faults.NotFoundError, "secret not found", nil)
+		return "", faults.NotFound("secret not found", nil)
 	}
 	return value, nil
 }
@@ -1450,7 +1450,7 @@ func (f *fakeSaveRepository) Get(_ context.Context, logicalPath string) (resourc
 			return testSaveContent(value), nil
 		}
 	}
-	return resourcedomain.Content{}, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
+	return resourcedomain.Content{}, faults.NotFound(fmt.Sprintf("resource %q not found", logicalPath), nil)
 }
 
 func (f *fakeSaveRepository) Delete(_ context.Context, _ string, _ repositorydomain.DeletePolicy) error {

@@ -28,7 +28,7 @@ func ParseJSONPointer(pointer string) ([]string, error) {
 		return nil, nil
 	}
 	if !strings.HasPrefix(trimmed, "/") {
-		return nil, faults.NewValidationError(fmt.Sprintf("invalid JSON pointer %q", pointer), nil)
+		return nil, faults.Invalid(fmt.Sprintf("invalid JSON pointer %q", pointer), nil)
 	}
 
 	rawTokens := strings.Split(trimmed[1:], "/")
@@ -36,7 +36,7 @@ func ParseJSONPointer(pointer string) ([]string, error) {
 	for idx, token := range rawTokens {
 		unescaped, err := unescapeJSONPointerToken(token)
 		if err != nil {
-			return nil, faults.NewValidationError(fmt.Sprintf("invalid JSON pointer %q", pointer), err)
+			return nil, faults.Invalid(fmt.Sprintf("invalid JSON pointer %q", pointer), err)
 		}
 		tokens[idx] = unescaped
 	}
@@ -151,7 +151,7 @@ func unescapeJSONPointerToken(token string) (string, error) {
 			continue
 		}
 		if idx+1 >= len(token) {
-			return "", faults.NewValidationError("invalid JSON pointer escape", nil)
+			return "", faults.Invalid("invalid JSON pointer escape", nil)
 		}
 		switch token[idx+1] {
 		case '0':
@@ -159,7 +159,7 @@ func unescapeJSONPointerToken(token string) (string, error) {
 		case '1':
 			builder.WriteByte('/')
 		default:
-			return "", faults.NewValidationError("invalid JSON pointer escape", nil)
+			return "", faults.Invalid("invalid JSON pointer escape", nil)
 		}
 		idx++
 	}
@@ -204,7 +204,7 @@ func setJSONPointerValue(root any, tokens []string, value any) (any, error) {
 				items = grown
 			}
 		default:
-			return nil, faults.NewValidationError("JSON pointer expects array segment", nil)
+			return nil, faults.Invalid("JSON pointer expects array segment", nil)
 		}
 
 		next, err := setJSONPointerValue(items[index], tail, value)
@@ -222,7 +222,7 @@ func setJSONPointerValue(root any, tokens []string, value any) (any, error) {
 	case map[string]any:
 		fields = typed
 	default:
-		return nil, faults.NewValidationError("JSON pointer expects object segment", nil)
+		return nil, faults.Invalid("JSON pointer expects object segment", nil)
 	}
 
 	next, err := setJSONPointerValue(fields[head], tail, value)

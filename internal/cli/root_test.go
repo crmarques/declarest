@@ -374,7 +374,7 @@ func TestManagedServiceGet(t *testing.T) {
 
 		deps := testDeps()
 		deps.Services.(*testServiceAccessor).server = &testManagedServiceClient{
-			tokenErr: faults.NewTypedError(faults.ValidationError, "managed-service.http.auth.oauth2 is not configured", nil),
+			tokenErr: faults.Invalid("managed-service.http.auth.oauth2 is not configured", nil),
 		}
 
 		_, err := executeForTest(deps, "", "server", "get", "access-token")
@@ -473,7 +473,7 @@ func TestManagedServiceCheck(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		deps.Services.ManagedServiceClient().(*testManagedServiceClient).requestErr = faults.NewTypedError(faults.NotFoundError, "probe not found", nil)
+		deps.Services.ManagedServiceClient().(*testManagedServiceClient).requestErr = faults.NotFound("probe not found", nil)
 
 		_, err := executeForTest(deps, "", "server", "check")
 		assertTypedCategory(t, err, faults.NotFoundError)
@@ -885,7 +885,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 
 		deps := testDeps()
 		orchestrator := deps.Orchestrator.(*testOrchestrator)
-		orchestrator.getLocalErr = faults.NewTypedError(faults.NotFoundError, "resource not found", nil)
+		orchestrator.getLocalErr = faults.NotFound("resource not found", nil)
 		orchestrator.localList = []resource.Resource{
 			{
 				LogicalPath: "/customers/acme",
@@ -957,7 +957,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 
 		deps := testDeps()
 		orchestrator := deps.Orchestrator.(*testOrchestrator)
-		orchestrator.getRemoteErr = faults.NewTypedError(faults.NotFoundError, "resource not found", nil)
+		orchestrator.getRemoteErr = faults.NotFound("resource not found", nil)
 		orchestrator.remoteList = []resource.Resource{
 			{
 				LogicalPath: "/admin/realms/master/clients/account",
@@ -990,7 +990,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 
 		deps := testDeps()
 		orchestrator := deps.Orchestrator.(*testOrchestrator)
-		orchestrator.getRemoteErr = faults.NewTypedError(faults.NotFoundError, "resource not found", nil)
+		orchestrator.getRemoteErr = faults.NotFound("resource not found", nil)
 		orchestrator.remoteList = []resource.Resource{
 			{
 				LogicalPath: "/admin/realms/master/user-registry/ldap-1",
@@ -1016,7 +1016,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 
 		deps := testDeps()
 		orchestrator := deps.Orchestrator.(*testOrchestrator)
-		orchestrator.getRemoteErr = faults.NewTypedError(faults.NotFoundError, "resource not found", nil)
+		orchestrator.getRemoteErr = faults.NotFound("resource not found", nil)
 		orchestrator.remoteList = []resource.Resource{
 			{
 				LogicalPath: "/projects/asdfads/platform",
@@ -1043,7 +1043,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 
 		deps := testDeps()
 		orchestrator := deps.Orchestrator.(*testOrchestrator)
-		orchestrator.getRemoteErr = faults.NewTypedError(faults.NotFoundError, "resource not found", nil)
+		orchestrator.getRemoteErr = faults.NotFound("resource not found", nil)
 		orchestrator.remoteList = []resource.Resource{
 			{
 				LogicalPath: "/admin/realms/master/user-registry/AD PRD/mappers/alpha",
@@ -1457,7 +1457,7 @@ func TestResourceRequestMethodCommands(t *testing.T) {
 
 		deps := testDeps()
 		orchestrator := deps.Orchestrator.(*testOrchestrator)
-		orchestrator.requestErr = faults.NewTypedError(faults.NotFoundError, "request path not found", nil)
+		orchestrator.requestErr = faults.NotFound("request path not found", nil)
 
 		_, err := executeForTest(deps, "", "resource", "request", "get", "/admin/realms/master/clients/account")
 		if err == nil {
@@ -2142,7 +2142,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
-			getRemoteErr:    faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+			getRemoteErr:    faults.NotFound("resource not found", nil),
 			remoteList: []resource.Resource{
 				{
 					LogicalPath: "/admin/realms/master/user-registry/AD PRD/mappers/alpha",

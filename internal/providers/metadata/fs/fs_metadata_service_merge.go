@@ -63,7 +63,7 @@ func validateResourceMetadata(kind metadataPathKind, metadata metadatadomain.Res
 		return err
 	}
 	if metadata.IsWholeResourceSecret() && len(metadata.SecretAttributes) > 0 {
-		return faults.NewValidationError(
+		return faults.Invalid(
 			"resource.secret: true and resource.secretAttributes are mutually exclusive",
 			nil,
 		)
@@ -75,7 +75,7 @@ func validateResourceMetadata(kind metadataPathKind, metadata metadatadomain.Res
 	keys := slices.Sorted(maps.Keys(metadata.Operations))
 	for _, key := range keys {
 		if !metadatadomain.Operation(key).IsValid() {
-			return faults.NewValidationError(fmt.Sprintf("unsupported metadata operation %q", key), nil)
+			return faults.Invalid(fmt.Sprintf("unsupported metadata operation %q", key), nil)
 		}
 
 		operationSpec := metadata.Operations[key]
@@ -104,7 +104,7 @@ func validateSelectorSpec(kind metadataPathKind, spec *metadatadomain.SelectorSp
 	if kind == metadataPathCollection {
 		return nil
 	}
-	return faults.NewValidationError("selector.descendants is only supported on collection metadata", nil)
+	return faults.Invalid("selector.descendants is only supported on collection metadata", nil)
 }
 
 func validateStructuredOnlyMetadataFields(
@@ -118,7 +118,7 @@ func validateStructuredOnlyMetadataFields(
 	structuredPayloadTypes := "json, yaml, ini, properties"
 
 	if strings.TrimSpace(metadata.ID) != "" {
-		return faults.NewValidationError(
+		return faults.Invalid(
 			fmt.Sprintf(
 				"resource.id requires structured payload type (%s); got %q",
 				structuredPayloadTypes,
@@ -128,7 +128,7 @@ func validateStructuredOnlyMetadataFields(
 		)
 	}
 	if strings.TrimSpace(metadata.Alias) != "" {
-		return faults.NewValidationError(
+		return faults.Invalid(
 			fmt.Sprintf(
 				"resource.alias requires structured payload type (%s); got %q",
 				structuredPayloadTypes,
@@ -138,7 +138,7 @@ func validateStructuredOnlyMetadataFields(
 		)
 	}
 	if len(metadata.SecretAttributes) > 0 {
-		return faults.NewValidationError(
+		return faults.Invalid(
 			fmt.Sprintf(
 				"resource.secretAttributes requires structured payload type (%s); got %q; use resource.secret: true for whole-resource secrets",
 				structuredPayloadTypes,
@@ -148,7 +148,7 @@ func validateStructuredOnlyMetadataFields(
 		)
 	}
 	if len(metadata.RequiredAttributes) > 0 {
-		return faults.NewValidationError(
+		return faults.Invalid(
 			fmt.Sprintf(
 				"resource.requiredAttributes requires structured payload type (%s); got %q",
 				structuredPayloadTypes,
@@ -158,7 +158,7 @@ func validateStructuredOnlyMetadataFields(
 		)
 	}
 	if len(metadata.ExternalizedAttributes) > 0 {
-		return faults.NewValidationError(
+		return faults.Invalid(
 			fmt.Sprintf(
 				"resource.externalizedAttributes requires structured payload type (%s); got %q",
 				structuredPayloadTypes,
@@ -168,7 +168,7 @@ func validateStructuredOnlyMetadataFields(
 		)
 	}
 	if metadatadomain.HasDefaultsSpecDirectives(metadata.Defaults) {
-		return faults.NewValidationError(
+		return faults.Invalid(
 			fmt.Sprintf(
 				"resource.defaults requires structured payload type (%s); got %q",
 				structuredPayloadTypes,
@@ -189,7 +189,7 @@ func validateStructuredPayloadDirectives(
 	for idx, step := range mutations {
 		stepType := metadatadomain.TransformStepType(step)
 		if stepType == "" {
-			return faults.NewValidationError(
+			return faults.Invalid(
 				fmt.Sprintf("%s transforms[%d] must define exactly one of selectAttributes, excludeAttributes, or jqExpression", scope, idx),
 				nil,
 			)
@@ -211,7 +211,7 @@ func validateStructuredPayloadDirectives(
 	if len(mutations) == 0 && validate == nil {
 		return nil
 	}
-	return faults.NewValidationError(
+	return faults.Invalid(
 		fmt.Sprintf("%s uses structured payload directives with non-structured payload type %q", scope, payloadType),
 		nil,
 	)
@@ -227,7 +227,7 @@ func validateOperationValidationSpec(
 
 	for idx, attribute := range spec.RequiredAttributes {
 		if strings.TrimSpace(attribute) == "" {
-			return faults.NewValidationError(
+			return faults.Invalid(
 				fmt.Sprintf("operation %q validate.requiredAttributes[%d] must not be empty", operation, idx),
 				nil,
 			)
@@ -239,7 +239,7 @@ func validateOperationValidationSpec(
 
 	for idx, assertion := range spec.Assertions {
 		if strings.TrimSpace(assertion.JQ) == "" {
-			return faults.NewValidationError(
+			return faults.Invalid(
 				fmt.Sprintf("operation %q validate.assertions[%d].jq must not be empty", operation, idx),
 				nil,
 			)
@@ -256,7 +256,7 @@ func validateOperationValidationSpec(
 	if strings.HasPrefix(schemaRef, "openapi:#/") {
 		return nil
 	}
-	return faults.NewValidationError(
+	return faults.Invalid(
 		fmt.Sprintf(
 			"operation %q validate.schemaRef %q is not supported (expected openapi:request-body or openapi:#/...)",
 			operation,
@@ -272,7 +272,7 @@ func validateIdentityTemplate(field string, value string) error {
 		return nil
 	}
 	if _, err := identitytemplate.Compile(trimmed); err != nil {
-		return faults.NewValidationError(field+" must be a valid identity template or JSON pointer shorthand", err)
+		return faults.Invalid(field+" must be a valid identity template or JSON pointer shorthand", err)
 	}
 	return nil
 }
@@ -281,10 +281,10 @@ func validateAttributePointers(field string, values []string) error {
 	for idx, value := range values {
 		trimmed := strings.TrimSpace(value)
 		if trimmed == "" {
-			return faults.NewValidationError(fmt.Sprintf("%s[%d] must not be empty", field, idx), nil)
+			return faults.Invalid(fmt.Sprintf("%s[%d] must not be empty", field, idx), nil)
 		}
 		if _, err := resource.ParseJSONPointer(trimmed); err != nil {
-			return faults.NewValidationError(fmt.Sprintf("%s[%d] must be a valid JSON pointer", field, idx), err)
+			return faults.Invalid(fmt.Sprintf("%s[%d] must be a valid JSON pointer", field, idx), err)
 		}
 	}
 	return nil

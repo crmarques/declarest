@@ -38,23 +38,23 @@ type ParsedRawPath struct {
 // suitable for paths that may contain wildcards or metadata placeholders.
 func CleanRawPath(value string) (string, error) {
 	if strings.TrimSpace(value) == "" {
-		return "", faults.NewTypedError(faults.ValidationError, "logical path must not be empty", nil)
+		return "", faults.Invalid("logical path must not be empty", nil)
 	}
 
 	normalizedInput := strings.ReplaceAll(value, "\\", "/")
 	if !strings.HasPrefix(normalizedInput, "/") {
-		return "", faults.NewTypedError(faults.ValidationError, "logical path must be absolute", nil)
+		return "", faults.Invalid("logical path must be absolute", nil)
 	}
 
 	for _, segment := range strings.Split(normalizedInput, "/") {
 		if segment == ".." {
-			return "", faults.NewTypedError(faults.ValidationError, "logical path must not contain traversal segments", nil)
+			return "", faults.Invalid("logical path must not contain traversal segments", nil)
 		}
 	}
 
 	cleaned := path.Clean(normalizedInput)
 	if !strings.HasPrefix(cleaned, "/") {
-		return "", faults.NewTypedError(faults.ValidationError, "logical path must be absolute", nil)
+		return "", faults.Invalid("logical path must be absolute", nil)
 	}
 
 	if cleaned != "/" {
@@ -67,7 +67,7 @@ func CleanRawPath(value string) (string, error) {
 func ParseRawPathWithOptions(value string, options RawPathParseOptions) (ParsedRawPath, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
-		return ParsedRawPath{}, faults.NewTypedError(faults.ValidationError, "logical path must not be empty", nil)
+		return ParsedRawPath{}, faults.Invalid("logical path must not be empty", nil)
 	}
 
 	normalizedInput := strings.ReplaceAll(trimmed, "\\", "/")
@@ -108,7 +108,7 @@ func NormalizeLogicalPath(value string) (string, error) {
 
 	for _, segment := range SplitRawPathSegments(cleaned) {
 		if segment == "_" {
-			return "", faults.NewTypedError(faults.ValidationError, "logical path must not contain reserved metadata segment \"_\"", nil)
+			return "", faults.Invalid("logical path must not contain reserved metadata segment \"_\"", nil)
 		}
 	}
 
@@ -140,7 +140,7 @@ func HasLogicalPathOverlap(a string, b string) (bool, error) {
 func JoinLogicalPath(collectionPath string, segment string) (string, error) {
 	trimmedSegment := strings.TrimSpace(segment)
 	if trimmedSegment == "" {
-		return "", faults.NewTypedError(faults.ValidationError, "logical path segment must not be empty", nil)
+		return "", faults.Invalid("logical path segment must not be empty", nil)
 	}
 
 	joined := path.Join(collectionPath, trimmedSegment)
@@ -249,16 +249,16 @@ func overlapBoundaryMatch(candidate string, prefix string) bool {
 func normalizeLogicalPathSegment(segment string) (string, error) {
 	trimmedSegment := strings.TrimSpace(segment)
 	if trimmedSegment == "" {
-		return "", faults.NewTypedError(faults.ValidationError, "logical path segment must not be empty", nil)
+		return "", faults.Invalid("logical path segment must not be empty", nil)
 	}
 	if trimmedSegment == "." || trimmedSegment == ".." {
-		return "", faults.NewTypedError(faults.ValidationError, "logical path segment must not contain traversal segments", nil)
+		return "", faults.Invalid("logical path segment must not contain traversal segments", nil)
 	}
 	if trimmedSegment == "_" {
-		return "", faults.NewTypedError(faults.ValidationError, "logical path segment must not contain reserved metadata segment \"_\"", nil)
+		return "", faults.Invalid("logical path segment must not contain reserved metadata segment \"_\"", nil)
 	}
 	if strings.Contains(trimmedSegment, "/") || strings.Contains(trimmedSegment, "\\") {
-		return "", faults.NewTypedError(faults.ValidationError, "logical path segment must not contain path separators", nil)
+		return "", faults.Invalid("logical path segment must not contain path separators", nil)
 	}
 	return trimmedSegment, nil
 }

@@ -27,14 +27,14 @@ import (
 
 func (r *Orchestrator) requireRepository() (repository.ResourceStore, error) {
 	if r == nil || r.repository == nil {
-		return nil, faults.NewTypedError(faults.ValidationError, "repository store is not configured", nil)
+		return nil, faults.Invalid("repository store is not configured", nil)
 	}
 	return r.repository, nil
 }
 
 func (r *Orchestrator) requireServer() (managedservice.ManagedServiceClient, error) {
 	if r == nil || r.server == nil {
-		return nil, faults.NewTypedError(faults.ValidationError, "managed service is not configured", nil)
+		return nil, faults.Invalid("managed service is not configured", nil)
 	}
 	return r.server, nil
 }
@@ -48,7 +48,7 @@ func (r *Orchestrator) resolveMetadataForPath(
 		if allowMissing {
 			return metadata.ResourceMetadata{}, nil
 		}
-		return metadata.ResourceMetadata{}, faults.NewTypedError(faults.ValidationError, "metadata service is not configured", nil)
+		return metadata.ResourceMetadata{}, faults.Invalid("metadata service is not configured", nil)
 	}
 
 	resolvedMetadata, err := r.metadata.ResolveForPath(ctx, normalizedPath)

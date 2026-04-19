@@ -49,24 +49,24 @@ func validateOpenAPISource(source string) error {
 
 	parsed, err := url.Parse(value)
 	if err != nil {
-		return faults.NewValidationError("managed-service.http.openapi is invalid", err)
+		return faults.Invalid("managed-service.http.openapi is invalid", err)
 	}
 
 	if parsed.Scheme == "" {
 		return nil
 	}
 	if parsed.Scheme != "https" {
-		return faults.NewValidationError("managed-service.http.openapi must use https when configured as URL", nil)
+		return faults.Invalid("managed-service.http.openapi must use https when configured as URL", nil)
 	}
 	if parsed.Host == "" {
-		return faults.NewValidationError("managed-service.http.openapi URL host is required", nil)
+		return faults.Invalid("managed-service.http.openapi URL host is required", nil)
 	}
 	return nil
 }
 
 func (g *Client) openAPIDocument(ctx context.Context) (map[string]any, error) {
 	if strings.TrimSpace(g.openAPISource) == "" {
-		return nil, faults.NewValidationError("managed-service.http.openapi is not configured", nil)
+		return nil, faults.Invalid("managed-service.http.openapi is not configured", nil)
 	}
 
 	g.openapiMu.Lock()
@@ -90,7 +90,7 @@ func (g *Client) loadOpenAPIDocument(ctx context.Context) (map[string]any, error
 	source := strings.TrimSpace(g.openAPISource)
 	parsed, err := url.Parse(source)
 	if err != nil {
-		return nil, faults.NewValidationError("managed-service.http.openapi is invalid", err)
+		return nil, faults.Invalid("managed-service.http.openapi is invalid", err)
 	}
 
 	var content []byte
@@ -98,12 +98,12 @@ func (g *Client) loadOpenAPIDocument(ctx context.Context) (map[string]any, error
 	case "":
 		content, err = os.ReadFile(source)
 		if err != nil {
-			return nil, notFoundError("managed-service.http.openapi file could not be read", err)
+			return nil, faults.NotFound("managed-service.http.openapi file could not be read", err)
 		}
 	case "https":
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, source, nil)
 		if err != nil {
-			return nil, internalError("failed to create OpenAPI request", err)
+			return nil, faults.Internal("failed to create OpenAPI request", err)
 		}
 		if sameURLOffsetOrigin(g.baseURL, parsed) {
 			if err := g.applyAuth(ctx, request); err != nil {
@@ -113,7 +113,7 @@ func (g *Client) loadOpenAPIDocument(ctx context.Context) (map[string]any, error
 
 		response, err := g.doRequest(ctx, "openapi", request)
 		if err != nil {
-			return nil, transportError("failed to fetch OpenAPI document", err)
+			return nil, faults.Transport("failed to fetch OpenAPI document", err)
 		}
 		defer func() {
 			_ = response.Body.Close()
@@ -121,41 +121,41 @@ func (g *Client) loadOpenAPIDocument(ctx context.Context) (map[string]any, error
 
 		content, err = io.ReadAll(io.LimitReader(response.Body, 4<<20))
 		if err != nil {
-			return nil, transportError("failed to read OpenAPI response body", err)
+			return nil, faults.Transport("failed to read OpenAPI response body", err)
 		}
 		if response.StatusCode >= http.StatusBadRequest {
 			if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
-				return nil, authError(
+				return nil, faults.Auth(
 					fmt.Sprintf("OpenAPI request failed with status %d: %s", response.StatusCode, summarizeBody(content)),
 					nil,
 				)
 			}
 			if response.StatusCode == http.StatusNotFound {
-				return nil, notFoundError(
+				return nil, faults.NotFound(
 					fmt.Sprintf("OpenAPI request failed with status %d: %s", response.StatusCode, summarizeBody(content)),
 					nil,
 				)
 			}
-			return nil, transportError(
+			return nil, faults.Transport(
 				fmt.Sprintf("OpenAPI request failed with status %d: %s", response.StatusCode, summarizeBody(content)),
 				nil,
 			)
 		}
 	default:
-		return nil, faults.NewValidationError("managed-service.http.openapi must be a local file path or https URL", nil)
+		return nil, faults.Invalid("managed-service.http.openapi must be a local file path or https URL", nil)
 	}
 
 	var root any
 	if jsonErr := json.Unmarshal(content, &root); jsonErr != nil {
 		if yamlErr := yaml.Unmarshal(content, &root); yamlErr != nil {
-			return nil, faults.NewValidationError("OpenAPI document must be valid JSON or YAML", yamlErr)
+			return nil, faults.Invalid("OpenAPI document must be valid JSON or YAML", yamlErr)
 		}
 	}
 
 	normalized := normalizeDynamicValue(root)
 	document, ok := normalized.(map[string]any)
 	if !ok {
-		return nil, faults.NewValidationError("OpenAPI document root must be an object", nil)
+		return nil, faults.Invalid("OpenAPI document root must be an object", nil)
 	}
 	document = normalizeOpenAPIDocument(document)
 	return document, nil

@@ -68,7 +68,7 @@ func DefaultsSupportsFileBackedPayloadType(payloadType string) bool {
 func DefaultsFileName(profile string, descriptor resource.PayloadDescriptor) (string, error) {
 	resolved := resource.NormalizePayloadDescriptor(descriptor)
 	if !DefaultsSupportsFileBackedDescriptor(resolved) {
-		return "", faults.NewValidationError(
+		return "", faults.Invalid(
 			fmt.Sprintf(
 				"resource defaults files support only json, yaml, yml, or properties; got %q",
 				resolved.Extension,
@@ -101,7 +101,7 @@ func ParseDefaultsIncludeReference(value string) (string, bool) {
 func ValidateDefaultsProfileName(value string) error {
 	trimmed := strings.TrimSpace(value)
 	if !profileNamePattern.MatchString(trimmed) {
-		return faults.NewValidationError(
+		return faults.Invalid(
 			fmt.Sprintf("resource.defaults profile %q is invalid", value),
 			nil,
 		)
@@ -118,7 +118,7 @@ func ValidateDefaultsSpec(value *DefaultsSpec) error {
 	}
 	for idx, profile := range value.UseProfiles {
 		if strings.TrimSpace(profile) == "" {
-			return faults.NewValidationError(
+			return faults.Invalid(
 				fmt.Sprintf("resource.defaults.useProfiles[%d] must not be empty", idx),
 				nil,
 			)
@@ -159,7 +159,7 @@ func ValidateDefaultsMode(value string) (string, error) {
 	case DefaultsModeInherit, DefaultsModeIgnore, DefaultsModeReplace:
 		return trimmed, nil
 	default:
-		return "", faults.NewValidationError(
+		return "", faults.Invalid(
 			fmt.Sprintf("resource.defaults.mode %q is not supported", value),
 			nil,
 		)
@@ -273,7 +273,7 @@ func ResolveEffectiveDefaults(spec *DefaultsSpec) (resource.Value, error) {
 	for _, profileName := range spec.UseProfiles {
 		entry, ok := spec.Profiles[profileName]
 		if !ok {
-			return nil, faults.NewValidationError(
+			return nil, faults.Invalid(
 				fmt.Sprintf("resource.defaults.useProfiles references unknown profile %q", profileName),
 				nil,
 			)
@@ -316,7 +316,7 @@ func validateDefaultsEntry(field string, value any, expectedProfile string) erro
 		return err
 	}
 	if _, ok := normalized.(map[string]any); !ok {
-		return faults.NewValidationError(field+" must be an object or exact {{include ...}} reference", nil)
+		return faults.Invalid(field+" must be an object or exact {{include ...}} reference", nil)
 	}
 	return nil
 }
@@ -324,14 +324,14 @@ func validateDefaultsEntry(field string, value any, expectedProfile string) erro
 func validateDefaultsIncludeReference(field string, value string, expectedProfile string) error {
 	includeFile, ok := ParseDefaultsIncludeReference(value)
 	if !ok {
-		return faults.NewValidationError(field+" must be an exact {{include ...}} reference", nil)
+		return faults.Invalid(field+" must be an exact {{include ...}} reference", nil)
 	}
 	base := strings.TrimSuffix(includeFile, filepath.Ext(includeFile))
 	extension := strings.ToLower(filepath.Ext(includeFile))
 	switch extension {
 	case ".json", ".properties", ".yaml", ".yml":
 	default:
-		return faults.NewValidationError(
+		return faults.Invalid(
 			fmt.Sprintf("%s include file %q is not supported", field, includeFile),
 			nil,
 		)
@@ -342,7 +342,7 @@ func validateDefaultsIncludeReference(field string, value string, expectedProfil
 		expectedBase = "defaults-" + expectedProfile
 	}
 	if base != expectedBase {
-		return faults.NewValidationError(
+		return faults.Invalid(
 			fmt.Sprintf("%s include file %q is invalid for this defaults entry", field, includeFile),
 			nil,
 		)
@@ -360,7 +360,7 @@ func defaultsEntryObject(value any, field string) (map[string]any, error) {
 	}
 	objectValue, ok := normalized.(map[string]any)
 	if !ok {
-		return nil, faults.NewValidationError(field+" must resolve to an object", nil)
+		return nil, faults.Invalid(field+" must resolve to an object", nil)
 	}
 	return objectValue, nil
 }

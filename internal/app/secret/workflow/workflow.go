@@ -226,7 +226,7 @@ func PersistDetectedAttributes(
 		return nil
 	}
 	if metadataService == nil {
-		return faults.NewTypedError(faults.ValidationError, "metadata service is not configured", nil)
+		return faults.Invalid("metadata service is not configured", nil)
 	}
 
 	currentMetadata, err := metadataService.Get(ctx, logicalPath)

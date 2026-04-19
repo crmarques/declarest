@@ -40,7 +40,7 @@ func decodeCatalog(data []byte) (config.ContextCatalog, error) {
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
 	if err := decoder.Decode(&contextCatalog); err != nil {
-		return config.ContextCatalog{}, faults.NewValidationError("invalid context catalog yaml", err)
+		return config.ContextCatalog{}, faults.Invalid("invalid context catalog yaml", err)
 	}
 
 	return contextCatalog, nil
@@ -65,7 +65,7 @@ func resolveCatalogPath(explicitPath string) (string, error) {
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return "", internalError("failed to resolve user home directory", err)
+		return "", faults.Internal("failed to resolve user home directory", err)
 	}
 
 	if path == "~" {
@@ -75,12 +75,12 @@ func resolveCatalogPath(explicitPath string) (string, error) {
 	}
 
 	if path == "" {
-		return "", faults.NewValidationError("context catalog path is empty", nil)
+		return "", faults.Invalid("context catalog path is empty", nil)
 	}
 
 	cleanPath := filepath.Clean(path)
 	if cleanPath == "." {
-		return "", faults.NewValidationError("context catalog path is invalid", errors.New("resolved to current directory"))
+		return "", faults.Invalid("context catalog path is invalid", errors.New("resolved to current directory"))
 	}
 
 	if !filepath.IsAbs(cleanPath) {
@@ -91,5 +91,5 @@ func resolveCatalogPath(explicitPath string) (string, error) {
 }
 
 func unknownOverrideError(key string) error {
-	return faults.NewValidationError(fmt.Sprintf("unknown override key %q", key), nil)
+	return faults.Invalid(fmt.Sprintf("unknown override key %q", key), nil)
 }

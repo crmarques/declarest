@@ -121,7 +121,7 @@ func isOpenAPIPathVariable(segment string) bool {
 }
 
 func openAPIPathMethod(pathItem map[string]any, method string) (map[string]any, bool) {
-	value, ok := pathItem[strings.ToLower(strings.TrimSpace(method))]
+	value, ok := pathItem[metadata.NormalizeHTTPMethod(method)]
 	if !ok {
 		return nil, false
 	}

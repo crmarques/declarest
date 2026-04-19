@@ -82,17 +82,14 @@ func Insecure(ctx context.Context) bool {
 	return insecure
 }
 
-// Printf prints a trace-level (3) debug message. Backward compatible with existing calls.
 func Printf(ctx context.Context, format string, args ...any) {
 	printAt(ctx, 3, "debug", format, args...)
 }
 
-// Infof prints an info-level (1) verbose message.
 func Infof(ctx context.Context, format string, args ...any) {
 	printAt(ctx, 1, "verbose", format, args...)
 }
 
-// Detailf prints a detail-level (2) verbose message.
 func Detailf(ctx context.Context, format string, args ...any) {
 	printAt(ctx, 2, "verbose", format, args...)
 }

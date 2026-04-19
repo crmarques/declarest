@@ -179,17 +179,17 @@ func classifyStatusError(statusCode int, body []byte) error {
 
 	switch statusCode {
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return authError(message, nil)
+		return faults.Auth(message, nil)
 	case http.StatusNotFound:
-		return notFoundError(message, nil)
+		return faults.NotFound(message, nil)
 	case http.StatusConflict:
-		return faults.NewConflictError(message, nil)
+		return faults.Conflict(message, nil)
 	}
 
 	if statusCode >= 400 && statusCode < 500 {
-		return faults.NewValidationError(message, nil)
+		return faults.Invalid(message, nil)
 	}
-	return transportError(message, nil)
+	return faults.Transport(message, nil)
 }
 
 func summarizeBody(body []byte) string {

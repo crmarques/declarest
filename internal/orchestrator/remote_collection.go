@@ -288,7 +288,7 @@ func openAPIExactPathLooksLikeResource(openAPISpec any, logicalPath string) bool
 		hasPost := false
 		hasResourceMutation := false
 		for method := range pathItem {
-			switch strings.ToLower(strings.TrimSpace(method)) {
+			switch metadata.NormalizeHTTPMethod(method) {
 			case "get":
 				hasGet = true
 			case "post":

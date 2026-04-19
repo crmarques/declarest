@@ -43,10 +43,10 @@ func NewLocalResourceRepository(baseDir string, metadataBaseDir ...string) *Loca
 
 func (r *LocalResourceRepository) Init(_ context.Context) error {
 	if r.baseDir == "" {
-		return faults.NewValidationError("repository base directory must not be empty", nil)
+		return faults.Invalid("repository base directory must not be empty", nil)
 	}
 	if err := os.MkdirAll(r.baseDir, 0o755); err != nil {
-		return internalError("failed to initialize repository directory", err)
+		return faults.Internal("failed to initialize repository directory", err)
 	}
 	return nil
 }
@@ -67,18 +67,18 @@ func (r *LocalResourceRepository) Check(_ context.Context) error {
 	info, err := os.Stat(r.baseDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return notFoundError("repository base directory does not exist")
+			return faults.NotFound("repository base directory does not exist", nil)
 		}
-		return internalError("failed to inspect repository base directory", err)
+		return faults.Internal("failed to inspect repository base directory", err)
 	}
 	if !info.IsDir() {
-		return faults.NewValidationError("repository base directory is not a directory", nil)
+		return faults.Invalid("repository base directory is not a directory", nil)
 	}
 	return nil
 }
 
 func (r *LocalResourceRepository) Push(context.Context, repository.PushPolicy) error {
-	return faults.NewValidationError("push requires git repository with remote configuration", nil)
+	return faults.Invalid("push requires git repository with remote configuration", nil)
 }
 
 func (r *LocalResourceRepository) SyncStatus(context.Context) (repository.SyncReport, error) {
@@ -88,12 +88,4 @@ func (r *LocalResourceRepository) SyncStatus(context.Context) (repository.SyncRe
 		Behind:         0,
 		HasUncommitted: false,
 	}, nil
-}
-
-func notFoundError(message string) error {
-	return faults.NewTypedError(faults.NotFoundError, message, nil)
-}
-
-func internalError(message string, cause error) error {
-	return faults.NewTypedError(faults.InternalError, message, cause)
 }

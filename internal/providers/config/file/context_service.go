@@ -50,7 +50,7 @@ func (m *Service) Create(_ context.Context, cfg config.Context) error {
 	}
 
 	if idx := findContextIndex(contextCatalog.Contexts, cfg.Name); idx >= 0 {
-		return faults.NewValidationError(fmt.Sprintf("context %q already exists", cfg.Name), nil)
+		return faults.Invalid(fmt.Sprintf("context %q already exists", cfg.Name), nil)
 	}
 
 	contextCatalog, err = mergeContextCredentials(contextCatalog, cfg.Credentials)
@@ -75,7 +75,7 @@ func (m *Service) Update(_ context.Context, cfg config.Context) error {
 
 	idx := findContextIndex(contextCatalog.Contexts, cfg.Name)
 	if idx < 0 {
-		return notFoundError(fmt.Sprintf("context %q not found", cfg.Name))
+		return faults.NotFound(fmt.Sprintf("context %q not found", cfg.Name), nil)
 	}
 
 	cfg = preserveProxyOmissions(cfg, normalizeConfig(contextCatalog.Contexts[idx]))
@@ -99,7 +99,7 @@ func (m *Service) Delete(_ context.Context, name string) error {
 
 	idx := findContextIndex(contextCatalog.Contexts, name)
 	if idx < 0 {
-		return notFoundError(fmt.Sprintf("context %q not found", name))
+		return faults.NotFound(fmt.Sprintf("context %q not found", name), nil)
 	}
 
 	contextCatalog.Contexts = append(contextCatalog.Contexts[:idx], contextCatalog.Contexts[idx+1:]...)
@@ -117,7 +117,7 @@ func (m *Service) Delete(_ context.Context, name string) error {
 
 func (m *Service) Rename(_ context.Context, fromName string, toName string) error {
 	if toName == "" {
-		return faults.NewValidationError("context name must not be empty", nil)
+		return faults.Invalid("context name must not be empty", nil)
 	}
 
 	contextCatalog, err := m.loadCatalog()
@@ -127,10 +127,10 @@ func (m *Service) Rename(_ context.Context, fromName string, toName string) erro
 
 	fromIdx := findContextIndex(contextCatalog.Contexts, fromName)
 	if fromIdx < 0 {
-		return notFoundError(fmt.Sprintf("context %q not found", fromName))
+		return faults.NotFound(fmt.Sprintf("context %q not found", fromName), nil)
 	}
 	if findContextIndex(contextCatalog.Contexts, toName) >= 0 {
-		return faults.NewValidationError(fmt.Sprintf("context %q already exists", toName), nil)
+		return faults.Invalid(fmt.Sprintf("context %q already exists", toName), nil)
 	}
 
 	contextCatalog.Contexts[fromIdx].Name = toName
@@ -159,7 +159,7 @@ func (m *Service) SetCurrent(_ context.Context, name string) error {
 	}
 
 	if findContextIndex(contextCatalog.Contexts, name) < 0 {
-		return notFoundError(fmt.Sprintf("context %q not found", name))
+		return faults.NotFound(fmt.Sprintf("context %q not found", name), nil)
 	}
 
 	contextCatalog.CurrentContext = name
@@ -172,12 +172,12 @@ func (m *Service) GetCurrent(_ context.Context) (config.Context, error) {
 		return config.Context{}, err
 	}
 	if contextCatalog.CurrentContext == "" {
-		return config.Context{}, notFoundError("current context not set")
+		return config.Context{}, faults.NotFound("current context not set", nil)
 	}
 
 	idx := findContextIndex(contextCatalog.Contexts, contextCatalog.CurrentContext)
 	if idx < 0 {
-		return config.Context{}, notFoundError(fmt.Sprintf("current context %q not found", contextCatalog.CurrentContext))
+		return config.Context{}, faults.NotFound(fmt.Sprintf("current context %q not found", contextCatalog.CurrentContext), nil)
 	}
 
 	return contextCatalog.Contexts[idx], nil
@@ -199,12 +199,12 @@ func (m *Service) ResolveContext(_ context.Context, selection config.ContextSele
 		effectiveName = resolvedCatalog.CurrentContext
 	}
 	if effectiveName == "" {
-		return config.Context{}, notFoundError("current context not set")
+		return config.Context{}, faults.NotFound("current context not set", nil)
 	}
 
 	idx := findContextIndex(resolvedCatalog.Contexts, effectiveName)
 	if idx < 0 {
-		return config.Context{}, notFoundError(fmt.Sprintf("context %q not found", effectiveName))
+		return config.Context{}, faults.NotFound(fmt.Sprintf("context %q not found", effectiveName), nil)
 	}
 
 	resolved, err := applyOverrides(normalizeConfig(resolvedCatalog.Contexts[idx]), selection.Overrides)
@@ -249,37 +249,37 @@ func (m *Service) saveCatalog(contextCatalog config.ContextCatalog) error {
 
 	encoded, err := encodeCatalog(contextCatalog)
 	if err != nil {
-		return internalError("failed to encode context catalog", err)
+		return faults.Internal("failed to encode context catalog", err)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(resolvedPath), 0o755); err != nil {
-		return internalError("failed to create context config directory", err)
+		return faults.Internal("failed to create context config directory", err)
 	}
 
 	tempFile, err := os.CreateTemp(filepath.Dir(resolvedPath), ".declarest-contexts-*")
 	if err != nil {
-		return internalError("failed to create temporary context catalog file", err)
+		return faults.Internal("failed to create temporary context catalog file", err)
 	}
 	tempPath := tempFile.Name()
 
 	if _, err := tempFile.Write(encoded); err != nil {
 		_ = tempFile.Close()
 		_ = os.Remove(tempPath)
-		return internalError("failed to write context catalog", err)
+		return faults.Internal("failed to write context catalog", err)
 	}
 	if err := tempFile.Chmod(0o600); err != nil {
 		_ = tempFile.Close()
 		_ = os.Remove(tempPath)
-		return internalError("failed to set context catalog permissions", err)
+		return faults.Internal("failed to set context catalog permissions", err)
 	}
 	if err := tempFile.Close(); err != nil {
 		_ = os.Remove(tempPath)
-		return internalError("failed to finalize context catalog", err)
+		return faults.Internal("failed to finalize context catalog", err)
 	}
 
 	if err := os.Rename(tempPath, resolvedPath); err != nil {
 		_ = os.Remove(tempPath)
-		return internalError("failed to replace context catalog", err)
+		return faults.Internal("failed to replace context catalog", err)
 	}
 
 	if err := ensureUserOnlyReadWriteFile(resolvedPath); err != nil {
@@ -345,28 +345,20 @@ func compactContextCatalogForPersistence(contextCatalog config.ContextCatalog) c
 	return compacted
 }
 
-func notFoundError(message string) error {
-	return faults.NewTypedError(faults.NotFoundError, message, nil)
-}
-
-func internalError(message string, cause error) error {
-	return faults.NewTypedError(faults.InternalError, message, cause)
-}
-
 func ensureUserOnlyReadWriteFile(path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
-		return internalError("failed to inspect context catalog permissions", err)
+		return faults.Internal("failed to inspect context catalog permissions", err)
 	}
 
 	if info.Mode().Perm() == 0o600 {
 		return nil
 	}
 	if err := os.Chmod(path, 0o600); err != nil {
-		return internalError("failed to update context catalog permissions", err)
+		return faults.Internal("failed to update context catalog permissions", err)
 	}
 	return nil
 }

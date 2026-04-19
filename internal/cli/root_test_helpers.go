@@ -355,7 +355,7 @@ func (r *testOrchestrator) GetRemote(_ context.Context, logicalPath string) (res
 		if value, ok := r.getRemoteValues[logicalPath]; ok {
 			return testContent(value), nil
 		}
-		return resource.Content{}, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
+		return resource.Content{}, faults.NotFound(fmt.Sprintf("resource %q not found", logicalPath), nil)
 	}
 	if r.getRemoteValue != nil {
 		return testContent(r.getRemoteValue), nil
@@ -641,7 +641,7 @@ func newTestMetadata() *testMetadata {
 func (s *testMetadata) Get(_ context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
 	metadata, found := s.items[logicalPath]
 	if !found {
-		return metadatadomain.ResourceMetadata{}, faults.NewTypedError(faults.NotFoundError, "metadata not found", nil)
+		return metadatadomain.ResourceMetadata{}, faults.NotFound("metadata not found", nil)
 	}
 	return metadata, nil
 }
@@ -772,7 +772,7 @@ func (s *testSecretProvider) Store(_ context.Context, key string, value string) 
 func (s *testSecretProvider) Get(_ context.Context, key string) (string, error) {
 	value, found := s.values[key]
 	if !found {
-		return "", faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("secret %q not found", key), nil)
+		return "", faults.NotFound(fmt.Sprintf("secret %q not found", key), nil)
 	}
 	return value, nil
 }
@@ -887,7 +887,7 @@ func (s *testManagedServiceClient) GetAccessToken(context.Context) (string, erro
 		return "", s.tokenErr
 	}
 	if s.accessToken == "" {
-		return "", faults.NewTypedError(faults.ValidationError, "managed-service.http.auth.oauth2 is not configured", nil)
+		return "", faults.Invalid("managed-service.http.auth.oauth2 is not configured", nil)
 	}
 	return s.accessToken, nil
 }
@@ -905,7 +905,7 @@ func (r *testRepository) GetDefaults(_ context.Context, logicalPath string) (res
 			return value, nil
 		}
 	}
-	return resource.Content{}, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource defaults %q not found", logicalPath), nil)
+	return resource.Content{}, faults.NotFound(fmt.Sprintf("resource defaults %q not found", logicalPath), nil)
 }
 func (r *testRepository) SaveDefaults(_ context.Context, logicalPath string, content resource.Content) error {
 	if r.saveDefaultsErr != nil {
@@ -1057,7 +1057,7 @@ func (r *resourceSaveTestRepository) Get(_ context.Context, logicalPath string) 
 			return testContent(value), nil
 		}
 	}
-	return resource.Content{}, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
+	return resource.Content{}, faults.NotFound(fmt.Sprintf("resource %q not found", logicalPath), nil)
 }
 
 func (r *resourceSaveTestRepository) GetDefaults(_ context.Context, logicalPath string) (resource.Content, error) {
@@ -1066,7 +1066,7 @@ func (r *resourceSaveTestRepository) GetDefaults(_ context.Context, logicalPath 
 			return content, nil
 		}
 	}
-	return resource.Content{}, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource defaults %q not found", logicalPath), nil)
+	return resource.Content{}, faults.NotFound(fmt.Sprintf("resource defaults %q not found", logicalPath), nil)
 }
 
 func (r *resourceSaveTestRepository) SaveDefaults(_ context.Context, logicalPath string, content resource.Content) error {

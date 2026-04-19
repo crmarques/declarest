@@ -203,7 +203,7 @@ func (fakeEditMetadataService) Unset(context.Context, string) error {
 }
 
 func (fakeEditMetadataService) ReadDefaultsArtifact(context.Context, string, string) (resourcedomain.Content, error) {
-	return resourcedomain.Content{}, faults.NewTypedError(faults.NotFoundError, "defaults artifact not found", nil)
+	return resourcedomain.Content{}, faults.NotFound("defaults artifact not found", nil)
 }
 
 func (fakeEditMetadataService) WriteDefaultsArtifact(context.Context, string, string, resourcedomain.Content) error {

@@ -57,15 +57,15 @@ type CompletionService interface {
 	OpenAPISpecReader
 }
 
-type RequestExecutor interface {
+type ManagedRequestExecutor interface {
 	Request(ctx context.Context, spec managedservice.RequestSpec) (resource.Content, error)
 }
 
-type RepositoryWriter interface {
+type ResourceSaver interface {
 	Save(ctx context.Context, logicalPath string, content resource.Content) error
 }
 
-type ResourceMutator interface {
+type ResourceApplier interface {
 	Apply(ctx context.Context, logicalPath string, policy ApplyPolicy) (resource.Resource, error)
 	ApplyWithContent(ctx context.Context, logicalPath string, content resource.Content, policy ApplyPolicy) (resource.Resource, error)
 	Create(ctx context.Context, logicalPath string, content resource.Content) (resource.Resource, error)
@@ -73,7 +73,7 @@ type ResourceMutator interface {
 	Delete(ctx context.Context, logicalPath string, policy DeletePolicy) error
 }
 
-type DiffReader interface {
+type ResourceDiffer interface {
 	Diff(ctx context.Context, logicalPath string) ([]resource.DiffEntry, error)
 }
 
@@ -85,9 +85,9 @@ type Orchestrator interface {
 	LocalReader
 	RemoteReader
 	OpenAPISpecReader
-	RequestExecutor
-	RepositoryWriter
-	ResourceMutator
-	DiffReader
+	ManagedRequestExecutor
+	ResourceSaver
+	ResourceApplier
+	ResourceDiffer
 	TemplateRenderer
 }

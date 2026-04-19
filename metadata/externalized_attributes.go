@@ -51,7 +51,7 @@ func ResolveExternalizedAttributes(metadata ResourceMetadata) ([]ResolvedExterna
 		}
 
 		if previous, exists := pathIndexByKey[entry.Path]; exists {
-			return nil, faults.NewValidationError(
+			return nil, faults.Invalid(
 				fmt.Sprintf(
 					"resource.externalizedAttributes[%d].path duplicates resource.externalizedAttributes[%d].path",
 					idx,
@@ -63,7 +63,7 @@ func ResolveExternalizedAttributes(metadata ResourceMetadata) ([]ResolvedExterna
 		pathIndexByKey[entry.Path] = idx
 
 		if previous, exists := fileIndexByKey[entry.File]; exists {
-			return nil, faults.NewValidationError(
+			return nil, faults.Invalid(
 				fmt.Sprintf(
 					"resource.externalizedAttributes[%d].file duplicates resource.externalizedAttributes[%d].file",
 					idx,
@@ -105,7 +105,7 @@ func resolveExternalizedAttribute(item ExternalizedAttribute, idx int) (Resolved
 		modeValue = ExternalizedAttributeModeText
 	}
 	if modeValue != ExternalizedAttributeModeText {
-		return ResolvedExternalizedAttribute{}, faults.NewValidationError(
+		return ResolvedExternalizedAttribute{}, faults.Invalid(
 			fmt.Sprintf(
 				"resource.externalizedAttributes[%d].mode %q is not supported",
 				idx,
@@ -120,7 +120,7 @@ func resolveExternalizedAttribute(item ExternalizedAttribute, idx int) (Resolved
 		saveBehaviorValue = ExternalizedAttributeSaveBehaviorExternalize
 	}
 	if saveBehaviorValue != ExternalizedAttributeSaveBehaviorExternalize {
-		return ResolvedExternalizedAttribute{}, faults.NewValidationError(
+		return ResolvedExternalizedAttribute{}, faults.Invalid(
 			fmt.Sprintf(
 				"resource.externalizedAttributes[%d].saveBehavior %q is not supported",
 				idx,
@@ -135,7 +135,7 @@ func resolveExternalizedAttribute(item ExternalizedAttribute, idx int) (Resolved
 		renderBehaviorValue = ExternalizedAttributeRenderBehaviorInclude
 	}
 	if renderBehaviorValue != ExternalizedAttributeRenderBehaviorInclude {
-		return ResolvedExternalizedAttribute{}, faults.NewValidationError(
+		return ResolvedExternalizedAttribute{}, faults.Invalid(
 			fmt.Sprintf(
 				"resource.externalizedAttributes[%d].renderBehavior %q is not supported",
 				idx,
@@ -159,7 +159,7 @@ func resolveExternalizedAttribute(item ExternalizedAttribute, idx int) (Resolved
 func normalizeExternalizedAttributePath(value string, idx int) (string, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
-		return "", faults.NewValidationError(
+		return "", faults.Invalid(
 			fmt.Sprintf("resource.externalizedAttributes[%d].path must not be empty", idx),
 			nil,
 		)
@@ -167,7 +167,7 @@ func normalizeExternalizedAttributePath(value string, idx int) (string, error) {
 
 	tokens, err := resource.ParseJSONPointer(trimmed)
 	if err != nil {
-		return "", faults.NewValidationError(
+		return "", faults.Invalid(
 			fmt.Sprintf("resource.externalizedAttributes[%d].path must be a valid JSON pointer", idx),
 			err,
 		)
@@ -179,13 +179,13 @@ func normalizeExternalizedAttributePath(value string, idx int) (string, error) {
 func normalizeExternalizedAttributeFile(value string, idx int) (string, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
-		return "", faults.NewValidationError(
+		return "", faults.Invalid(
 			fmt.Sprintf("resource.externalizedAttributes[%d].file must not be empty", idx),
 			nil,
 		)
 	}
 	if strings.HasPrefix(trimmed, "/") {
-		return "", faults.NewValidationError(
+		return "", faults.Invalid(
 			fmt.Sprintf("resource.externalizedAttributes[%d].file must stay within the resource directory", idx),
 			nil,
 		)
@@ -193,7 +193,7 @@ func normalizeExternalizedAttributeFile(value string, idx int) (string, error) {
 
 	cleaned := path.Clean(trimmed)
 	if cleaned == "." || cleaned == "" {
-		return "", faults.NewValidationError(
+		return "", faults.Invalid(
 			fmt.Sprintf("resource.externalizedAttributes[%d].file must not be empty", idx),
 			nil,
 		)
@@ -202,7 +202,7 @@ func normalizeExternalizedAttributeFile(value string, idx int) (string, error) {
 	segments := strings.Split(cleaned, "/")
 	for _, segment := range segments {
 		if segment == ".." {
-			return "", faults.NewValidationError(
+			return "", faults.Invalid(
 				fmt.Sprintf("resource.externalizedAttributes[%d].file must stay within the resource directory", idx),
 				nil,
 			)

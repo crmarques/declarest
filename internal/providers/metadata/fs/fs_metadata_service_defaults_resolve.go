@@ -88,20 +88,20 @@ func (s *FSMetadataService) resolveDefaultsEntry(
 		}
 		objectValue, ok := normalized.(map[string]any)
 		if !ok {
-			return nil, faults.NewValidationError(field+" must resolve to an object", nil)
+			return nil, faults.Invalid(field+" must resolve to an object", nil)
 		}
 		return objectValue, nil
 	}
 
 	resolvedFile, ok := metadatadomain.ParseDefaultsIncludeReference(includeFile)
 	if !ok {
-		return nil, faults.NewValidationError(field+" must be an exact {{include ...}} reference", nil)
+		return nil, faults.Invalid(field+" must be an exact {{include ...}} reference", nil)
 	}
 
 	metadataPath := metadataPathForSelector(selector, kind)
 	content, err := s.ReadDefaultsArtifact(ctx, metadataPath, resolvedFile)
 	if err != nil {
-		return nil, faults.NewValidationError(
+		return nil, faults.Invalid(
 			fmt.Sprintf("%s failed to resolve include %q", field, includeFile),
 			err,
 		)

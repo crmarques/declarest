@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
 )
@@ -76,7 +77,7 @@ func (r *LocalResourceRepository) Exists(_ context.Context, logicalPath string) 
 	} else if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	} else {
-		return false, internalError("failed to check collection path", err)
+		return false, faults.Internal("failed to check collection path", err)
 	}
 }
 
@@ -86,7 +87,7 @@ func (r *LocalResourceRepository) listDirect(baseLogicalPath string, collectionP
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
 		}
-		return nil, internalError("failed to list collection", err)
+		return nil, faults.Internal("failed to list collection", err)
 	}
 
 	itemsByPath := make(map[string]resource.Resource)
@@ -166,7 +167,7 @@ func (r *LocalResourceRepository) listRecursive(baseLogicalPath string, collecti
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
 		}
-		return nil, internalError("failed to walk collection", err)
+		return nil, faults.Internal("failed to walk collection", err)
 	}
 
 	items := make([]resource.Resource, 0, len(itemsByPath))

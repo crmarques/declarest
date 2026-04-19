@@ -83,14 +83,14 @@ func normalizeValue(value any) (any, error) {
 
 func normalizeFloat(value float64) (float64, error) {
 	if math.IsNaN(value) || math.IsInf(value, 0) {
-		return 0, faults.NewTypedError(faults.ValidationError, "payload contains non-finite float", nil)
+		return 0, faults.Invalid("payload contains non-finite float", nil)
 	}
 	return value, nil
 }
 
 func normalizeUint(value uint64) (int64, error) {
 	if value > math.MaxInt64 {
-		return 0, faults.NewTypedError(faults.ValidationError, "payload contains integer out of range", nil)
+		return 0, faults.Invalid("payload contains integer out of range", nil)
 	}
 	return int64(value), nil
 }
@@ -104,12 +104,12 @@ func normalizeJSONNumber(value json.Number) (any, error) {
 		if asBig.IsInt64() {
 			return asBig.Int64(), nil
 		}
-		return nil, faults.NewTypedError(faults.ValidationError, "payload contains integer out of range", nil)
+		return nil, faults.Invalid("payload contains integer out of range", nil)
 	}
 
 	asFloat, err := value.Float64()
 	if err != nil {
-		return nil, faults.NewTypedError(faults.ValidationError, "payload contains invalid number", err)
+		return nil, faults.Invalid("payload contains invalid number", err)
 	}
 	return normalizeFloat(asFloat)
 }
@@ -154,7 +154,7 @@ func normalizeReflectValue(value any) (any, error) {
 	switch reflectValue.Kind() {
 	case reflect.Map:
 		if reflectValue.Type().Key().Kind() != reflect.String {
-			return nil, faults.NewTypedError(faults.ValidationError, "payload map keys must be strings", nil)
+			return nil, faults.Invalid("payload map keys must be strings", nil)
 		}
 
 		keys := reflectValue.MapKeys()
