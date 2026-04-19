@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - bases/declarest-operator.clusterserviceversion.yaml
+  - ../default
+  - ../samples
+  - webhooks.yaml
+patches:
+  - path: patches/deployment_olm_volumes.yaml
+    target:
+      kind: Deployment
+      name: declarest-operator
+  - path: patches/deployment_olm_webhooks.yaml
+    target:
+      kind: Deployment
+      name: declarest-operator
+  - path: patches/remove_pvc.yaml
+    target:
+      kind: PersistentVolumeClaim
+      name: declarest-operator-state
+images:
+  - name: ghcr.io/crmarques/declarest-operator
+    newTag: 0.0.1

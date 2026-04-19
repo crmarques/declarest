@@ -1,5 +1,8 @@
 # ---- Go binaries & build dirs
 /bin/
+/declarest
+/declarest-operator-manager
+/declarest-operator-manager-*
 /build/
 /dist/
 /out/
@@ -40,7 +43,7 @@ go.work
 go.work.sum
 
 # Dependency vendor dir (UNCOMMENT to ignore vendor; keep commented if you commit vendored deps)
-// vendor/
+# vendor/
 
 # Editor/IDE
 .vscode
@@ -70,8 +73,14 @@ Thumbs.db
 .venv/
 
 # mkdocs
-.docs
+/site/
+/docs/site/
+/.docs/
 docs/__pycache__/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
 
 # E2E runtime artifacts
 test/e2e/.runs/

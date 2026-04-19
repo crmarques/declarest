@@ -1,0 +1,67 @@
+domain: declarest.io
+layout:
+- go.kubebuilder.io/v4
+projectName: declarest-operator
+repo: github.com/crmarques/declarest
+version: "3"
+plugins:
+  manifests.sdk.operatorframework.io/v2: {}
+  scorecard.sdk.operatorframework.io/v2: {}
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: declarest.io
+  group: declarest.io
+  kind: ResourceRepository
+  path: github.com/crmarques/declarest/api/v1alpha1
+  version: v1alpha1
+  webhooks:
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: declarest.io
+  group: declarest.io
+  kind: ManagedService
+  path: github.com/crmarques/declarest/api/v1alpha1
+  version: v1alpha1
+  webhooks:
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: declarest.io
+  group: declarest.io
+  kind: SecretStore
+  path: github.com/crmarques/declarest/api/v1alpha1
+  version: v1alpha1
+  webhooks:
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: declarest.io
+  group: declarest.io
+  kind: SyncPolicy
+  path: github.com/crmarques/declarest/api/v1alpha1
+  version: v1alpha1
+  webhooks:
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: declarest.io
+  group: declarest.io
+  kind: RepositoryWebhook
+  path: github.com/crmarques/declarest/api/v1alpha1
+  version: v1alpha1

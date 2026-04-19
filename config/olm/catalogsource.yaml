@@ -1,0 +1,13 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: declarest-operator-catalog
+  namespace: olm
+spec:
+  sourceType: grpc
+  image: ghcr.io/crmarques/declarest-operator-catalog:latest
+  displayName: DeclaREST Operator
+  publisher: Carlos Marques
+  updateStrategy:
+    registryPoll:
+      interval: 30m

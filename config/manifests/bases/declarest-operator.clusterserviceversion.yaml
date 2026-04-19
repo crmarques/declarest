@@ -1,0 +1,157 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: "[]"
+    capabilities: Seamless Upgrades
+    categories: "Integration & Delivery"
+    containerImage: ghcr.io/crmarques/declarest-operator:latest
+    description: Declarative resource sync between Git and REST APIs.
+    repository: https://github.com/crmarques/declarest
+    support: Community
+  name: declarest-operator.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+      - name: resourcerepositories.declarest.io
+        version: v1alpha1
+        kind: ResourceRepository
+        displayName: Resource Repository
+        description: Git-backed source of truth for DeclaREST resources, including polling, authentication, and webhook configuration.
+      - name: managedservices.declarest.io
+        version: v1alpha1
+        kind: ManagedService
+        displayName: Managed Service
+        description: Remote REST service targeted by DeclaREST, including OpenAPI sourcing, auth, throttling, and metadata bundle references.
+      - name: secretstores.declarest.io
+        version: v1alpha1
+        kind: SecretStore
+        displayName: Secret Store
+        description: Secret provider configuration (file-backed today) used to resolve credentials referenced by DeclaREST contexts.
+      - name: syncpolicies.declarest.io
+        version: v1alpha1
+        kind: SyncPolicy
+        displayName: Sync Policy
+        description: Binds a ResourceRepository, ManagedService, and SecretStore and controls the scoped sync, prune, and schedule behavior.
+      - name: repositorywebhooks.declarest.io
+        version: v1alpha1
+        kind: RepositoryWebhook
+        displayName: Repository Webhook
+        description: Repository webhook receiver state used by the operator to drive event-driven repository refresh.
+  description: |
+    DeclaREST keeps REST APIs in sync with declarative state stored in Git. The
+    operator watches `ResourceRepository`, `ManagedService`, `SecretStore`, and
+    `SyncPolicy` resources to plan and execute incremental or full sync cycles
+    against targeted services.
+
+    ### Highlights
+    - Git-backed source of truth with webhook-driven and interval-based refresh.
+    - OpenAPI-aware remote operations with optional throttling and proxy support.
+    - Safety-biased diff-based incremental sync with deterministic fallback to full sync.
+    - File-backed secret provider with `${ENV_VAR}` resolution at admission and reconcile.
+
+    ### Installation notes
+    - OLM-installed pods use an `emptyDir` for their state volume; persistent
+      storage outside OLM is supported via the kustomize manifests published
+      alongside each release (`install.yaml`).
+    - Admission webhooks are enabled in this bundle and managed by OLM (cert
+      generation and injection). The operator listens on port 9443.
+    - The bundle ships cluster-scoped RBAC; `OwnNamespace`, `SingleNamespace`,
+      and `AllNamespaces` install modes are supported.
+  displayName: DeclaREST Operator
+  install:
+    spec:
+      deployments: []
+    strategy: deployment
+  installModes:
+    - supported: true
+      type: OwnNamespace
+    - supported: true
+      type: SingleNamespace
+    - supported: false
+      type: MultiNamespace
+    - supported: true
+      type: AllNamespaces
+  keywords:
+    - declarest
+    - rest
+    - gitops
+    - sync
+    - openapi
+  links:
+    - name: Documentation
+      url: https://github.com/crmarques/declarest/tree/main/docs
+    - name: Source
+      url: https://github.com/crmarques/declarest
+  maintainers:
+    - email: crmarquesjc@gmail.com
+      name: Carlos Marques
+  maturity: alpha
+  minKubeVersion: 1.27.0
+  provider:
+    name: Carlos Marques
+    url: https://github.com/crmarques/declarest
+  version: 0.0.0
+  webhookdefinitions:
+    - admissionReviewVersions: ["v1"]
+      containerPort: 9443
+      deploymentName: declarest-operator
+      failurePolicy: Fail
+      generateName: vresourcerepository-v1alpha1.declarest.io
+      rules:
+        - apiGroups: ["declarest.io"]
+          apiVersions: ["v1alpha1"]
+          operations: ["CREATE", "UPDATE"]
+          resources: ["resourcerepositories"]
+      sideEffects: None
+      targetPort: 9443
+      timeoutSeconds: 10
+      type: ValidatingAdmissionWebhook
+      webhookPath: /validate-declarest-io-v1alpha1-resourcerepository
+    - admissionReviewVersions: ["v1"]
+      containerPort: 9443
+      deploymentName: declarest-operator
+      failurePolicy: Fail
+      generateName: vmanagedservice-v1alpha1.declarest.io
+      rules:
+        - apiGroups: ["declarest.io"]
+          apiVersions: ["v1alpha1"]
+          operations: ["CREATE", "UPDATE"]
+          resources: ["managedservices"]
+      sideEffects: None
+      targetPort: 9443
+      timeoutSeconds: 10
+      type: ValidatingAdmissionWebhook
+      webhookPath: /validate-declarest-io-v1alpha1-managedservice
+    - admissionReviewVersions: ["v1"]
+      containerPort: 9443
+      deploymentName: declarest-operator
+      failurePolicy: Fail
+      generateName: vsecretstore-v1alpha1.declarest.io
+      rules:
+        - apiGroups: ["declarest.io"]
+          apiVersions: ["v1alpha1"]
+          operations: ["CREATE", "UPDATE"]
+          resources: ["secretstores"]
+      sideEffects: None
+      targetPort: 9443
+      timeoutSeconds: 10
+      type: ValidatingAdmissionWebhook
+      webhookPath: /validate-declarest-io-v1alpha1-secretstore
+    - admissionReviewVersions: ["v1"]
+      containerPort: 9443
+      deploymentName: declarest-operator
+      failurePolicy: Fail
+      generateName: vsyncpolicy-v1alpha1.declarest.io
+      rules:
+        - apiGroups: ["declarest.io"]
+          apiVersions: ["v1alpha1"]
+          operations: ["CREATE", "UPDATE"]
+          resources: ["syncpolicies"]
+      sideEffects: None
+      targetPort: 9443
+      timeoutSeconds: 10
+      type: ValidatingAdmissionWebhook
+      webhookPath: /validate-declarest-io-v1alpha1-syncpolicy

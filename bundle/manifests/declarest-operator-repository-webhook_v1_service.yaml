@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/component: repository-webhook
+    app.kubernetes.io/name: declarest-operator
+    app.kubernetes.io/part-of: declarest
+  name: declarest-operator-repository-webhook
+spec:
+  ports:
+  - name: repo-webhook
+    port: 8082
+    targetPort: repo-webhook
+  selector:
+    app.kubernetes.io/name: declarest-operator
+status:
+  loadBalancer: {}

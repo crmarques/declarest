@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: declarest-system
+  labels:
+    app.kubernetes.io/name: declarest-operator
+    app.kubernetes.io/part-of: declarest

@@ -322,8 +322,9 @@ Profiles (required, defaults to cli-basic when omitted):
     cli-full       : Execute "main" plus "corner" CLI cases to cover less-common paths and components.
     cli-manual     : Start only local-instantiable components, emit setup/reset shell scripts, and exit so you can run
                      Declarest commands interactively. Requires every selected connection to stay local.
-    operator-manual: Provision a kubernetes-only local stack, deploy the operator manager in-cluster, apply generated
-                     ResourceRepository/ManagedService/SecretStore/SyncPolicy resources, then keep runtime for manual checks.
+    operator-manual: Provision a kubernetes-only local stack, apply vendored OLM core YAML, install the operator through
+                     CatalogSource/OperatorGroup/Subscription, apply generated ResourceRepository/ManagedService/
+                     SecretStore/SyncPolicy resources, then keep runtime for manual checks.
     operator-basic : Same operator environment as operator-manual, then run operator-focused "main" automated cases.
     operator-full  : Same operator environment as operator-basic, plus corner validations.
 

@@ -544,6 +544,10 @@ e2e_cleanup_run_operator_manager() {
   local run_id=$1
   local pid
 
+  if declare -F e2e_operator_cleanup_olm_for_run_id >/dev/null 2>&1; then
+    e2e_operator_cleanup_olm_for_run_id "${run_id}" || return 1
+  fi
+
   pid=$(e2e_runtime_state_get_for_run_id "${run_id}" 'OPERATOR_MANAGER_PID' || true)
   if [[ -z "${pid}" || ! "${pid}" =~ ^[0-9]+$ ]]; then
     return 0

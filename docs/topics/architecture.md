@@ -106,6 +106,15 @@ Both CLI and Operator share the same orchestrator and provider implementations -
 - **CLI**: explicit user or CI invocation. Each command maps to one orchestrator workflow.
 - **Operator**: Kubernetes reconciliation loop. Four CRDs define desired configuration; the controller reconciles through the same save/diff/apply cycle.
 
+## Packaging artifacts
+
+The same operator binary ships through two independent packaging paths. Both wrap the kustomize base in `config/default/` and run the same controller code; the difference is lifecycle management on the target cluster.
+
+- **Kustomize manifests (`install.yaml`, `install-admission-*.yaml`)**: rendered from `config/release/*` overlays at release time. Installs CRDs, RBAC, and the operator Deployment directly. Uses a `PersistentVolumeClaim` for operator state.
+- **OLM bundle and catalog**: operator-sdk `registry+v1` bundle under `bundle/` plus a file-based catalog under `catalog/declarest-operator/`. Published as `ghcr.io/crmarques/declarest-operator-bundle:<VERSION>` and `ghcr.io/crmarques/declarest-operator-catalog:<VERSION>` and consumed by OLM through the reference `install-olm.yaml` (`OperatorGroup`, `CatalogSource`, `Subscription`). Uses `emptyDir` for operator state because OLM's `registry+v1` format forbids bundled PVCs.
+
+Neither packaging layer carries reconcile or webhook logic. They are overlays over the same Deployment, RBAC, and CRDs.
+
 ## Extension points
 
 - **Metadata overrides** for API-specific path, method, and payload adaptation without code changes.

@@ -1,0 +1,13 @@
+services:
+  haproxy:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    user: root
+    entrypoint: ["/var/lib/haproxy-seed/entrypoint.sh"]
+    volumes:
+      - ./config/haproxy.cfg:/var/lib/haproxy-seed/haproxy.cfg:ro,Z
+      - ./config/entrypoint.sh:/var/lib/haproxy-seed/entrypoint.sh:ro,Z
+      - ./config/dpa_proxy.py:/var/lib/haproxy-seed/dpa_proxy.py:ro,Z
+    ports:
+      - "${HAPROXY_DPA_PORT}:5555"

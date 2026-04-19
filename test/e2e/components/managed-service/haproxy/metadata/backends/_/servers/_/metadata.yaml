@@ -1,0 +1,32 @@
+resource:
+  id: "{{/name}}"
+  alias: "{{/name}}"
+  remoteCollectionPath: /services/haproxy/configuration/backends/{{/backend}}/servers
+  requiredAttributes:
+    - /name
+    - /address
+operations:
+  list:
+    path: .
+  get:
+    path: ./{{/id}}
+  create:
+    method: POST
+    path: .
+    validate:
+      requiredAttributes:
+        - /name
+        - /address
+      schemaRef: openapi:request-body
+  update:
+    method: PUT
+    path: ./{{/id}}
+    validate:
+      requiredAttributes:
+        - /name
+        - /address
+      schemaRef: openapi:request-body
+  delete:
+    path: ./{{/id}}
+  compare:
+    path: ./{{/id}}

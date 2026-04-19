@@ -9,6 +9,7 @@ Define the Kubernetes operator contract for CRD validation, controller reconcili
 3. Sync planning and scheduling behavior (full vs incremental sync, prune, cron).
 4. Repository webhook receiver contract and authentication rules.
 5. Operator runtime context mapping into canonical DeclaREST interfaces.
+6. OLM packaging artifacts (bundle image, file-based catalog image) that install and manage the operator through OLM.
 
 ## Out of Scope
 1. CLI command semantics and UX output contracts.
@@ -30,6 +31,13 @@ Define the Kubernetes operator contract for CRD validation, controller reconcili
 12. `SyncPolicy` scheduling MUST requeue by the earliest due trigger between `spec.syncInterval` and `spec.fullResyncCron` (when configured), with invalid cron expressions treated as spec-validation failures.
 13. Repository webhook receiver MUST accept only authenticated provider events for configured repositories, enforce payload-size bounds, enforce bounded read/write/idle HTTP timeouts, accept only push events for the configured branch, and patch webhook receipt annotations before returning success.
 14. Webhook-triggered repository refresh MUST be event-driven via `ResourceRepository` annotation changes and MUST not wait for `pollInterval`.
+15. The operator MUST ship an operator-sdk `registry+v1` bundle under `bundle/` whose `bundle/manifests/` tree contains the `ClusterServiceVersion`, all owned CRDs, operator `Deployment`, RBAC, `Service` objects, and `PodDisruptionBudget`, whose `bundle/metadata/annotations.yaml` declares `operators.operatorframework.io.bundle.package.v1=declarest-operator` with the `alpha` channel set as default, and whose `bundle/tests/scorecard/config.yaml` enables the default operator-sdk scorecard suite.
+16. The bundle `ClusterServiceVersion` MUST declare `installModes` supporting `OwnNamespace`, `SingleNamespace`, and `AllNamespaces` (and MUST disable `MultiNamespace`), MUST list every `declarest.io/v1alpha1` owned CRD (`resourcerepositories`, `managedservices`, `secretstores`, `syncpolicies`, `repositorywebhooks`) with deterministic `alm-examples` sourced from `config/samples/`, MUST declare webhook definitions mirroring `config/manifests/webhooks.yaml` on container port 9443 with `failurePolicy=Fail` and `timeoutSeconds=10`, and MUST NOT embed an `icon` entry.
+17. The bundle Deployment MUST replace the cluster-scoped `declarest-operator-state` `PersistentVolumeClaim` with an `emptyDir` volume (OLM `registry+v1` forbids bundled PVCs); kustomize-published release manifests (`install.yaml`, `install-admission-*.yaml`) MUST continue to ship the PVC for non-OLM installs.
+18. `make bundle` MUST regenerate bundle manifests from `config/manifests/` via `operator-sdk generate bundle --manifests` (never `--overwrite`) so that the hand-authored `bundle.Dockerfile`, `bundle/metadata/annotations.yaml`, and `bundle/tests/scorecard/config.yaml` are preserved; `make bundle-validate` MUST run `operator-sdk bundle validate ./bundle` with the `operatorhub` suite and fail on any reported error.
+19. The file-based catalog MUST live under `catalog/declarest-operator/catalog.yaml` with `olm.package`, `olm.channel` (`alpha`, pointing at `declarest-operator.v<VERSION>`), and `olm.bundle` entries referencing the published bundle image; `catalog.Dockerfile` MUST build from `quay.io/operator-framework/opm:v1.48.0` and `make catalog-validate` MUST run `opm validate ./catalog` successfully.
+20. Release tooling MUST publish bundle and catalog images to `ghcr.io/crmarques/declarest-operator-bundle` and `ghcr.io/crmarques/declarest-operator-catalog` for every git tag and attach the bundle tarball, rendered CSV, and rendered catalog as release assets; the tag-triggered bundle-image workflow MUST re-run `operator-sdk bundle validate` and `opm validate` before pushing.
+21. `config/olm/` MUST provide a reference install overlay (`Namespace`, `OperatorGroup`, `CatalogSource`, `Subscription`) targeting the published catalog image in namespace `olm`, and `make olm-install`/`make olm-uninstall` MUST apply/remove that overlay deterministically.
 
 ## Data Contracts
 1. Condition types: `Ready`, `Reconciling`, `Stalled` (from `api/v1alpha1`).
@@ -42,6 +50,10 @@ Define the Kubernetes operator contract for CRD validation, controller reconcili
 8. `SyncPolicy` defaults: `spec.source.recursive=true` and `spec.syncInterval=5m` when omitted.
 9. `SyncPolicy` reconcile runtime MUST assemble a `config.Context` and bootstrap a session using `bootstrap.NewSessionFromResolvedContext`, yielding canonical interface implementations (`orchestrator.Orchestrator`, `repository.ResourceStore`, `metadata.MetadataService`, `secrets.SecretProvider`) for mutation workflows; managed-service and vault proxy blocks MAY override only selected fields from process proxy environment.
 10. Sync execution plan modes: `full` or `incremental`; plan targets MUST be normalized and deduplicated.
+11. OLM bundle layout: `bundle.Dockerfile` at repo root, `bundle/manifests/*.yaml` (CSV, CRDs, `Deployment`, RBAC, `Service` objects, `PodDisruptionBudget`), `bundle/metadata/annotations.yaml`, and `bundle/tests/scorecard/config.yaml`; bundle image tag equals the released operator `VERSION` (for example `0.0.1`).
+12. File-based catalog layout: `catalog.Dockerfile`, `catalog/declarest-operator/catalog.yaml` with `olm.package`, `olm.channel` (`alpha` default), and one `olm.bundle` entry per published version referencing `ghcr.io/crmarques/declarest-operator-bundle:<VERSION>`.
+13. OLM install overlay (`config/olm/`): `Namespace=olm`, `OperatorGroup=declarest-operators`, `CatalogSource=declarest-catalog` pointing at the published catalog image, and `Subscription=declarest-operator` on channel `alpha` with `installPlanApproval=Automatic`.
+14. Scorecard suite: default operator-sdk basic and OLM tests enabled via `bundle/tests/scorecard/config.yaml` for release gating.
 
 ## Failure Modes
 1. Spec validation failure (one-of/auth/path/cron/poll interval invariants) marks resource `NotReady` with reason `SpecInvalid`.
@@ -49,6 +61,8 @@ Define the Kubernetes operator contract for CRD validation, controller reconcili
 3. Repository unavailable, session bootstrap failure, or apply/prune errors mark `SyncPolicy` `NotReady` with reconcile-failure reasons.
 4. Webhook authentication/signature/token mismatch returns authorization failure and MUST NOT mutate repository annotations.
 5. Oversized webhook payloads or malformed target paths return request errors and MUST NOT enqueue repository refresh.
+6. Bundle validation failure (`operator-sdk bundle validate --select-optional suite=operatorhub`) or catalog validation failure (`opm validate`) MUST block release-image publishing.
+7. Bundle manifests containing OLM-incompatible kinds (for example `PersistentVolumeClaim`) MUST fail `operator-sdk bundle validate` before image build.
 
 ## Edge Cases
 1. Secret rotation with unchanged repository revision MUST still trigger `SyncPolicy` reconcile via secret-version-hash change.
@@ -58,6 +72,8 @@ Define the Kubernetes operator contract for CRD validation, controller reconcili
 5. Non-overlapping source paths with shared dependency references MUST be accepted.
 6. Slow or idle webhook clients MUST be disconnected by bounded HTTP server timeouts rather than holding connections indefinitely.
 7. A change to `customers/_/defaults.yaml` SHOULD produce an incremental apply target for `/customers`, while a change to `customers/acme/defaults-prod.yaml` SHOULD target `/customers/acme`; unknown files under a resource directory that only share the `defaults` prefix still trigger safe full fallback.
+8. OLM-installed pods MUST rely on the bundled `emptyDir` state volume and MUST continue to accept configuration that assumes no persistent state volume is mounted; persistent state on non-OLM clusters remains available through the kustomize manifests.
+9. Installing the operator via OLM across `AllNamespaces`, `SingleNamespace`, and `OwnNamespace` install modes MUST preserve admission-webhook behavior because OLM injects the webhook-serving certificate automatically.
 
 ## Examples
 1. Normal: `ResourceRepository` receives a valid authenticated push webhook for the tracked branch, webhook annotations are patched, and reconcile fetches a new revision before the next `pollInterval`.
@@ -70,3 +86,4 @@ Define the Kubernetes operator contract for CRD validation, controller reconcili
 4. Full-resync schedule and requeue interval computation MUST be covered by `internal/operator/controllers/syncpolicy_schedule_test.go`.
 5. Path-overlap validation and dependency-sharing behavior MUST be covered by `internal/operator/controllers/syncpolicy_controller_test.go`.
 6. Runtime `${ENV_VAR}` expansion for CR-backed repository/server/secret-store/sync-policy fields MUST be covered by `api/v1alpha1/webhook_test.go` plus controller-level tests such as `internal/operator/controllers/util_test.go`.
+7. OLM packaging changes MUST be covered by `make verify-bundle` (kustomize build of `config/manifests` and `config/olm`, `operator-sdk bundle validate` with the `operatorhub` suite, and `opm validate ./catalog`), and any release-workflow change touching the bundle/catalog images MUST keep the tag-triggered CI validation steps green before publish.

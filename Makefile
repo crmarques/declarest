@@ -26,7 +26,7 @@ E2E_BUILD_DIR := .e2e-build
 
 .DEFAULT_GOAL := help
 
-.PHONY: help fmt vet lint test docs docs-deps e2e e2e-contract e2e-validate-components check build run install clean tidy operator-build operator-run operator-test operator-image operator-image-push manifests generate bundle-install-core bundle-install-admission-certmanager bundle-install-admission-openshift release-assets verify-generated
+.PHONY: help fmt vet lint test docs docs-deps e2e e2e-contract e2e-validate-components check build run install clean tidy operator-build operator-run operator-test operator-image operator-image-push manifests generate bundle-install-core bundle-install-admission-certmanager bundle-install-admission-openshift bundle-install-olm release-assets verify-generated bundle bundle-build bundle-push bundle-validate bundle-run catalog-build catalog-push catalog-validate olm-install olm-uninstall operator-sdk opm verify-bundle
 
 help: ## List available make targets with descriptions
 	@printf "Available targets:\n"
@@ -154,11 +154,95 @@ bundle-install-admission-openshift: ## Generate dist/install-admission-openshift
 	kubectl kustomize config/release/admission-openshift > dist/install-admission-openshift.yaml
 	@git checkout config/release/admission-openshift/kustomization.yaml 2>/dev/null || sed -i 's|newTag: .*|newTag: RELEASE_TAG|' config/release/admission-openshift/kustomization.yaml
 
-release-assets: bundle-install-core bundle-install-admission-certmanager bundle-install-admission-openshift ## Generate all release install bundles under dist/
+bundle-install-olm: ## Generate dist/install-olm.yaml from config/olm overlay (OperatorGroup, CatalogSource, Subscription)
+	@mkdir -p dist
+	$(eval CATALOG_TAG := $(patsubst v%,%,$(RELEASE_TAG)))
+	sed -i 's|image: ghcr.io/crmarques/declarest-operator-catalog:.*|image: ghcr.io/crmarques/declarest-operator-catalog:$(CATALOG_TAG)|' config/olm/catalogsource.yaml
+	kubectl kustomize config/olm > dist/install-olm.yaml
+	@git checkout config/olm/catalogsource.yaml 2>/dev/null || sed -i 's|image: ghcr.io/crmarques/declarest-operator-catalog:.*|image: ghcr.io/crmarques/declarest-operator-catalog:latest|' config/olm/catalogsource.yaml
+
+release-assets: bundle-install-core bundle-install-admission-certmanager bundle-install-admission-openshift bundle-install-olm ## Generate all release install bundles under dist/
 
 verify-generated: manifests generate ## Verify generated files are up-to-date
 	@if ! git diff --quiet -- config/crd/bases/ api/v1alpha1/zz_generated.deepcopy.go; then \
 		echo "ERROR: Generated files are out of date. Run 'make manifests generate' and commit the result."; \
 		git diff --stat -- config/crd/bases/ api/v1alpha1/zz_generated.deepcopy.go; \
+		exit 1; \
+	fi
+
+# --- OLM bundle and catalog ---
+
+VERSION ?= 0.0.1
+CHANNELS ?= alpha
+DEFAULT_CHANNEL ?= alpha
+IMAGE_TAG_BASE ?= ghcr.io/crmarques/declarest-operator
+BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:$(VERSION)
+CATALOG_IMG ?= $(IMAGE_TAG_BASE)-catalog:$(VERSION)
+OPERATOR_IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
+BUNDLE_GEN_FLAGS ?= -q --manifests --version $(VERSION) --channels $(CHANNELS) --default-channel $(DEFAULT_CHANNEL)
+BUNDLE_IMAGE_BUILDER ?= podman
+OPM_VERSION ?= v1.48.0
+OPERATOR_SDK_VERSION ?= v1.41.0
+OPM := $(BIN_DIR_ABS)/opm
+OPERATOR_SDK := $(BIN_DIR_ABS)/operator-sdk
+OPM_URL := https://github.com/operator-framework/operator-registry/releases/download/$(OPM_VERSION)/linux-amd64-opm
+OPERATOR_SDK_URL := https://github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_linux_amd64
+
+opm: ## Install opm locally into bin/ when missing
+	@if [ -x "$(OPM)" ]; then \
+		exit 0; \
+	fi; \
+	mkdir -p "$(BIN_DIR_ABS)"; \
+	echo "Downloading opm $(OPM_VERSION) to $(OPM)"; \
+	curl -fsSL "$(OPM_URL)" -o "$(OPM)"; \
+	chmod +x "$(OPM)"
+
+operator-sdk: ## Install operator-sdk locally into bin/ when missing
+	@if [ -x "$(OPERATOR_SDK)" ]; then \
+		exit 0; \
+	fi; \
+	mkdir -p "$(BIN_DIR_ABS)"; \
+	echo "Downloading operator-sdk $(OPERATOR_SDK_VERSION) to $(OPERATOR_SDK)"; \
+	curl -fsSL "$(OPERATOR_SDK_URL)" -o "$(OPERATOR_SDK)"; \
+	chmod +x "$(OPERATOR_SDK)"
+
+bundle: manifests generate operator-sdk ## Regenerate OLM bundle manifests under bundle/ for the current VERSION
+	sed -i 's|newTag: .*|newTag: $(VERSION)|' config/release/core/kustomization.yaml config/manifests/kustomization.yaml
+	kubectl kustomize config/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
+	@git checkout config/release/core/kustomization.yaml 2>/dev/null || sed -i 's|newTag: .*|newTag: RELEASE_TAG|' config/release/core/kustomization.yaml
+	$(MAKE) bundle-validate
+
+bundle-validate: operator-sdk ## Run operator-sdk bundle validate against bundle/ (registry+v1 + operatorhub checks)
+	$(OPERATOR_SDK) bundle validate ./bundle --select-optional suite=operatorframework
+
+bundle-build: ## Build the OLM bundle image ($(BUNDLE_IMG))
+	$(BUNDLE_IMAGE_BUILDER) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+
+bundle-push: ## Push the OLM bundle image ($(BUNDLE_IMG))
+	$(BUNDLE_IMAGE_BUILDER) push $(BUNDLE_IMG)
+
+bundle-run: operator-sdk ## Install the bundle into the current cluster via operator-sdk run bundle
+	$(OPERATOR_SDK) run bundle $(BUNDLE_IMG) --namespace declarest-system --install-mode AllNamespaces
+
+catalog-build: opm ## Build the file-based catalog image ($(CATALOG_IMG))
+	$(BUNDLE_IMAGE_BUILDER) build -f catalog.Dockerfile -t $(CATALOG_IMG) .
+
+catalog-push: ## Push the file-based catalog image ($(CATALOG_IMG))
+	$(BUNDLE_IMAGE_BUILDER) push $(CATALOG_IMG)
+
+catalog-validate: opm ## Validate the file-based catalog under catalog/
+	$(OPM) validate catalog
+
+olm-install: ## Apply the OLM CatalogSource, OperatorGroup, and Subscription samples
+	kubectl apply -k config/olm
+
+olm-uninstall: ## Remove the OLM CatalogSource, OperatorGroup, and Subscription samples
+	kubectl delete -k config/olm --ignore-not-found
+
+verify-bundle: ## Regenerate the bundle and fail if committed bundle artifacts drift
+	$(MAKE) bundle VERSION=$(VERSION)
+	@if ! git diff --quiet -- bundle/ config/manifests/; then \
+		echo "ERROR: Bundle artifacts are out of date. Run 'make bundle' and commit the result."; \
+		git diff --stat -- bundle/ config/manifests/; \
 		exit 1; \
 	fi

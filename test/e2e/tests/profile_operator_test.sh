@@ -125,18 +125,22 @@ test_operator_profile_uses_supported_repository_poll_interval() {
 }
 
 test_operator_profile_sets_home_to_writable_state_dir() {
-  local script="${REPO_ROOT}/test/e2e/lib/operator.sh"
+  local csv="${REPO_ROOT}/bundle/manifests/declarest-operator.clusterserviceversion.yaml"
 
-  assert_file_contains "${script}" '- name: HOME'
-  assert_file_contains "${script}" 'value: ${runtime_root}'
+  assert_file_contains "${csv}" '- name: HOME'
+  assert_file_contains "${csv}" 'value: /var/lib/declarest'
 }
 
-test_operator_profile_sets_api_server_env_for_manager() {
+test_operator_profile_uses_yaml_driven_olm_core_install() {
   local script="${REPO_ROOT}/test/e2e/lib/operator.sh"
+  local content
+  content=$(<"${script}")
 
-  assert_file_contains "${script}" 'e2e_operator_api_server_endpoint()'
-  assert_file_contains "${script}" '- name: KUBERNETES_SERVICE_HOST'
-  assert_file_contains "${script}" '- name: KUBERNETES_SERVICE_PORT'
+  assert_file_contains "${script}" 'test/e2e/olm/v0.42.0'
+  assert_file_contains "${script}" 'apply --server-side=true -f "${crds_manifest}"'
+  assert_file_contains "${script}" 'apply -f "${runtime_manifest}"'
+  assert_not_contains "${content}" 'operator-sdk" olm install'
+  assert_not_contains "${content}" 'operator-sdk binary is unavailable'
 }
 
 test_operator_profile_defaults_and_validation_pass
@@ -148,4 +152,4 @@ test_cli_profile_automated_scopes
 test_operator_profile_builds_linux_static_manager_binary
 test_operator_profile_uses_supported_repository_poll_interval
 test_operator_profile_sets_home_to_writable_state_dir
-test_operator_profile_sets_api_server_env_for_manager
+test_operator_profile_uses_yaml_driven_olm_core_install

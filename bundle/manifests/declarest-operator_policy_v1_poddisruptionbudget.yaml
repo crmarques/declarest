@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  labels:
+    app.kubernetes.io/component: operator
+    app.kubernetes.io/name: declarest-operator
+    app.kubernetes.io/part-of: declarest
+  name: declarest-operator
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: declarest-operator

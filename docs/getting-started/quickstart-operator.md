@@ -19,8 +19,9 @@ Choose one released install manifest:
 | `install.yaml` | CRDs, RBAC, operator manager | Nothing beyond Kubernetes | You want the fastest path to first reconcile success |
 | `install-admission-certmanager.yaml` | `install.yaml` plus validating admission webhooks | `cert-manager` | Recommended for most non-OpenShift production clusters |
 | `install-admission-openshift.yaml` | `install.yaml` plus validating admission webhooks | OpenShift serving cert support | Recommended on OpenShift |
+| `install-olm.yaml` | `OperatorGroup`, `CatalogSource`, `Subscription` for OLM-managed install | [OLM](https://olm.operatorframework.io/) installed on the cluster | Your cluster manages operators through OLM (see [Installing with OLM](../guide/installing-with-olm.md)) |
 
-Admission-enabled manifests reject invalid CRs earlier, at create/update time. The base `install.yaml` keeps cluster dependencies minimal and is the shortest quickstart path.
+Admission-enabled manifests reject invalid CRs earlier, at create/update time. The base `install.yaml` keeps cluster dependencies minimal and is the shortest quickstart path. The OLM manifest delegates lifecycle management (install, upgrade, uninstall) to OLM and always enables admission webhooks.
 
 ```bash
 VERSION={{ declarest_tag() }}

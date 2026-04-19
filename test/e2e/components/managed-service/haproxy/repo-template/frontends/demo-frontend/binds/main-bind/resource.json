@@ -1,0 +1,5 @@
+{
+  "name": "main-bind",
+  "address": "*",
+  "port": 18080
+}

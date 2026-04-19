@@ -481,10 +481,6 @@ e2e_operator_prepare_repository_webhook() {
   return 0
 }
 
-e2e_operator_manager_manifest_path() {
-  printf '%s/operator-manager.yaml\n' "$(e2e_operator_manifest_dir)"
-}
-
 e2e_operator_ready_timeout_seconds() {
   local timeout_seconds=${E2E_OPERATOR_READY_TIMEOUT_SECONDS:-120}
 
@@ -501,343 +497,774 @@ e2e_operator_ready_timeout_seconds() {
   printf '%s\n' "${timeout_seconds}"
 }
 
-e2e_operator_wait_pid_exit() {
-  local pid=$1
-  local loops=${2:-60}
-  local idx
+e2e_operator_stop_manager() {
+  e2e_operator_olm_cleanup_current_run || return 1
+}
 
-  for ((idx = 0; idx < loops; idx++)); do
-    if ! kill -0 "${pid}" >/dev/null 2>&1; then
-      return 0
+e2e_operator_olm_run_dir() {
+  printf '%s/operator/olm\n' "${E2E_RUN_DIR}"
+}
+
+e2e_operator_olm_core_dir() {
+  printf '%s/test/e2e/olm/v0.42.0\n' "${E2E_ROOT_DIR}"
+}
+
+e2e_operator_olm_core_crds_manifest_path() {
+  printf '%s/crds.yaml\n' "$(e2e_operator_olm_core_dir)"
+}
+
+e2e_operator_olm_core_runtime_manifest_path() {
+  printf '%s/olm.yaml\n' "$(e2e_operator_olm_core_dir)"
+}
+
+e2e_operator_olm_core_required_crds() {
+  printf '%s\n' \
+    catalogsources.operators.coreos.com \
+    clusterserviceversions.operators.coreos.com \
+    installplans.operators.coreos.com \
+    olmconfigs.operators.coreos.com \
+    operatorconditions.operators.coreos.com \
+    operatorgroups.operators.coreos.com \
+    operators.operators.coreos.com \
+    subscriptions.operators.coreos.com
+}
+
+e2e_operator_olm_bundle_image() {
+  printf 'localhost/declarest/e2e-operator-bundle:%s\n' "${E2E_RUN_ID}"
+}
+
+e2e_operator_olm_catalog_image() {
+  printf 'localhost/declarest/e2e-operator-catalog:%s\n' "${E2E_RUN_ID}"
+}
+
+e2e_operator_olm_image_repo() {
+  local image=$1
+  printf '%s\n' "${image%:*}"
+}
+
+e2e_operator_olm_image_digest_ref() {
+  local image=$1
+  local digest=$2
+  local repo
+  repo=$(e2e_operator_olm_image_repo "${image}")
+  printf '%s@%s\n' "${repo}" "${digest}"
+}
+
+e2e_operator_olm_bundle_image_ref() {
+  local image
+  image=$(e2e_operator_olm_bundle_image)
+  if [[ -n "${E2E_OPERATOR_OLM_BUNDLE_DIGEST:-}" ]]; then
+    e2e_operator_olm_image_digest_ref "${image}" "${E2E_OPERATOR_OLM_BUNDLE_DIGEST}"
+    return 0
+  fi
+  printf '%s\n' "${image}"
+}
+
+e2e_operator_olm_catalog_image_ref() {
+  local image
+  image=$(e2e_operator_olm_catalog_image)
+  if [[ -n "${E2E_OPERATOR_OLM_CATALOG_DIGEST:-}" ]]; then
+    e2e_operator_olm_image_digest_ref "${image}" "${E2E_OPERATOR_OLM_CATALOG_DIGEST}"
+    return 0
+  fi
+  printf '%s\n' "${image}"
+}
+
+e2e_operator_olm_catalog_source_name() {
+  e2e_operator_scoped_name 'declarest-catalog'
+}
+
+e2e_operator_olm_operator_group_name() {
+  e2e_operator_scoped_name 'declarest-operators'
+}
+
+e2e_operator_olm_subscription_name() {
+  e2e_operator_scoped_name 'declarest-operator'
+}
+
+e2e_operator_olm_install_manifest_path() {
+  printf '%s/olm-install.yaml\n' "$(e2e_operator_olm_run_dir)"
+}
+
+e2e_operator_olm_catalog_manifest_path() {
+  printf '%s/olm-catalog.yaml\n' "$(e2e_operator_olm_run_dir)"
+}
+
+e2e_operator_olm_subscription_manifest_path() {
+  printf '%s/olm-subscription.yaml\n' "$(e2e_operator_olm_run_dir)"
+}
+
+e2e_operator_olm_prepare_bundle_tree() {
+  local src_bundle="${E2E_ROOT_DIR}/bundle"
+  local src_dockerfile="${E2E_ROOT_DIR}/bundle.Dockerfile"
+  if [[ ! -d "${src_bundle}" ]]; then
+    e2e_die "operator OLM bundle directory is unavailable: ${src_bundle}"
+    return 1
+  fi
+  if [[ ! -f "${src_dockerfile}" ]]; then
+    e2e_die "operator OLM bundle dockerfile is unavailable: ${src_dockerfile}"
+    return 1
+  fi
+
+  local run_dir
+  run_dir=$(e2e_operator_olm_run_dir)
+  local dst_bundle="${run_dir}/bundle"
+  local dst_dockerfile="${run_dir}/bundle.Dockerfile"
+
+  rm -rf "${dst_bundle}" || return 1
+  mkdir -p "${run_dir}" || return 1
+  cp -R "${src_bundle}" "${dst_bundle}" || return 1
+  cp -f "${src_dockerfile}" "${dst_dockerfile}" || return 1
+
+  local csv_file=''
+  local candidate
+  for candidate in "${dst_bundle}/manifests/"*.clusterserviceversion.yaml; do
+    if [[ -f "${candidate}" ]]; then
+      csv_file="${candidate}"
+      break
     fi
-    sleep 0.1
   done
+  if [[ -z "${csv_file}" ]]; then
+    e2e_die "operator OLM CSV manifest not found under ${dst_bundle}/manifests"
+    return 1
+  fi
 
+  e2e_operator_olm_patch_csv "${csv_file}" || return 1
+  return 0
+}
+
+e2e_operator_olm_patch_csv() {
+  local csv_file=$1
+  local python_cmd
+  if command -v python3 >/dev/null 2>&1; then
+    python_cmd='python3'
+  elif command -v python >/dev/null 2>&1; then
+    python_cmd='python'
+  else
+    e2e_die 'python interpreter is required to patch the OLM bundle CSV'
+    return 1
+  fi
+
+  local metadata_secret_name=''
+  local metadata_mount_dir=''
+  if [[ -n "${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE:-}" ]]; then
+    metadata_secret_name=$(e2e_operator_managed_service_metadata_bundle_secret_name)
+    metadata_mount_dir=$(e2e_operator_managed_service_metadata_bundle_mount_dir)
+  fi
+
+  E2E_OLM_CSV_FILE="${csv_file}" \
+  E2E_OLM_OPERATOR_IMAGE="${E2E_OPERATOR_IMAGE}" \
+  E2E_OLM_WATCH_NAMESPACE="$(e2e_operator_effective_namespace)" \
+  E2E_OLM_METADATA_SECRET_NAME="${metadata_secret_name}" \
+  E2E_OLM_METADATA_MOUNT_DIR="${metadata_mount_dir}" \
+  "${python_cmd}" <<'PY' || return 1
+import os
+import sys
+
+try:
+    import yaml
+except ImportError:
+    sys.stderr.write('PyYAML is required to patch the OLM bundle CSV\n')
+    sys.exit(1)
+
+csv_path = os.environ['E2E_OLM_CSV_FILE']
+image = os.environ.get('E2E_OLM_OPERATOR_IMAGE', '')
+watch_namespace = os.environ.get('E2E_OLM_WATCH_NAMESPACE', '')
+metadata_secret = os.environ.get('E2E_OLM_METADATA_SECRET_NAME', '')
+metadata_mount = os.environ.get('E2E_OLM_METADATA_MOUNT_DIR', '')
+metadata_volume_name = 'managed-service-metadata'
+
+with open(csv_path, 'r', encoding='utf-8') as handle:
+    data = yaml.safe_load(handle)
+
+spec = data.setdefault('spec', {})
+
+install = spec.setdefault('install', {})
+install_spec = install.setdefault('spec', {})
+deployment_names = []
+for deployment in install_spec.get('deployments', []) or []:
+    deployment_name = deployment.get('name')
+    if deployment_name:
+        deployment_names.append(deployment_name)
+    dep_spec = deployment.setdefault('spec', {})
+    template = dep_spec.setdefault('template', {})
+    pod_spec = template.setdefault('spec', {})
+
+    volumes = pod_spec.get('volumes', []) or []
+    for volume in volumes:
+        if volume.pop('persistentVolumeClaim', None) is not None:
+            volume['emptyDir'] = volume.get('emptyDir') or {}
+
+    if metadata_secret and metadata_mount:
+        if not any(v.get('name') == metadata_volume_name for v in volumes):
+            volumes.append({
+                'name': metadata_volume_name,
+                'secret': {'secretName': metadata_secret},
+            })
+    pod_spec['volumes'] = volumes
+
+    for container in pod_spec.get('containers', []) or []:
+        if image:
+            container['image'] = image
+        args = []
+        for arg in container.get('args') or []:
+            if arg.startswith('--enable-admission-webhooks=') or arg == '--enable-admission-webhooks':
+                continue
+            if arg.startswith('--watch-namespace=') or arg == '--watch-namespace':
+                continue
+            if arg.startswith('--repository-webhook-bind-address=') or arg == '--repository-webhook-bind-address':
+                continue
+            args.append(arg)
+        args.append('--enable-admission-webhooks=true')
+        if watch_namespace:
+            args.append(f'--watch-namespace={watch_namespace}')
+        args.append('--repository-webhook-bind-address=:8082')
+        container['args'] = args
+
+        if metadata_secret and metadata_mount:
+            mounts = container.get('volumeMounts', []) or []
+            if not any(m.get('name') == metadata_volume_name for m in mounts):
+                mounts.append({
+                    'name': metadata_volume_name,
+                    'mountPath': metadata_mount,
+                    'readOnly': True,
+                })
+            container['volumeMounts'] = mounts
+
+if deployment_names:
+    default_deployment_name = deployment_names[0]
+    for webhook in spec.get('webhookdefinitions') or []:
+        if webhook.get('deploymentName') not in deployment_names:
+            webhook['deploymentName'] = default_deployment_name
+        webhook.setdefault('containerPort', 9443)
+        webhook.setdefault('targetPort', 9443)
+
+with open(csv_path, 'w', encoding='utf-8') as handle:
+    yaml.safe_dump(data, handle, sort_keys=False, default_flow_style=False)
+PY
+  return 0
+}
+
+e2e_operator_olm_python_cmd() {
+  if command -v python3 >/dev/null 2>&1; then
+    printf 'python3\n'
+    return 0
+  fi
+  if command -v python >/dev/null 2>&1; then
+    printf 'python\n'
+    return 0
+  fi
+  e2e_die 'python interpreter is required to parse OCI image archives'
   return 1
 }
 
-e2e_operator_stop_manager() {
-  local manager_manifest
-  manager_manifest=$(e2e_operator_manager_manifest_path)
-  if [[ -n "${E2E_KUBECONFIG:-}" && -f "${manager_manifest}" ]]; then
-    e2e_info "stopping operator manager deployment manifest=${manager_manifest}"
-    kubectl --kubeconfig "${E2E_KUBECONFIG}" delete -f "${manager_manifest}" --ignore-not-found >/dev/null 2>&1 || true
-  fi
+e2e_operator_olm_read_oci_archive_digest() {
+  local archive=$1
+  local python_cmd
+  python_cmd=$(e2e_operator_olm_python_cmd) || return 1
+  tar -xOf "${archive}" index.json | "${python_cmd}" -c '
+import json
+import sys
 
-  local pid=${E2E_OPERATOR_MANAGER_PID:-}
+index = json.load(sys.stdin)
+manifests = index.get("manifests", []) or []
+if not manifests:
+    sys.stderr.write("OCI archive index.json has no manifests\n")
+    sys.exit(1)
+print(manifests[0]["digest"])
+'
+}
 
-  if [[ -z "${pid}" ]]; then
-    local runtime_state
-    runtime_state=$(e2e_runtime_state_file)
-    pid=$(e2e_state_get "${runtime_state}" 'OPERATOR_MANAGER_PID' || true)
-  fi
-
-  if [[ -z "${pid}" || ! "${pid}" =~ ^[0-9]+$ ]]; then
-    return 0
-  fi
-  if ! kill -0 "${pid}" >/dev/null 2>&1; then
-    return 0
-  fi
-
-  e2e_info "stopping operator manager pid=${pid}"
-  kill -TERM "${pid}" >/dev/null 2>&1 || true
-  if e2e_operator_wait_pid_exit "${pid}" 80; then
-    return 0
-  fi
-
-  kill -KILL "${pid}" >/dev/null 2>&1 || true
-  if ! e2e_operator_wait_pid_exit "${pid}" 20; then
-    e2e_warn "failed to stop operator manager pid=${pid}"
-    return 1
-  fi
+e2e_operator_olm_save_oci_archive() {
+  local image=$1
+  local archive=$2
+  e2e_run_cmd "${E2E_CONTAINER_ENGINE}" save --format oci-archive -o "${archive}" "${image}" || return 1
   return 0
 }
 
-e2e_operator_install_crds() {
-  local crd_dir="${E2E_ROOT_DIR}/config/crd/bases"
+e2e_operator_olm_build_bundle_image() {
+  local run_dir
+  run_dir=$(e2e_operator_olm_run_dir)
+  local image
+  image=$(e2e_operator_olm_bundle_image)
+
+  e2e_info "operator profile building OLM bundle image image=${image}"
+  e2e_run_cmd "${E2E_CONTAINER_ENGINE}" build \
+    -f "${run_dir}/bundle.Dockerfile" \
+    -t "${image}" \
+    "${run_dir}" || return 1
+
+  local archive_dir="${run_dir}/archives"
+  mkdir -p "${archive_dir}" || return 1
+  local bundle_archive="${archive_dir}/bundle.oci.tar"
+  e2e_operator_olm_save_oci_archive "${image}" "${bundle_archive}" || return 1
+  E2E_OPERATOR_OLM_BUNDLE_DIGEST=$(e2e_operator_olm_read_oci_archive_digest "${bundle_archive}") || return 1
+  export E2E_OPERATOR_OLM_BUNDLE_DIGEST
+  e2e_info "operator profile captured OLM bundle digest ${E2E_OPERATOR_OLM_BUNDLE_DIGEST}"
+  return 0
+}
+
+e2e_operator_olm_prepare_catalog_tree() {
+  local run_dir
+  run_dir=$(e2e_operator_olm_run_dir)
+  local catalog_dir="${run_dir}/catalog/declarest-operator"
+  local catalog_dockerfile="${run_dir}/catalog.Dockerfile"
+  local bundle_image
+  bundle_image=$(e2e_operator_olm_bundle_image_ref)
+
+  rm -rf "${run_dir}/catalog" || return 1
+  mkdir -p "${catalog_dir}" || return 1
+
+  cat >"${catalog_dir}/catalog.yaml" <<EOF_CATALOG
+---
+schema: olm.package
+name: declarest-operator
+defaultChannel: alpha
+---
+schema: olm.channel
+package: declarest-operator
+name: alpha
+entries:
+  - name: declarest-operator.v0.0.1
+---
+schema: olm.bundle
+name: declarest-operator.v0.0.1
+package: declarest-operator
+image: ${bundle_image}
+properties:
+  - type: olm.package
+    value:
+      packageName: declarest-operator
+      version: 0.0.1
+EOF_CATALOG
+
+  cat >"${catalog_dockerfile}" <<'EOF_CATALOG_DOCKER'
+FROM quay.io/operator-framework/opm:v1.48.0
+
+LABEL operators.operatorframework.io.index.configs.v1=/configs
+
+ENTRYPOINT ["/bin/opm"]
+CMD ["serve", "/configs", "--cache-dir=/tmp/cache"]
+
+ADD catalog /configs
+
+RUN ["/bin/opm", "serve", "/configs", "--cache-dir=/tmp/cache", "--cache-only"]
+EOF_CATALOG_DOCKER
+
+  return 0
+}
+
+e2e_operator_olm_build_catalog_image() {
+  local run_dir
+  run_dir=$(e2e_operator_olm_run_dir)
+  local image
+  image=$(e2e_operator_olm_catalog_image)
+
+  e2e_info "operator profile building OLM catalog image image=${image}"
+  e2e_run_cmd "${E2E_CONTAINER_ENGINE}" build \
+    -f "${run_dir}/catalog.Dockerfile" \
+    -t "${image}" \
+    "${run_dir}" || return 1
+
+  local archive_dir="${run_dir}/archives"
+  mkdir -p "${archive_dir}" || return 1
+  local catalog_archive="${archive_dir}/catalog.oci.tar"
+  e2e_operator_olm_save_oci_archive "${image}" "${catalog_archive}" || return 1
+  E2E_OPERATOR_OLM_CATALOG_DIGEST=$(e2e_operator_olm_read_oci_archive_digest "${catalog_archive}") || return 1
+  export E2E_OPERATOR_OLM_CATALOG_DIGEST
+  e2e_info "operator profile captured OLM catalog digest ${E2E_OPERATOR_OLM_CATALOG_DIGEST}"
+  return 0
+}
+
+e2e_operator_olm_kind_node_containers() {
+  "${E2E_CONTAINER_ENGINE}" ps --filter "label=io.x-k8s.kind.cluster=${E2E_KIND_CLUSTER_NAME}" --format '{{.Names}}'
+}
+
+e2e_operator_olm_import_oci_archive_into_nodes() {
+  local archive=$1
+  local image=$2
+  local digest=$3
+  local node
+  local nodes_out
+  nodes_out=$(e2e_operator_olm_kind_node_containers) || return 1
+  if [[ -z "${nodes_out}" ]]; then
+    e2e_die "operator profile cannot locate kind nodes for cluster ${E2E_KIND_CLUSTER_NAME}"
+    return 1
+  fi
+  local remote_archive="/tmp/$(basename -- "${archive}")"
+  while IFS= read -r node; do
+    [[ -n "${node}" ]] || continue
+    e2e_run_cmd "${E2E_CONTAINER_ENGINE}" cp "${archive}" "${node}:${remote_archive}" || return 1
+    e2e_run_cmd "${E2E_CONTAINER_ENGINE}" exec "${node}" \
+      ctr --namespace=k8s.io images import --all-platforms "${remote_archive}" || return 1
+    if [[ -n "${digest}" ]]; then
+      local digest_ref
+      digest_ref=$(e2e_operator_olm_image_digest_ref "${image}" "${digest}")
+      e2e_run_cmd "${E2E_CONTAINER_ENGINE}" exec "${node}" \
+        ctr --namespace=k8s.io images tag --force "${image}" "${digest_ref}" || return 1
+    fi
+    e2e_run_cmd "${E2E_CONTAINER_ENGINE}" exec "${node}" rm -f "${remote_archive}" || true
+  done <<<"${nodes_out}"
+  return 0
+}
+
+e2e_operator_olm_load_images_into_cluster() {
+  local archive_dir
+  archive_dir="$(e2e_operator_olm_run_dir)/archives"
+  mkdir -p "${archive_dir}" || return 1
+
+  local bundle_image catalog_image
+  bundle_image=$(e2e_operator_olm_bundle_image)
+  catalog_image=$(e2e_operator_olm_catalog_image)
+
+  local bundle_archive="${archive_dir}/bundle.oci.tar"
+  local catalog_archive="${archive_dir}/catalog.oci.tar"
+  local manager_archive="${archive_dir}/manager.oci.tar"
+
+  if [[ ! -f "${bundle_archive}" ]]; then
+    e2e_operator_olm_save_oci_archive "${bundle_image}" "${bundle_archive}" || return 1
+    E2E_OPERATOR_OLM_BUNDLE_DIGEST=$(e2e_operator_olm_read_oci_archive_digest "${bundle_archive}") || return 1
+    export E2E_OPERATOR_OLM_BUNDLE_DIGEST
+  fi
+  if [[ ! -f "${catalog_archive}" ]]; then
+    e2e_operator_olm_save_oci_archive "${catalog_image}" "${catalog_archive}" || return 1
+    E2E_OPERATOR_OLM_CATALOG_DIGEST=$(e2e_operator_olm_read_oci_archive_digest "${catalog_archive}") || return 1
+    export E2E_OPERATOR_OLM_CATALOG_DIGEST
+  fi
+
+  e2e_info "operator profile exporting OLM manager image archive dir=${archive_dir}"
+  e2e_operator_olm_save_oci_archive "${E2E_OPERATOR_IMAGE}" "${manager_archive}" || return 1
+
+  e2e_info "operator profile loading OLM image archives into kind cluster name=${E2E_KIND_CLUSTER_NAME}"
+  e2e_operator_olm_import_oci_archive_into_nodes "${bundle_archive}" "${bundle_image}" "${E2E_OPERATOR_OLM_BUNDLE_DIGEST}" || return 1
+  e2e_operator_olm_import_oci_archive_into_nodes "${catalog_archive}" "${catalog_image}" "${E2E_OPERATOR_OLM_CATALOG_DIGEST}" || return 1
+  e2e_operator_olm_import_oci_archive_into_nodes "${manager_archive}" "${E2E_OPERATOR_IMAGE}" '' || return 1
+  return 0
+}
+
+e2e_operator_olm_core_ready() {
+  kubectl --kubeconfig "${E2E_KUBECONFIG}" get namespace olm >/dev/null 2>&1 || return 1
+
+  local crd
+  while IFS= read -r crd; do
+    [[ -n "${crd}" ]] || continue
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" \
+      wait --for=condition=Established "crd/${crd}" --timeout=1s >/dev/null 2>&1 || return 1
+  done < <(e2e_operator_olm_core_required_crds)
+
+  local deployment
+  for deployment in olm-operator catalog-operator packageserver; do
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n olm \
+      wait --for=condition=Available "deployment/${deployment}" --timeout=1s >/dev/null 2>&1 || return 1
+  done
+
+  return 0
+}
+
+e2e_operator_olm_wait_for_core_crds_ready() {
   local ready_timeout_seconds
-  if [[ ! -d "${crd_dir}" ]]; then
-    e2e_die "operator profile missing CRD manifests: ${crd_dir}"
-    return 1
-  fi
-
   ready_timeout_seconds=$(e2e_operator_ready_timeout_seconds) || return 1
-  e2e_info "operator profile installing CRDs from ${crd_dir}"
-  e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${crd_dir}" || return 1
-  e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" wait --for=condition=Established --timeout="${ready_timeout_seconds}s" \
-    crd/resourcerepositories.declarest.io \
-    crd/managedservices.declarest.io \
-    crd/secretstores.declarest.io \
-    crd/syncpolicies.declarest.io || return 1
+
+  local crd
+  while IFS= read -r crd; do
+    [[ -n "${crd}" ]] || continue
+    e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" \
+      wait --for=condition=Established "crd/${crd}" --timeout="${ready_timeout_seconds}s" || return 1
+  done < <(e2e_operator_olm_core_required_crds)
   return 0
 }
 
-e2e_operator_write_manager_manifest() {
-  if [[ -z "${E2E_OPERATOR_IMAGE:-}" ]]; then
-    e2e_die "operator manager image is unavailable: ${E2E_OPERATOR_IMAGE:-<unset>}"
-    return 1
-  fi
+e2e_operator_olm_wait_for_core_deployments_ready() {
+  local ready_timeout_seconds
+  ready_timeout_seconds=$(e2e_operator_ready_timeout_seconds) || return 1
 
-  if [[ -z "${E2E_KIND_CLUSTER_NAME:-}" ]]; then
-    e2e_die 'operator profile kind cluster metadata is missing'
-    return 1
-  fi
-
-  local namespace
-  namespace=$(e2e_operator_effective_namespace)
-  local deployment_name
-  deployment_name=$(e2e_operator_scoped_name 'declarest-operator')
-  local webhook_service_name
-  webhook_service_name=$(e2e_operator_repository_webhook_service_name)
-  local role_name
-  role_name=$(e2e_operator_scoped_name 'declarest-operator-role')
-  local role_binding_name
-  role_binding_name=$(e2e_operator_scoped_name 'declarest-operator-role-binding')
-  local service_account_name
-  service_account_name=$(e2e_operator_scoped_name 'declarest-operator-service-account')
-  local run_label
-  run_label=$(e2e_operator_run_label_value)
-  local runtime_root='/var/lib/declarest'
-  local repo_root="${runtime_root}/repos"
-  local cache_root="${runtime_root}/cache"
-  local api_service_host=''
-  local api_service_port=''
-  read -r api_service_host api_service_port < <(e2e_operator_api_server_endpoint) || return 1
-  e2e_operator_prepare_managed_service_metadata_bundle || return 1
-  local manifest_dir
-  manifest_dir=$(e2e_operator_manifest_dir)
-  mkdir -p "${manifest_dir}" || return 1
-
-  local manager_manifest
-  manager_manifest=$(e2e_operator_manager_manifest_path)
-  local metadata_bundle_archive="${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE:-}"
-  local manager_metadata_secret_yaml=''
-  local manager_metadata_volume_mount_yaml=''
-  local manager_metadata_volume_yaml=''
-  if [[ -n "${metadata_bundle_archive}" ]]; then
-    if [[ ! -f "${metadata_bundle_archive}" ]]; then
-      e2e_die "operator metadata bundle archive is unavailable: ${metadata_bundle_archive}"
+  local deployment
+  for deployment in olm-operator catalog-operator packageserver; do
+    if ! e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" -n olm \
+      wait --for=condition=Available "deployment/${deployment}" --timeout="${ready_timeout_seconds}s"; then
+      e2e_error "OLM deployment ${deployment} did not become Available"
+      kubectl --kubeconfig "${E2E_KUBECONFIG}" -n olm describe "deployment/${deployment}" || true
+      kubectl --kubeconfig "${E2E_KUBECONFIG}" -n olm get pods -o wide || true
       return 1
     fi
+  done
+  return 0
+}
 
-    local metadata_bundle_secret_name
-    metadata_bundle_secret_name=$(e2e_operator_managed_service_metadata_bundle_secret_name)
-    local metadata_bundle_mount_dir
-    metadata_bundle_mount_dir=$(e2e_operator_managed_service_metadata_bundle_mount_dir)
+e2e_operator_olm_delete_default_catalogs() {
+  if ! kubectl --kubeconfig "${E2E_KUBECONFIG}" -n olm \
+    get catalogsource/operatorhubio-catalog >/dev/null 2>&1; then
+    return 0
+  fi
 
-    manager_metadata_secret_yaml=$(cat <<EOF_MANAGER_METADATA_SECRET
+  e2e_info 'operator profile deleting upstream default OLM catalogsource operatorhubio-catalog'
+  e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" -n olm \
+    delete catalogsource/operatorhubio-catalog --ignore-not-found || return 1
+  return 0
+}
+
+e2e_operator_olm_install_core() {
+  if e2e_operator_olm_core_ready; then
+    e2e_info 'operator profile OLM core already installed and ready; skipping'
+    e2e_operator_olm_delete_default_catalogs || return 1
+    return 0
+  fi
+
+  local crds_manifest runtime_manifest
+  crds_manifest=$(e2e_operator_olm_core_crds_manifest_path)
+  runtime_manifest=$(e2e_operator_olm_core_runtime_manifest_path)
+
+  [[ -f "${crds_manifest}" ]] || {
+    e2e_die "vendored OLM CRD manifest is unavailable: ${crds_manifest}"
+    return 1
+  }
+  [[ -f "${runtime_manifest}" ]] || {
+    e2e_die "vendored OLM runtime manifest is unavailable: ${runtime_manifest}"
+    return 1
+  }
+
+  e2e_info "operator profile installing OLM core from vendored YAML manifests dir=$(e2e_operator_olm_core_dir)"
+  e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply --server-side=true -f "${crds_manifest}" || return 1
+  e2e_operator_olm_wait_for_core_crds_ready || return 1
+  e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${runtime_manifest}" || return 1
+  e2e_operator_olm_wait_for_core_deployments_ready || return 1
+  e2e_operator_olm_delete_default_catalogs || return 1
+  return 0
+}
+
+e2e_operator_olm_write_install_manifest() {
+  local manifest_path catalog_manifest_path subscription_manifest_path
+  manifest_path=$(e2e_operator_olm_install_manifest_path)
+  catalog_manifest_path=$(e2e_operator_olm_catalog_manifest_path)
+  subscription_manifest_path=$(e2e_operator_olm_subscription_manifest_path)
+  local namespace
+  namespace=$(e2e_operator_effective_namespace)
+  local run_label
+  run_label=$(e2e_operator_run_label_value)
+  local catalog_name
+  catalog_name=$(e2e_operator_olm_catalog_source_name)
+  local operator_group_name
+  operator_group_name=$(e2e_operator_olm_operator_group_name)
+  local subscription_name
+  subscription_name=$(e2e_operator_olm_subscription_name)
+  local catalog_image
+  catalog_image=$(e2e_operator_olm_catalog_image_ref)
+
+  mkdir -p -- "$(dirname -- "${manifest_path}")" || return 1
+
+  cat >"${catalog_manifest_path}" <<EOF_OLM_CATALOG
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${namespace}
+  labels:
+    app.kubernetes.io/name: declarest-operator
+    declarest.e2e/run-id: ${run_label}
 ---
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: ${catalog_name}
+  namespace: olm
+  labels:
+    declarest.e2e/run-id: ${run_label}
+spec:
+  sourceType: grpc
+  image: ${catalog_image}
+  displayName: DeclaREST Operator (E2E)
+  publisher: DeclaREST E2E
+EOF_OLM_CATALOG
+
+  : >"${subscription_manifest_path}" || return 1
+  if [[ -n "${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE:-}" && -f "${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE}" ]]; then
+    local secret_name
+    secret_name=$(e2e_operator_managed_service_metadata_bundle_secret_name)
+    local encoded
+    encoded=$(base64 < "${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE}" | tr -d '\n')
+    cat >"${subscription_manifest_path}" <<EOF_METADATA_SECRET
 apiVersion: v1
 kind: Secret
 metadata:
-  name: ${metadata_bundle_secret_name}
+  name: ${secret_name}
   namespace: ${namespace}
+  labels:
+    declarest.e2e/run-id: ${run_label}
 type: Opaque
 data:
-  metadata-bundle.tar.gz: $(base64 < "${metadata_bundle_archive}" | tr -d '\n')
-EOF_MANAGER_METADATA_SECRET
-)
-
-    manager_metadata_volume_mount_yaml=$(cat <<EOF_MANAGER_METADATA_MOUNT
-            - name: managed-service-metadata
-              mountPath: ${metadata_bundle_mount_dir}
-              readOnly: true
-EOF_MANAGER_METADATA_MOUNT
-)
-
-    manager_metadata_volume_yaml=$(cat <<EOF_MANAGER_METADATA_VOLUME
-        - name: managed-service-metadata
-          secret:
-            secretName: ${metadata_bundle_secret_name}
-EOF_MANAGER_METADATA_VOLUME
-)
+  metadata-bundle.tar.gz: ${encoded}
+---
+EOF_METADATA_SECRET
   fi
 
-  cat >"${manager_manifest}" <<EOF_MANAGER
-apiVersion: v1
-kind: ServiceAccount
+  cat >>"${subscription_manifest_path}" <<EOF_OLM_SUBSCRIPTION
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
 metadata:
-  name: ${service_account_name}
-  namespace: ${namespace}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: ${role_name}
-  namespace: ${namespace}
-rules:
-  - apiGroups: ["declarest.io"]
-    resources: ["resourcerepositories", "managedservices", "secretstores", "syncpolicies", "repositorywebhooks"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: ["declarest.io"]
-    resources: ["resourcerepositories/status", "managedservices/status", "secretstores/status", "syncpolicies/status", "repositorywebhooks/status"]
-    verbs: ["get", "update", "patch"]
-  - apiGroups: ["declarest.io"]
-    resources: ["resourcerepositories/finalizers", "managedservices/finalizers", "secretstores/finalizers", "syncpolicies/finalizers", "repositorywebhooks/finalizers"]
-    verbs: ["update"]
-  - apiGroups: [""]
-    resources: ["events"]
-    verbs: ["create", "patch"]
-  - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: [""]
-    resources: ["persistentvolumeclaims"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: ${role_binding_name}
-  namespace: ${namespace}
-subjects:
-  - kind: ServiceAccount
-    name: ${service_account_name}
-    namespace: ${namespace}
-roleRef:
-  kind: Role
-  name: ${role_name}
-  apiGroup: rbac.authorization.k8s.io
-${manager_metadata_secret_yaml}
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: ${deployment_name}
+  name: ${operator_group_name}
   namespace: ${namespace}
   labels:
-    app.kubernetes.io/name: declarest-operator
     declarest.e2e/run-id: ${run_label}
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: declarest-operator
-      declarest.e2e/run-id: ${run_label}
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: declarest-operator
-        declarest.e2e/run-id: ${run_label}
-    spec:
-      serviceAccountName: ${service_account_name}
-      securityContext:
-        runAsNonRoot: true
-        seccompProfile:
-          type: RuntimeDefault
-      containers:
-        - name: manager
-          image: ${E2E_OPERATOR_IMAGE}
-          imagePullPolicy: IfNotPresent
-          args:
-            - --leader-elect=false
-            - --enable-admission-webhooks=false
-            - --watch-namespace=${namespace}
-            - --health-probe-bind-address=:18081
-            - --metrics-bind-address=:18080
-            - --repository-webhook-bind-address=:18082
-          env:
-            - name: DECLAREST_OPERATOR_REPO_BASE_DIR
-              value: ${repo_root}
-            - name: DECLAREST_OPERATOR_CACHE_BASE_DIR
-              value: ${cache_root}
-            - name: HOME
-              value: ${runtime_root}
-            - name: KUBERNETES_SERVICE_HOST
-              value: ${api_service_host}
-            - name: KUBERNETES_SERVICE_PORT
-              value: "${api_service_port}"
-          ports:
-            - containerPort: 18080
-              name: metrics
-            - containerPort: 18081
-              name: probes
-            - containerPort: 18082
-              name: repo-webhook
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: probes
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: probes
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
-            readOnlyRootFilesystem: true
-          volumeMounts:
-            - name: state
-              mountPath: ${runtime_root}
-            - name: tmp
-              mountPath: /tmp
-${manager_metadata_volume_mount_yaml}
-      volumes:
-        - name: state
-          emptyDir: {}
-        - name: tmp
-          emptyDir: {}
-${manager_metadata_volume_yaml}
+  targetNamespaces:
+    - ${namespace}
 ---
-apiVersion: v1
-kind: Service
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
 metadata:
-  name: ${webhook_service_name}
+  name: ${subscription_name}
   namespace: ${namespace}
   labels:
-    app.kubernetes.io/name: declarest-operator
     declarest.e2e/run-id: ${run_label}
 spec:
-  selector:
-    app.kubernetes.io/name: declarest-operator
-    declarest.e2e/run-id: ${run_label}
-  ports:
-    - name: repo-webhook
-      port: 18082
-      targetPort: repo-webhook
-EOF_MANAGER
+  channel: alpha
+  name: declarest-operator
+  source: ${catalog_name}
+  sourceNamespace: olm
+  installPlanApproval: Automatic
+EOF_OLM_SUBSCRIPTION
+
+  {
+    cat "${catalog_manifest_path}"
+    printf '\n---\n'
+    cat "${subscription_manifest_path}"
+  } >"${manifest_path}" || return 1
+
+  return 0
 }
 
-e2e_operator_start_manager() {
-  e2e_operator_write_manager_manifest || return 1
+e2e_operator_olm_wait_for_catalog_source_ready() {
+  local ready_timeout_seconds
+  ready_timeout_seconds=$(e2e_operator_ready_timeout_seconds) || return 1
+  local deadline=$(( $(date +%s) + ready_timeout_seconds ))
+  local catalog_name
+  catalog_name=$(e2e_operator_olm_catalog_source_name)
+  e2e_info "operator profile waiting for OLM catalog READY catalog=${catalog_name} timeout=${ready_timeout_seconds}s"
+  while (( $(date +%s) < deadline )); do
+    local state
+    state=$(
+      kubectl --kubeconfig "${E2E_KUBECONFIG}" -n olm get "catalogsource/${catalog_name}" \
+        -o jsonpath='{.status.connectionState.lastObservedState}' 2>/dev/null || true
+    )
+    if [[ "${state}" == 'READY' ]]; then
+      return 0
+    fi
+    sleep 2
+  done
+  e2e_error "operator profile OLM catalog ${catalog_name} did not reach READY within ${ready_timeout_seconds}s"
+  kubectl --kubeconfig "${E2E_KUBECONFIG}" -n olm describe "catalogsource/${catalog_name}" || true
+  kubectl --kubeconfig "${E2E_KUBECONFIG}" -n olm get pods -o wide || true
+  return 1
+}
 
-  local manager_manifest
-  manager_manifest=$(e2e_operator_manager_manifest_path)
+e2e_operator_olm_apply_install_manifest() {
+  local manifest_path catalog_manifest_path subscription_manifest_path
+  manifest_path=$(e2e_operator_olm_install_manifest_path)
+  catalog_manifest_path=$(e2e_operator_olm_catalog_manifest_path)
+  subscription_manifest_path=$(e2e_operator_olm_subscription_manifest_path)
+  if [[ ! -f "${manifest_path}" ]]; then
+    e2e_die "operator OLM install manifest is unavailable: ${manifest_path}"
+    return 1
+  fi
+  if [[ ! -f "${catalog_manifest_path}" ]]; then
+    e2e_die "operator OLM catalog manifest is unavailable: ${catalog_manifest_path}"
+    return 1
+  fi
+  if [[ ! -f "${subscription_manifest_path}" ]]; then
+    e2e_die "operator OLM subscription manifest is unavailable: ${subscription_manifest_path}"
+    return 1
+  fi
+
+  e2e_info "operator profile applying OLM catalog manifest=${catalog_manifest_path}"
+  e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${catalog_manifest_path}" || return 1
+  e2e_operator_olm_wait_for_catalog_source_ready || return 1
+
+  e2e_info "operator profile applying OLM subscription manifest=${subscription_manifest_path}"
+  e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${subscription_manifest_path}" || return 1
+  return 0
+}
+
+e2e_operator_olm_wait_for_csv_succeeded() {
   local namespace
   namespace=$(e2e_operator_effective_namespace)
-  local deployment_name
-  deployment_name=$(e2e_operator_scoped_name 'declarest-operator')
+  local subscription_name
+  subscription_name=$(e2e_operator_olm_subscription_name)
+  local ready_timeout_seconds
+  ready_timeout_seconds=$(e2e_operator_ready_timeout_seconds) || return 1
+  local start_ts
+  start_ts=$(date +%s)
+  local deadline=$((start_ts + ready_timeout_seconds))
+  local csv_name=''
+
+  e2e_info "operator profile waiting for CSV Succeeded namespace=${namespace} subscription=${subscription_name} timeout=${ready_timeout_seconds}s"
+  while (( $(date +%s) < deadline )); do
+    csv_name=$(kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" \
+      get subscription "${subscription_name}" \
+      -o jsonpath='{.status.installedCSV}' 2>/dev/null || true)
+    if [[ -n "${csv_name}" ]]; then
+      break
+    fi
+    sleep 2
+  done
+
+  if [[ -z "${csv_name}" ]]; then
+    e2e_error "operator subscription ${subscription_name} did not resolve to an installed CSV within ${ready_timeout_seconds}s"
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" describe "subscription/${subscription_name}" || true
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" get installplans,csv || true
+    return 1
+  fi
+
+  local remaining=$(( deadline - $(date +%s) ))
+  if (( remaining <= 0 )); then
+    remaining=1
+  fi
+
+  if ! kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" \
+    wait --for=jsonpath='{.status.phase}=Succeeded' "csv/${csv_name}" \
+    --timeout="${remaining}s"; then
+    e2e_error "operator CSV ${csv_name} did not reach Succeeded within timeout"
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" describe "csv/${csv_name}" || true
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" describe "subscription/${subscription_name}" || true
+    return 1
+  fi
+
+  E2E_OPERATOR_CSV_NAME="${csv_name}"
+  export E2E_OPERATOR_CSV_NAME
+  return 0
+}
+
+e2e_operator_olm_wait_for_manager_deployment_ready() {
+  local namespace
+  namespace=$(e2e_operator_effective_namespace)
+  local ready_timeout_seconds
+  ready_timeout_seconds=$(e2e_operator_ready_timeout_seconds) || return 1
+  local deployment_name='declarest-operator'
+
+  e2e_info "operator profile waiting for OLM-managed Deployment Available namespace=${namespace} deployment=${deployment_name} timeout=${ready_timeout_seconds}s"
+  if ! e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" \
+    wait --for=condition=Available "deployment/${deployment_name}" --timeout="${ready_timeout_seconds}s"; then
+    e2e_error "operator Deployment ${deployment_name} did not become Available"
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" describe "deployment/${deployment_name}" || true
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" get pods -o wide || true
+    return 1
+  fi
+
+  return 0
+}
+
+e2e_operator_olm_record_runtime_state() {
+  local namespace
+  namespace=$(e2e_operator_effective_namespace)
+  local deployment_name='declarest-operator'
   local webhook_service_name
   webhook_service_name=$(e2e_operator_repository_webhook_service_name)
-  local run_label
-  run_label=$(e2e_operator_run_label_value)
   local runtime_root='/var/lib/declarest'
   local repo_root="${runtime_root}/repos"
   local cache_root="${runtime_root}/cache"
-  local image_archive="${E2E_RUN_DIR}/operator/manager-image.tar"
-  mkdir -p -- "$(dirname -- "${image_archive}")" || return 1
-  e2e_info "operator profile exporting manager image archive image=${E2E_OPERATOR_IMAGE} archive=${image_archive}"
-  e2e_run_cmd "${E2E_CONTAINER_ENGINE}" save -o "${image_archive}" "${E2E_OPERATOR_IMAGE}" || return 1
-
-  e2e_info "operator profile loading manager image archive into kind cluster name=${E2E_KIND_CLUSTER_NAME} archive=${image_archive}"
-  e2e_kind_cmd_locked load image-archive "${image_archive}" --name "${E2E_KIND_CLUSTER_NAME}" || return 1
-
-  local ready_timeout_seconds
-  ready_timeout_seconds=$(e2e_operator_ready_timeout_seconds) || return 1
-  e2e_info "operator profile installing manager deployment namespace=${namespace}"
-  e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manager_manifest}" || return 1
-  if ! e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" rollout status "deployment/${deployment_name}" --timeout="${ready_timeout_seconds}s"; then
-    e2e_error "operator manager deployment failed rollout deployment=${deployment_name} namespace=${namespace}"
-    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" describe "deployment/${deployment_name}" || true
-    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" logs "deployment/${deployment_name}" --tail=80 || true
-    return 1
-  fi
 
   E2E_OPERATOR_MANAGER_DEPLOYMENT="${deployment_name}"
   E2E_OPERATOR_MANAGER_POD=$(
     kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" \
-      get pod -l "app.kubernetes.io/name=declarest-operator,declarest.e2e/run-id=${run_label}" \
+      get pod -l 'app.kubernetes.io/name=declarest-operator' \
       -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true
   )
   E2E_OPERATOR_MANAGER_PID=''
@@ -850,11 +1277,22 @@ e2e_operator_start_manager() {
   export E2E_OPERATOR_NAMESPACE
 
   e2e_runtime_state_set 'OPERATOR_IMAGE' "${E2E_OPERATOR_IMAGE}" || return 1
-  e2e_runtime_state_set 'OPERATOR_IMAGE_ARCHIVE' "${image_archive}" || return 1
+  e2e_runtime_state_set 'OPERATOR_BUNDLE_IMAGE' "$(e2e_operator_olm_bundle_image)" || return 1
+  e2e_runtime_state_set 'OPERATOR_CATALOG_IMAGE' "$(e2e_operator_olm_catalog_image)" || return 1
   e2e_runtime_state_set 'OPERATOR_NAMESPACE' "${namespace}" || return 1
   e2e_runtime_state_set 'OPERATOR_REPOSITORY_WEBHOOK_SERVICE_NAME' "${webhook_service_name}" || return 1
   e2e_runtime_state_set 'OPERATOR_MANAGER_DEPLOYMENT' "${deployment_name}" || return 1
   e2e_runtime_state_set 'OPERATOR_MANAGER_LOG_FILE' "${E2E_OPERATOR_MANAGER_LOG_FILE}" || return 1
+  if [[ -n "${E2E_OPERATOR_CSV_NAME:-}" ]]; then
+    e2e_runtime_state_set 'OPERATOR_CSV_NAME' "${E2E_OPERATOR_CSV_NAME}" || return 1
+  fi
+  e2e_runtime_state_set 'OPERATOR_CATALOG_SOURCE_NAME' "$(e2e_operator_olm_catalog_source_name)" || return 1
+  e2e_runtime_state_set 'OPERATOR_OPERATOR_GROUP_NAME' "$(e2e_operator_olm_operator_group_name)" || return 1
+  e2e_runtime_state_set 'OPERATOR_SUBSCRIPTION_NAME' "$(e2e_operator_olm_subscription_name)" || return 1
+  e2e_runtime_state_set 'OPERATOR_OLM_INSTALL_MANIFEST' "$(e2e_operator_olm_install_manifest_path)" || return 1
+  e2e_runtime_state_set 'OPERATOR_OLM_CATALOG_MANIFEST' "$(e2e_operator_olm_catalog_manifest_path)" || return 1
+  e2e_runtime_state_set 'OPERATOR_OLM_SUBSCRIPTION_MANIFEST' "$(e2e_operator_olm_subscription_manifest_path)" || return 1
+  e2e_runtime_state_set 'OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SECRET_NAME' "$(e2e_operator_managed_service_metadata_bundle_secret_name)" || return 1
   if [[ -n "${E2E_OPERATOR_MANAGER_POD}" ]]; then
     e2e_runtime_state_set 'OPERATOR_MANAGER_POD' "${E2E_OPERATOR_MANAGER_POD}" || return 1
   fi
@@ -866,6 +1304,182 @@ e2e_operator_start_manager() {
   fi
   e2e_runtime_state_set 'OPERATOR_REPO_BASE_DIR' "${repo_root}" || return 1
   e2e_runtime_state_set 'OPERATOR_CACHE_BASE_DIR' "${cache_root}" || return 1
+  return 0
+}
+
+e2e_operator_olm_cluster_reused_truthy() {
+  local value=${1:-}
+  case "${value,,}" in
+    1|true|yes|on)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+e2e_operator_olm_delete_namespaced_resource() {
+  local kubeconfig=$1
+  local namespace=$2
+  local resource=$3
+  local name=$4
+
+  [[ -n "${name}" ]] || return 0
+  if ! kubectl --kubeconfig "${kubeconfig}" -n "${namespace}" \
+    delete "${resource}/${name}" --ignore-not-found >/dev/null 2>&1; then
+    e2e_warn "failed to delete ${resource}/${name} in namespace=${namespace}"
+    return 1
+  fi
+  return 0
+}
+
+e2e_operator_olm_cleanup_resources() {
+  local kubeconfig=$1
+  local namespace=$2
+  local catalog_name=$3
+  local subscription_name=$4
+  local operator_group_name=$5
+  local csv_name=$6
+  local metadata_secret_name=$7
+  local subscription_manifest=$8
+  local failed=0
+
+  [[ -n "${kubeconfig}" && -f "${kubeconfig}" ]] || return 0
+  if ! kubectl --kubeconfig "${kubeconfig}" get namespace olm >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if [[ -f "${subscription_manifest}" ]]; then
+    e2e_info "cleanup deleting run-scoped operator OLM subscription resources manifest=${subscription_manifest}"
+    kubectl --kubeconfig "${kubeconfig}" delete -f "${subscription_manifest}" --ignore-not-found >/dev/null 2>&1 || failed=1
+  else
+    e2e_operator_olm_delete_namespaced_resource "${kubeconfig}" "${namespace}" subscription "${subscription_name}" || failed=1
+    e2e_operator_olm_delete_namespaced_resource "${kubeconfig}" "${namespace}" operatorgroup "${operator_group_name}" || failed=1
+    e2e_operator_olm_delete_namespaced_resource "${kubeconfig}" "${namespace}" secret "${metadata_secret_name}" || failed=1
+  fi
+
+  e2e_operator_olm_delete_namespaced_resource "${kubeconfig}" "${namespace}" csv "${csv_name}" || failed=1
+  e2e_operator_olm_delete_namespaced_resource "${kubeconfig}" olm catalogsource "${catalog_name}" || failed=1
+
+  if ((failed == 1)); then
+    return 1
+  fi
+  return 0
+}
+
+e2e_operator_olm_cleanup_current_run() {
+  local cluster_reused=${E2E_KIND_CLUSTER_REUSED:-}
+  if [[ -z "${cluster_reused}" && -n "${E2E_STATE_DIR:-}" ]]; then
+    local runtime_state
+    runtime_state=$(e2e_runtime_state_file)
+    cluster_reused=$(e2e_state_get "${runtime_state}" 'KIND_CLUSTER_REUSED' || true)
+  fi
+
+  e2e_operator_olm_cluster_reused_truthy "${cluster_reused}" || return 0
+
+  local namespace
+  namespace=$(e2e_operator_effective_namespace)
+  local csv_name=${E2E_OPERATOR_CSV_NAME:-}
+  if [[ -z "${csv_name}" && -n "${E2E_STATE_DIR:-}" ]]; then
+    local runtime_state
+    runtime_state=$(e2e_runtime_state_file)
+    csv_name=$(e2e_state_get "${runtime_state}" 'OPERATOR_CSV_NAME' || true)
+  fi
+
+  e2e_operator_olm_cleanup_resources \
+    "${E2E_KUBECONFIG:-}" \
+    "${namespace}" \
+    "$(e2e_operator_olm_catalog_source_name)" \
+    "$(e2e_operator_olm_subscription_name)" \
+    "$(e2e_operator_olm_operator_group_name)" \
+    "${csv_name}" \
+    "$(e2e_operator_managed_service_metadata_bundle_secret_name)" \
+    "$(e2e_operator_olm_subscription_manifest_path)" || return 1
+  return 0
+}
+
+e2e_operator_cleanup_olm_for_run_id() {
+  local run_id=$1
+  local runtime_state="${E2E_RUNS_DIR}/${run_id}/state/runtime.env"
+  [[ -f "${runtime_state}" ]] || return 0
+
+  local cluster_reused
+  cluster_reused=$(e2e_state_get "${runtime_state}" 'KIND_CLUSTER_REUSED' || true)
+  e2e_operator_olm_cluster_reused_truthy "${cluster_reused}" || return 0
+
+  local run_dir="${E2E_RUNS_DIR}/${run_id}"
+  local kubeconfig namespace catalog_name subscription_name operator_group_name csv_name metadata_secret_name subscription_manifest
+  kubeconfig=$(e2e_state_get "${runtime_state}" 'KUBECONFIG_PATH' || true)
+  namespace=$(e2e_state_get "${runtime_state}" 'OPERATOR_NAMESPACE' || true)
+  if [[ -z "${namespace}" ]]; then
+    namespace=$(e2e_state_get "${runtime_state}" 'K8S_NAMESPACE' || true)
+  fi
+  catalog_name=$(e2e_state_get "${runtime_state}" 'OPERATOR_CATALOG_SOURCE_NAME' || true)
+  subscription_name=$(e2e_state_get "${runtime_state}" 'OPERATOR_SUBSCRIPTION_NAME' || true)
+  operator_group_name=$(e2e_state_get "${runtime_state}" 'OPERATOR_OPERATOR_GROUP_NAME' || true)
+  csv_name=$(e2e_state_get "${runtime_state}" 'OPERATOR_CSV_NAME' || true)
+  metadata_secret_name=$(e2e_state_get "${runtime_state}" 'OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SECRET_NAME' || true)
+  subscription_manifest=$(e2e_state_get "${runtime_state}" 'OPERATOR_OLM_SUBSCRIPTION_MANIFEST' || true)
+
+  local previous_run_id=${E2E_RUN_ID:-}
+  E2E_RUN_ID="${run_id}"
+  if [[ -z "${namespace}" ]]; then
+    namespace=$(e2e_k8s_namespace_for_run "${run_id}")
+  fi
+  if [[ -z "${catalog_name}" ]]; then
+    catalog_name=$(e2e_operator_olm_catalog_source_name)
+  fi
+  if [[ -z "${subscription_name}" ]]; then
+    subscription_name=$(e2e_operator_olm_subscription_name)
+  fi
+  if [[ -z "${operator_group_name}" ]]; then
+    operator_group_name=$(e2e_operator_olm_operator_group_name)
+  fi
+  if [[ -z "${metadata_secret_name}" ]]; then
+    metadata_secret_name=$(e2e_operator_managed_service_metadata_bundle_secret_name)
+  fi
+  if [[ -n "${previous_run_id}" ]]; then
+    E2E_RUN_ID="${previous_run_id}"
+  else
+    unset E2E_RUN_ID
+  fi
+  if [[ -z "${subscription_manifest}" ]]; then
+    subscription_manifest="${run_dir}/operator/olm/olm-subscription.yaml"
+  fi
+
+  e2e_operator_olm_cleanup_resources \
+    "${kubeconfig}" \
+    "${namespace}" \
+    "${catalog_name}" \
+    "${subscription_name}" \
+    "${operator_group_name}" \
+    "${csv_name}" \
+    "${metadata_secret_name}" \
+    "${subscription_manifest}" || return 1
+  return 0
+}
+
+e2e_operator_install_via_olm() {
+  if [[ -z "${E2E_OPERATOR_IMAGE:-}" ]]; then
+    e2e_die "operator manager image is unavailable: ${E2E_OPERATOR_IMAGE:-<unset>}"
+    return 1
+  fi
+  if [[ -z "${E2E_KIND_CLUSTER_NAME:-}" ]]; then
+    e2e_die 'operator profile kind cluster metadata is missing'
+    return 1
+  fi
+
+  e2e_operator_prepare_managed_service_metadata_bundle || return 1
+  e2e_operator_olm_prepare_bundle_tree || return 1
+  e2e_operator_olm_build_bundle_image || return 1
+  e2e_operator_olm_prepare_catalog_tree || return 1
+  e2e_operator_olm_build_catalog_image || return 1
+  e2e_operator_olm_load_images_into_cluster || return 1
+  e2e_operator_olm_install_core || return 1
+  e2e_operator_olm_write_install_manifest || return 1
+  e2e_operator_olm_apply_install_manifest || return 1
+  e2e_operator_olm_wait_for_csv_succeeded || return 1
+  e2e_operator_olm_wait_for_manager_deployment_ready || return 1
+  e2e_operator_olm_record_runtime_state || return 1
   return 0
 }
 
@@ -1496,8 +2110,7 @@ e2e_operator_apply_manifests() {
 
 e2e_operator_install_stack() {
   e2e_operator_profile_enabled || return 0
-  e2e_operator_install_crds || return 1
-  e2e_operator_start_manager || return 1
+  e2e_operator_install_via_olm || return 1
   e2e_operator_write_manifests || return 1
   e2e_operator_apply_manifests || return 1
   return 0

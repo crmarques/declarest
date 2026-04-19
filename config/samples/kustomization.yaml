@@ -5,3 +5,4 @@ resources:
   - declarest_v1alpha1_managedservice.yaml
   - declarest_v1alpha1_secretstore.yaml
   - declarest_v1alpha1_syncpolicy.yaml
+  - declarest_v1alpha1_repositorywebhook.yaml

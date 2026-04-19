@@ -1,0 +1,20 @@
+---
+schema: olm.package
+name: declarest-operator
+defaultChannel: alpha
+---
+schema: olm.channel
+package: declarest-operator
+name: alpha
+entries:
+  - name: declarest-operator.v0.0.1
+---
+schema: olm.bundle
+name: declarest-operator.v0.0.1
+package: declarest-operator
+image: ghcr.io/crmarques/declarest-operator-bundle:0.0.1
+properties:
+  - type: olm.package
+    value:
+      packageName: declarest-operator
+      version: 0.0.1

@@ -221,7 +221,7 @@ func (g *Client) validateOperationSchemaRef(
 		schemaPayload = augmentSchemaValidationPayload(payload, derivedFields, schema, document)
 	}
 
-	if err := validateValueAgainstOpenAPISchema(schemaPayload, schema, document, "$", map[string]struct{}{}, 0); err != nil {
+	if err := validateValueAgainstOpenAPISchema(schemaPayload, schema, document, "$", map[string]struct{}{}, nil, 0); err != nil {
 		return faults.NewValidationError(
 			fmt.Sprintf(
 				"operation payload validation failed for schemaRef %q: %v",
@@ -487,6 +487,7 @@ func validateValueAgainstOpenAPISchema(
 	document map[string]any,
 	location string,
 	visitedRefs map[string]struct{},
+	extraKnownProperties map[string]struct{},
 	depth int,
 ) error {
 	if depth > 96 {
@@ -505,7 +506,7 @@ func validateValueAgainstOpenAPISchema(
 		return nil
 	}
 
-	if err := validateSchemaCombiners(value, resolvedSchema, document, location, depth); err != nil {
+	if err := validateSchemaCombiners(value, resolvedSchema, document, location, extraKnownProperties, depth); err != nil {
 		return err
 	}
 	if err := validateSchemaEnum(value, resolvedSchema, location); err != nil {
@@ -514,7 +515,7 @@ func validateValueAgainstOpenAPISchema(
 	if err := validateSchemaType(value, resolvedSchema, location); err != nil {
 		return err
 	}
-	if err := validateSchemaObject(value, resolvedSchema, document, location, depth); err != nil {
+	if err := validateSchemaObject(value, resolvedSchema, document, location, extraKnownProperties, depth); err != nil {
 		return err
 	}
 	if err := validateSchemaArray(value, resolvedSchema, document, location, depth); err != nil {
@@ -621,9 +622,28 @@ func validateSchemaCombiners(
 	schema map[string]any,
 	document map[string]any,
 	location string,
+	extraKnownProperties map[string]struct{},
 	depth int,
 ) error {
 	if allOf, ok := schemaSlice(schema["allOf"]); ok && len(allOf) > 0 {
+		unionFields := map[string]struct{}{}
+		for key := range extraKnownProperties {
+			unionFields[key] = struct{}{}
+		}
+		if ownProperties, ok := asStringAnyMap(schema["properties"]); ok {
+			for key := range ownProperties {
+				unionFields[key] = struct{}{}
+			}
+		}
+		for _, name := range requiredPropertyNames(schema["required"]) {
+			unionFields[name] = struct{}{}
+		}
+		for _, item := range allOf {
+			branchFields := topLevelSchemaObjectFieldNames(item, document, map[string]struct{}{}, depth+1)
+			for key := range branchFields {
+				unionFields[key] = struct{}{}
+			}
+		}
 		for idx, item := range allOf {
 			if err := validateValueAgainstOpenAPISchema(
 				value,
@@ -631,6 +651,7 @@ func validateSchemaCombiners(
 				document,
 				fmt.Sprintf("%s allOf[%d]", location, idx),
 				map[string]struct{}{},
+				unionFields,
 				depth+1,
 			); err != nil {
 				return err
@@ -648,6 +669,7 @@ func validateSchemaCombiners(
 				document,
 				fmt.Sprintf("%s anyOf[%d]", location, idx),
 				map[string]struct{}{},
+				nil,
 				depth+1,
 			)
 			if err == nil {
@@ -675,6 +697,7 @@ func validateSchemaCombiners(
 				document,
 				fmt.Sprintf("%s oneOf[%d]", location, idx),
 				map[string]struct{}{},
+				nil,
 				depth+1,
 			)
 			if err == nil {
@@ -728,6 +751,7 @@ func validateSchemaObject(
 	schema map[string]any,
 	document map[string]any,
 	location string,
+	extraKnownProperties map[string]struct{},
 	depth int,
 ) error {
 	properties, hasProperties := asStringAnyMap(schema["properties"])
@@ -760,6 +784,7 @@ func validateSchemaObject(
 			document,
 			dotPath(location, propertyName),
 			map[string]struct{}{},
+			nil,
 			depth+1,
 		); err != nil {
 			return err
@@ -767,11 +792,25 @@ func validateSchemaObject(
 	}
 
 	if additionalValue, hasAdditional := schema["additionalProperties"]; hasAdditional {
+		ownAllOfFields := map[string]struct{}{}
+		if allOf, ok := schemaSlice(schema["allOf"]); ok {
+			for _, item := range allOf {
+				for key := range topLevelSchemaObjectFieldNames(item, document, map[string]struct{}{}, depth+1) {
+					ownAllOfFields[key] = struct{}{}
+				}
+			}
+		}
 		switch typed := additionalValue.(type) {
 		case bool:
 			if !typed {
 				for key := range objectValue {
 					if _, known := properties[key]; known {
+						continue
+					}
+					if _, known := extraKnownProperties[key]; known {
+						continue
+					}
+					if _, known := ownAllOfFields[key]; known {
 						continue
 					}
 					return fmt.Errorf("%s property %q is not allowed", location, key)
@@ -782,12 +821,19 @@ func validateSchemaObject(
 				if _, known := properties[key]; known {
 					continue
 				}
+				if _, known := extraKnownProperties[key]; known {
+					continue
+				}
+				if _, known := ownAllOfFields[key]; known {
+					continue
+				}
 				if err := validateValueAgainstOpenAPISchema(
 					propertyValue,
 					typed,
 					document,
 					dotPath(location, key),
 					map[string]struct{}{},
+					nil,
 					depth+1,
 				); err != nil {
 					return err
@@ -829,6 +875,7 @@ func validateSchemaArray(
 				document,
 				fmt.Sprintf("%s[%d]", location, idx),
 				map[string]struct{}{},
+				nil,
 				depth+1,
 			); err != nil {
 				return err
@@ -844,6 +891,7 @@ func validateSchemaArray(
 			document,
 			fmt.Sprintf("%s[%d]", location, idx),
 			map[string]struct{}{},
+			nil,
 			depth+1,
 		); err != nil {
 			return err

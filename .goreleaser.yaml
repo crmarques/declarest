@@ -42,6 +42,10 @@ release:
     - glob: ./.release-assets/install.yaml
     - glob: ./.release-assets/install-admission-certmanager.yaml
     - glob: ./.release-assets/install-admission-openshift.yaml
+    - glob: ./.release-assets/install-olm.yaml
+    - glob: ./.release-assets/declarest-operator-bundle.tar.gz
+    - glob: ./.release-assets/declarest-operator-bundle.yaml
+    - glob: ./.release-assets/declarest-operator-catalog.yaml
 
 changelog:
   use: github

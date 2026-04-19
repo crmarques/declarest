@@ -53,6 +53,19 @@ jobs:
           cp dist/install.yaml .release-assets/install.yaml
           cp dist/install-admission-certmanager.yaml .release-assets/install-admission-certmanager.yaml
           cp dist/install-admission-openshift.yaml .release-assets/install-admission-openshift.yaml
+          cp dist/install-olm.yaml .release-assets/install-olm.yaml
+      - name: Stage OLM bundle assets
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          make bundle-validate
+          make catalog-validate
+          tar -czf .release-assets/declarest-operator-bundle.tar.gz bundle bundle.Dockerfile
+          cp bundle/manifests/declarest-operator.clusterserviceversion.yaml .release-assets/declarest-operator-bundle.yaml
+          cp catalog/declarest-operator/catalog.yaml .release-assets/declarest-operator-catalog.yaml
+          echo "Staged OLM bundle for version ${version}"
       - name: Validate GoReleaser config
         uses: goreleaser/goreleaser-action@v7
         with:

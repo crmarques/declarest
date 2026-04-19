@@ -133,6 +133,7 @@ RULES / GUARDRAILS
 - Prefer simple, readable solutions over heavy patterns.
 - If context is missing, state assumptions and offer alternatives.
 - Do not apply changes automatically; propose only (unless I explicitly ask you to implement).
+- no backward-compatibility wanted. architecture and code should be as lean as possible
 
 SUCCESS CRITERIA
 - Clearer domain boundaries and package containment.

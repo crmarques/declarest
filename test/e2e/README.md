@@ -24,10 +24,10 @@ This repository uses a componentized Bash e2e harness.
   - simple-api-server local mTLS defaults: disabled; when enabled, cert material is generated under `test/e2e/.runs/<run-id>/certs/managed-service-simple-api-server` and mounted to `/etc/simple-api-server/certs`
   - simple-api-server mTLS trusted client certs are loaded from the mounted cert directory for new connections without restart; an empty trusted-cert directory denies all client API access
   - runtime resources are kept; clean them with `./run-e2e.sh --clean <run-id>` or `./run-e2e.sh --clean-all`
-- `operator-manual`: provisions a local kubernetes-only stack, installs CRDs, starts `declarest-operator-manager`, applies generated operator CRs, and exits with runtime kept for manual reconciliation checks.
+- `operator-manual`: provisions a local kubernetes-only stack, applies vendored OLM core YAML, installs the operator through a run-scoped `CatalogSource`/`OperatorGroup`/`Subscription`, applies generated operator CRs, and exits with runtime kept for manual reconciliation checks.
   - defaults to the component-declared operator selections for `repo-type` and `git-provider` when those flags are omitted
   - requires local component connections, operator-compatible `repo-type`/`git-provider` selections, and a selected `secret-provider`
-  - copies the selected managed-service `repo-template`, initializes the local git repository, commits/pushes seed content to the selected git provider, then applies `ResourceRepository`, `ManagedService`, `SecretStore`, and `SyncPolicy` CRs
+  - copies the selected managed-service `repo-template`, initializes the local git repository, commits/pushes seed content to the selected git provider, waits for the OLM-managed CSV and Deployment, then applies `ResourceRepository`, `ManagedService`, `SecretStore`, and `SyncPolicy` CRs
   - prints shell handoff scripts and concrete `declarest-e2e` commands so you can commit/push a resource change and verify it on the managed service manually
 - `operator-basic`: same operator environment as `operator-manual`, then runs compatible shared `smoke` cases plus operator-focused automated `operator-main` cases.
 - `operator-full`: same operator environment as `operator-basic`, then runs all compatible `smoke`, operator-compatible `main`, `operator-main`, and `corner` cases.

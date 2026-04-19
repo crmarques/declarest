@@ -283,6 +283,178 @@ test_operator_ready_timeout_validation_and_cap() {
   assert_contains "${output}" "invalid operator readiness timeout"
 }
 
+assert_text_order() {
+  local haystack=$1
+  local earlier=$2
+  local later=$3
+  local earlier_line later_line
+
+  earlier_line=$(grep -nF -- "${earlier}" <<<"${haystack}" | head -n 1 | cut -d: -f1 || true)
+  later_line=$(grep -nF -- "${later}" <<<"${haystack}" | head -n 1 | cut -d: -f1 || true)
+  [[ -n "${earlier_line}" ]] || fail "expected text to contain ${earlier@Q}"
+  [[ -n "${later_line}" ]] || fail "expected text to contain ${later@Q}"
+  if ((earlier_line >= later_line)); then
+    fail "expected ${earlier@Q} before ${later@Q}"
+  fi
+}
+
+test_operator_olm_install_core_applies_vendored_yaml() {
+  load_operator_libs
+
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  export E2E_KUBECONFIG="${tmp}/kubeconfig"
+  export E2E_OPERATOR_READY_TIMEOUT_SECONDS=5
+  : >"${E2E_KUBECONFIG}"
+
+  local calls="${tmp}/kubectl.calls"
+  kubectl() {
+    printf '%s\n' "$*" >>"${calls}"
+    case "$*" in
+      *'get namespace olm'*)
+        return 1
+        ;;
+    esac
+    return 0
+  }
+
+  e2e_operator_olm_install_core
+
+  local output
+  output=$(<"${calls}")
+  assert_contains "${output}" "apply --server-side=true -f ${REPO_ROOT}/test/e2e/olm/v0.42.0/crds.yaml"
+  assert_contains "${output}" "apply -f ${REPO_ROOT}/test/e2e/olm/v0.42.0/olm.yaml"
+  assert_contains "${output}" "wait --for=condition=Established crd/catalogsources.operators.coreos.com"
+  assert_contains "${output}" "-n olm wait --for=condition=Available deployment/olm-operator"
+  assert_contains "${output}" "-n olm wait --for=condition=Available deployment/catalog-operator"
+  assert_contains "${output}" "-n olm wait --for=condition=Available deployment/packageserver"
+  assert_contains "${output}" "-n olm delete catalogsource/operatorhubio-catalog --ignore-not-found"
+  assert_not_contains "$(declare -f e2e_operator_olm_install_core)" "operator-sdk"
+}
+
+test_operator_olm_patch_csv_preserves_webhooks_and_enables_admission() {
+  load_operator_libs
+
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  export E2E_RUN_ID='operator-csv-patch'
+  export E2E_RUN_DIR="${tmp}/run"
+  export E2E_K8S_NAMESPACE='declarest-operator-csv'
+  export E2E_OPERATOR_IMAGE='localhost/declarest/e2e-operator-manager:csv-patch'
+  export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE="${tmp}/metadata-bundle.tar.gz"
+  : >"${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE}"
+
+  local csv_file="${tmp}/declarest-operator.clusterserviceversion.yaml"
+  cat >"${csv_file}" <<'EOF'
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  name: declarest-operator.v0.0.1
+spec:
+  webhookdefinitions:
+    - type: ValidatingAdmissionWebhook
+      deploymentName: declarest-operator-webhook
+      webhookPath: /validate-declarest-io-v1alpha1-managedservice
+  install:
+    strategy: deployment
+    spec:
+      deployments:
+        - name: declarest-operator
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: manager
+                    image: ghcr.io/crmarques/declarest-operator:old
+                    args:
+                      - --health-probe-bind-address=:8081
+                      - --enable-admission-webhooks=false
+                      - --watch-namespace=old
+                      - --repository-webhook-bind-address=:18082
+                      - --leader-elect
+                    volumeMounts:
+                      - name: state
+                        mountPath: /var/lib/declarest
+                volumes:
+                  - name: state
+                    persistentVolumeClaim:
+                      claimName: declarest-operator-state
+                  - name: tmp
+                    emptyDir: {}
+EOF
+
+  e2e_operator_olm_patch_csv "${csv_file}"
+
+  assert_file_contains "${csv_file}" "webhookdefinitions:"
+  assert_file_contains "${csv_file}" "deploymentName: declarest-operator"
+  assert_file_contains "${csv_file}" "containerPort: 9443"
+  assert_file_contains "${csv_file}" "targetPort: 9443"
+  assert_file_contains "${csv_file}" "image: localhost/declarest/e2e-operator-manager:csv-patch"
+  assert_file_contains "${csv_file}" "--enable-admission-webhooks=true"
+  assert_file_contains "${csv_file}" "--watch-namespace=declarest-operator-csv"
+  assert_file_contains "${csv_file}" "--repository-webhook-bind-address=:8082"
+  assert_file_contains "${csv_file}" "emptyDir: {}"
+  assert_file_contains "${csv_file}" "secretName: $(e2e_operator_managed_service_metadata_bundle_secret_name)"
+  assert_file_contains "${csv_file}" "mountPath: $(e2e_operator_managed_service_metadata_bundle_mount_dir)"
+  assert_not_contains "$(<"${csv_file}")" "--enable-admission-webhooks=false"
+  assert_not_contains "$(<"${csv_file}")" "--watch-namespace=old"
+  assert_not_contains "$(<"${csv_file}")" "persistentVolumeClaim"
+}
+
+test_operator_olm_apply_waits_for_catalog_before_subscription() {
+  load_operator_libs
+
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  export E2E_RUN_ID='operator-olm-order'
+  export E2E_RUN_DIR="${tmp}/run"
+  export E2E_K8S_NAMESPACE='declarest-operator-order'
+  export E2E_KUBECONFIG="${tmp}/kubeconfig"
+  export E2E_OPERATOR_READY_TIMEOUT_SECONDS=5
+  : >"${E2E_KUBECONFIG}"
+
+  local calls="${tmp}/kubectl.calls"
+  kubectl() {
+    printf '%s\n' "$*" >>"${calls}"
+    case "$*" in
+      *'get catalogsource/'*)
+        printf 'READY'
+        ;;
+    esac
+    return 0
+  }
+
+  e2e_operator_olm_write_install_manifest
+  e2e_operator_olm_apply_install_manifest
+
+  local output catalog_manifest subscription_manifest catalog_name
+  output=$(<"${calls}")
+  catalog_manifest=$(e2e_operator_olm_catalog_manifest_path)
+  subscription_manifest=$(e2e_operator_olm_subscription_manifest_path)
+  catalog_name=$(e2e_operator_olm_catalog_source_name)
+
+  assert_text_order "${output}" "apply -f ${catalog_manifest}" "get catalogsource/${catalog_name}"
+  assert_text_order "${output}" "get catalogsource/${catalog_name}" "apply -f ${subscription_manifest}"
+}
+
+test_operator_install_waits_for_olm_before_declarest_crs() {
+  load_operator_libs
+
+  local install_via_olm install_stack
+  install_via_olm=$(declare -f e2e_operator_install_via_olm)
+  install_stack=$(declare -f e2e_operator_install_stack)
+
+  assert_text_order "${install_via_olm}" "e2e_operator_olm_apply_install_manifest" "e2e_operator_olm_wait_for_csv_succeeded"
+  assert_text_order "${install_via_olm}" "e2e_operator_olm_wait_for_csv_succeeded" "e2e_operator_olm_wait_for_manager_deployment_ready"
+  assert_text_order "${install_stack}" "e2e_operator_install_via_olm" "e2e_operator_write_manifests"
+}
+
 test_operator_write_manifests_prefers_prepared_keycloak_metadata_bundle_mount_path() {
   source_e2e_libs common profile operator components
 
@@ -421,44 +593,6 @@ test_operator_prepare_rundeck_component_metadata_bundle_omits_case_only_fixtures
   assert_not_contains "${archive_listing}" "metadata/secret-detect-fix/acme/metadata.yaml"
 }
 
-test_operator_write_manager_manifest_mounts_prepared_metadata_bundle() {
-  load_operator_libs
-
-  local tmp
-  tmp=$(new_temp_dir)
-  trap 'rm -rf "${tmp}"' RETURN
-
-  export E2E_RUN_ID='operator-rundeck-metadata-manager'
-  export E2E_RUN_DIR="${tmp}/run"
-  export E2E_KUBECONFIG="${tmp}/kubeconfig"
-  export E2E_KIND_CLUSTER_NAME='declarest-e2e-operator'
-  export E2E_K8S_NAMESPACE='declarest-operator'
-  export E2E_OPERATOR_IMAGE='localhost/declarest/e2e-operator-manager:test'
-  export E2E_MANAGED_SERVICE='rundeck'
-  export E2E_METADATA_DIR="${tmp}/metadata"
-  unset E2E_METADATA_BUNDLE
-
-  mkdir -p "${E2E_RUN_DIR}" "${E2E_METADATA_DIR}/projects/_"
-  cat >"${E2E_METADATA_DIR}/projects/_/metadata.yaml" <<'EOF'
-{"resource":{"id":"{{/name}}","alias":"{{/name}}"}}
-EOF
-
-  e2e_operator_api_server_endpoint() {
-    printf '10.89.0.1 6443\n'
-  }
-
-  e2e_operator_write_manager_manifest
-
-  local manager_manifest
-  manager_manifest=$(e2e_operator_manager_manifest_path)
-  assert_path_exists "${manager_manifest}"
-  assert_file_contains "${manager_manifest}" "kind: Secret"
-  assert_file_contains "${manager_manifest}" "name: $(e2e_operator_managed_service_metadata_bundle_secret_name)"
-  assert_file_contains "${manager_manifest}" "metadata-bundle.tar.gz:"
-  assert_file_contains "${manager_manifest}" "mountPath: $(e2e_operator_managed_service_metadata_bundle_mount_dir)"
-  assert_file_contains "${manager_manifest}" "secretName: $(e2e_operator_managed_service_metadata_bundle_secret_name)"
-}
-
 test_operator_write_manifests_uses_prepared_metadata_bundle_mount_path() {
   source_e2e_libs common profile operator components
 
@@ -542,9 +676,12 @@ test_operator_repository_webhook_registration_deferred_only_for_operator_profile
 test_operator_configure_repository_webhook_if_needed_runs_git_provider_hook
 test_operator_rewrites_local_urls_for_cluster_services
 test_operator_ready_timeout_validation_and_cap
+test_operator_olm_install_core_applies_vendored_yaml
+test_operator_olm_patch_csv_preserves_webhooks_and_enables_admission
+test_operator_olm_apply_waits_for_catalog_before_subscription
+test_operator_install_waits_for_olm_before_declarest_crs
 test_operator_write_manifests_prefers_prepared_keycloak_metadata_bundle_mount_path
 test_operator_prepare_managed_service_metadata_bundle_from_metadata_dir
 test_operator_prepare_rundeck_component_metadata_bundle_omits_case_only_fixtures
-test_operator_write_manager_manifest_mounts_prepared_metadata_bundle
 test_operator_write_manifests_uses_prepared_metadata_bundle_mount_path
 test_secretstore_crd_does_not_require_legacy_provider_field

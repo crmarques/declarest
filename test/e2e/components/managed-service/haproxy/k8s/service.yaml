@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: managed-service-haproxy
+  labels:
+    app.kubernetes.io/name: managed-service-haproxy
+    declarest.e2e/component-key: managed-service-haproxy
+  annotations:
+    declarest.e2e/port-forward: "${HAPROXY_DPA_PORT}:5555"
+spec:
+  selector:
+    app.kubernetes.io/name: managed-service-haproxy
+  ports:
+    - name: dpa
+      port: 5555
+      targetPort: 5555

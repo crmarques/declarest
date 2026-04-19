@@ -120,6 +120,7 @@ Released install manifests are the recommended install path:
 | `install.yaml` | CRDs, RBAC, manager deployment | None | Simplest install, evaluation environments, or clusters where you do not want admission webhook dependencies |
 | `install-admission-certmanager.yaml` | Base install plus validating admission webhooks | `cert-manager` | Recommended default for production Kubernetes clusters |
 | `install-admission-openshift.yaml` | Base install plus validating admission webhooks | OpenShift serving cert integration | Recommended for OpenShift |
+| `install-olm.yaml` | `OperatorGroup`, `CatalogSource`, `Subscription` for an OLM-managed install | [OLM](https://olm.operatorframework.io/) already installed on the cluster | Clusters that manage operators through OLM ([detailed guide](installing-with-olm.md)) |
 
 ```bash
 VERSION={{ declarest_tag() }}
@@ -139,6 +140,7 @@ Use the cert-manager variant unless one of these is true:
 
 - You are on OpenShift: use `install-admission-openshift.yaml`.
 - You want the fewest cluster dependencies or a quick evaluation install: use `install.yaml`.
+- Your cluster manages operators through OLM: use `install-olm.yaml` and follow the [OLM install guide](installing-with-olm.md). OLM manages the operator Deployment, CRDs, and webhook certs, and the bundled Deployment uses `emptyDir` for state.
 
 For local development from a source checkout, the repository kustomize bases are still useful:
 

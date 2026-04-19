@@ -1,0 +1,11 @@
+apiVersion: declarest.io/v1alpha1
+kind: RepositoryWebhook
+metadata:
+  name: example-repository
+spec:
+  provider: gitea
+  repositoryRef:
+    name: example-repository
+  secretRef:
+    name: repository-credentials
+    key: webhook-secret

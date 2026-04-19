@@ -1,0 +1,499 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "declarest.io/v1alpha1",
+          "kind": "ManagedService",
+          "metadata": {
+            "name": "example-managed-service"
+          },
+          "spec": {
+            "http": {
+              "auth": {
+                "oauth2": {
+                  "clientIDRef": {
+                    "key": "client-id",
+                    "name": "managed-service-oauth2"
+                  },
+                  "clientSecretRef": {
+                    "key": "client-secret",
+                    "name": "managed-service-oauth2"
+                  },
+                  "grantType": "client_credentials",
+                  "tokenURL": "https://managed-service.example.com/oauth/token"
+                }
+              },
+              "baseURL": "https://managed-service.example.com/api",
+              "requestThrottling": {
+                "burst": 40,
+                "maxConcurrentRequests": 4,
+                "queueSize": 16,
+                "requestsPerSecond": 20
+              }
+            },
+            "metadata": {
+              "bundle": "managed-service-bundle:0.0.1"
+            },
+            "openapi": {
+              "url": "https://managed-service.example.com/openapi.yaml"
+            }
+          }
+        },
+        {
+          "apiVersion": "declarest.io/v1alpha1",
+          "kind": "RepositoryWebhook",
+          "metadata": {
+            "name": "example-repository"
+          },
+          "spec": {
+            "provider": "gitea",
+            "repositoryRef": {
+              "name": "example-repository"
+            },
+            "secretRef": {
+              "key": "webhook-secret",
+              "name": "repository-credentials"
+            }
+          }
+        },
+        {
+          "apiVersion": "declarest.io/v1alpha1",
+          "kind": "ResourceRepository",
+          "metadata": {
+            "name": "example-repository"
+          },
+          "spec": {
+            "git": {
+              "auth": {
+                "tokenRef": {
+                  "key": "token",
+                  "name": "repository-credentials"
+                }
+              },
+              "branch": "main",
+              "url": "https://github.com/example/declarest-resources.git",
+              "webhook": {
+                "provider": "gitea",
+                "secretRef": {
+                  "key": "webhook-secret",
+                  "name": "repository-credentials"
+                }
+              }
+            },
+            "pollInterval": "1m",
+            "storage": {
+              "pvc": {
+                "accessModes": [
+                  "ReadWriteOnce"
+                ],
+                "requests": {
+                  "storage": "1Gi"
+                }
+              }
+            },
+            "type": "git"
+          }
+        },
+        {
+          "apiVersion": "declarest.io/v1alpha1",
+          "kind": "SecretStore",
+          "metadata": {
+            "name": "example-secret-store"
+          },
+          "spec": {
+            "file": {
+              "encryption": {
+                "passphraseRef": {
+                  "key": "passphrase",
+                  "name": "secret-store-file"
+                }
+              },
+              "path": "/var/lib/declarest/secrets/secrets.json",
+              "storage": {
+                "pvc": {
+                  "accessModes": [
+                    "ReadWriteOnce"
+                  ],
+                  "requests": {
+                    "storage": "1Gi"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "apiVersion": "declarest.io/v1alpha1",
+          "kind": "SyncPolicy",
+          "metadata": {
+            "name": "example-sync-policy"
+          },
+          "spec": {
+            "managedServiceRef": {
+              "name": "example-managed-service"
+            },
+            "resourceRepositoryRef": {
+              "name": "example-repository"
+            },
+            "secretStoreRef": {
+              "name": "example-secret-store"
+            },
+            "source": {
+              "path": "/customers",
+              "recursive": true
+            },
+            "suspend": false,
+            "sync": {
+              "force": false,
+              "prune": false
+            }
+          }
+        }
+      ]
+    capabilities: Seamless Upgrades
+    categories: Integration & Delivery
+    containerImage: ghcr.io/crmarques/declarest-operator:latest
+    createdAt: "2026-04-18T14:09:01Z"
+    description: Declarative resource sync between Git and REST APIs.
+    operators.operatorframework.io/builder: operator-sdk-v1.41.0
+    operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
+    repository: https://github.com/crmarques/declarest
+    support: Community
+  name: declarest-operator.v0.0.1
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: Remote REST service targeted by DeclaREST, including OpenAPI sourcing,
+        auth, throttling, and metadata bundle references.
+      displayName: Managed Service
+      kind: ManagedService
+      name: managedservices.declarest.io
+      version: v1alpha1
+    - description: Repository webhook receiver state used by the operator to drive
+        event-driven repository refresh.
+      displayName: Repository Webhook
+      kind: RepositoryWebhook
+      name: repositorywebhooks.declarest.io
+      version: v1alpha1
+    - description: Git-backed source of truth for DeclaREST resources, including polling,
+        authentication, and webhook configuration.
+      displayName: Resource Repository
+      kind: ResourceRepository
+      name: resourcerepositories.declarest.io
+      version: v1alpha1
+    - description: Secret provider configuration (file-backed today) used to resolve
+        credentials referenced by DeclaREST contexts.
+      displayName: Secret Store
+      kind: SecretStore
+      name: secretstores.declarest.io
+      version: v1alpha1
+    - description: Binds a ResourceRepository, ManagedService, and SecretStore and
+        controls the scoped sync, prune, and schedule behavior.
+      displayName: Sync Policy
+      kind: SyncPolicy
+      name: syncpolicies.declarest.io
+      version: v1alpha1
+  description: |
+    DeclaREST keeps REST APIs in sync with declarative state stored in Git. The
+    operator watches `ResourceRepository`, `ManagedService`, `SecretStore`, and
+    `SyncPolicy` resources to plan and execute incremental or full sync cycles
+    against targeted services.
+
+    ### Highlights
+    - Git-backed source of truth with webhook-driven and interval-based refresh.
+    - OpenAPI-aware remote operations with optional throttling and proxy support.
+    - Safety-biased diff-based incremental sync with deterministic fallback to full sync.
+    - File-backed secret provider with `${ENV_VAR}` resolution at admission and reconcile.
+
+    ### Installation notes
+    - OLM-installed pods use an `emptyDir` for their state volume; persistent
+      storage outside OLM is supported via the kustomize manifests published
+      alongside each release (`install.yaml`).
+    - Admission webhooks are enabled in this bundle and managed by OLM (cert
+      generation and injection). The operator listens on port 9443.
+    - The bundle ships cluster-scoped RBAC; `OwnNamespace`, `SingleNamespace`,
+      and `AllNamespaces` install modes are supported.
+  displayName: DeclaREST Operator
+  install:
+    spec:
+      clusterPermissions:
+      - rules:
+        - apiGroups:
+          - declarest.io
+          resources:
+          - resourcerepositories
+          - managedservices
+          - secretstores
+          - syncpolicies
+          - repositorywebhooks
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - declarest.io
+          resources:
+          - resourcerepositories/status
+          - managedservices/status
+          - secretstores/status
+          - syncpolicies/status
+          - repositorywebhooks/status
+          verbs:
+          - get
+          - update
+          - patch
+        - apiGroups:
+          - declarest.io
+          resources:
+          - resourcerepositories/finalizers
+          - managedservices/finalizers
+          - secretstores/finalizers
+          - syncpolicies/finalizers
+          - repositorywebhooks/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - persistentvolumeclaims
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        serviceAccountName: declarest-operator
+      deployments:
+      - label:
+          app.kubernetes.io/component: operator
+          app.kubernetes.io/managed-by: kustomize
+          app.kubernetes.io/name: declarest-operator
+          app.kubernetes.io/part-of: declarest
+        name: declarest-operator
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: declarest-operator
+          strategy: {}
+          template:
+            metadata:
+              labels:
+                app.kubernetes.io/component: operator
+                app.kubernetes.io/name: declarest-operator
+                app.kubernetes.io/part-of: declarest
+            spec:
+              containers:
+              - args:
+                - --health-probe-bind-address=:8081
+                - --metrics-bind-address=:8080
+                - --repository-webhook-bind-address=:8082
+                - --leader-elect
+                - --enable-admission-webhooks=true
+                command:
+                - /manager
+                env:
+                - name: DECLAREST_OPERATOR_REPO_BASE_DIR
+                  value: /var/lib/declarest/repos
+                - name: DECLAREST_OPERATOR_CACHE_BASE_DIR
+                  value: /var/lib/declarest/cache
+                - name: HOME
+                  value: /var/lib/declarest
+                image: ghcr.io/crmarques/declarest-operator:0.0.1
+                imagePullPolicy: IfNotPresent
+                livenessProbe:
+                  httpGet:
+                    path: /healthz
+                    port: probes
+                name: manager
+                ports:
+                - containerPort: 9443
+                  name: webhook-server
+                  protocol: TCP
+                - containerPort: 8080
+                  name: metrics
+                - containerPort: 8081
+                  name: probes
+                - containerPort: 8082
+                  name: repo-webhook
+                readinessProbe:
+                  httpGet:
+                    path: /readyz
+                    port: probes
+                resources:
+                  limits:
+                    cpu: 500m
+                    memory: 512Mi
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop:
+                    - ALL
+                  readOnlyRootFilesystem: true
+                volumeMounts:
+                - mountPath: /var/lib/declarest
+                  name: state
+                - mountPath: /tmp
+                  name: tmp
+              securityContext:
+                runAsNonRoot: true
+                seccompProfile:
+                  type: RuntimeDefault
+              serviceAccountName: declarest-operator
+              volumes:
+              - emptyDir: {}
+                name: state
+                persistentVolumeClaim:
+                  claimName: declarest-operator-state
+              - emptyDir: {}
+                name: tmp
+      permissions:
+      - rules:
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+        serviceAccountName: declarest-operator
+    strategy: deployment
+  installModes:
+  - supported: true
+    type: OwnNamespace
+  - supported: true
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - declarest
+  - rest
+  - gitops
+  - sync
+  - openapi
+  links:
+  - name: Documentation
+    url: https://github.com/crmarques/declarest/tree/main/docs
+  - name: Source
+    url: https://github.com/crmarques/declarest
+  maintainers:
+  - email: crmarquesjc@gmail.com
+    name: Carlos Marques
+  maturity: alpha
+  minKubeVersion: 1.27.0
+  provider:
+    name: Carlos Marques
+    url: https://github.com/crmarques/declarest
+  version: 0.0.1
+  webhookdefinitions:
+  - admissionReviewVersions:
+    - v1
+    deploymentName: declarest-operator-webhook
+    failurePolicy: Fail
+    generateName: vmanagedservice-v1alpha1.declarest.io
+    rules:
+    - apiGroups:
+      - declarest.io
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - managedservices
+    sideEffects: None
+    timeoutSeconds: 10
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-declarest-io-v1alpha1-managedservice
+  - admissionReviewVersions:
+    - v1
+    deploymentName: declarest-operator-webhook
+    failurePolicy: Fail
+    generateName: vresourcerepository-v1alpha1.declarest.io
+    rules:
+    - apiGroups:
+      - declarest.io
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - resourcerepositories
+    sideEffects: None
+    timeoutSeconds: 10
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-declarest-io-v1alpha1-resourcerepository
+  - admissionReviewVersions:
+    - v1
+    deploymentName: declarest-operator-webhook
+    failurePolicy: Fail
+    generateName: vsecretstore-v1alpha1.declarest.io
+    rules:
+    - apiGroups:
+      - declarest.io
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - secretstores
+    sideEffects: None
+    timeoutSeconds: 10
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-declarest-io-v1alpha1-secretstore
+  - admissionReviewVersions:
+    - v1
+    deploymentName: declarest-operator-webhook
+    failurePolicy: Fail
+    generateName: vsyncpolicy-v1alpha1.declarest.io
+    rules:
+    - apiGroups:
+      - declarest.io
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - syncpolicies
+    sideEffects: None
+    timeoutSeconds: 10
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-declarest-io-v1alpha1-syncpolicy

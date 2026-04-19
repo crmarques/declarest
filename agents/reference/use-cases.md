@@ -769,12 +769,12 @@ Failure expectation:
 Goal: run operator profile end-to-end and manually verify repository-to-managed-service reconciliation.
 
 Inputs:
-1. `run-e2e.sh --profile operator --managed-service simple-api-server --repo-type git --git-provider gitea --secret-provider file`.
+1. `run-e2e.sh --profile operator-manual --managed-service simple-api-server --repo-type git --git-provider gitea --secret-provider file`.
 2. Local toolchain supports `kind`, `kubectl`, and selected container engine.
 
 Execution:
 1. Runner initializes selected local components and config context.
-2. Runner seeds fixture repository content, initializes git, commits/pushes seed content to the selected git provider, installs CRDs, starts `declarest-operator-manager`, and applies generated operator CRs.
+2. Runner seeds fixture repository content, initializes git, commits/pushes seed content to the selected git provider, applies vendored OLM core YAML when needed, installs the operator through `CatalogSource`/`OperatorGroup`/`Subscription`, waits for the OLM-managed CSV and Deployment, and applies generated operator CRs.
 3. User sources the generated setup script and runs the printed commands to save one new resource, commit/push it, and read the same logical path from the managed service.
 
 Expected outputs:
@@ -783,7 +783,7 @@ Expected outputs:
 3. Runtime artifacts and shell reset script remain available until explicit cleanup.
 
 Failure expectation:
-1. Operator-manager startup failures surface actionable logs and abort before CR application.
+1. OLM core, CatalogSource, Subscription, CSV, or operator Deployment readiness failures surface actionable logs and abort before CR application.
 
 ### Example 31: Operator Profile Invalid Selection (Corner)
 Goal: reject unsupported operator profile selections before runtime startup.

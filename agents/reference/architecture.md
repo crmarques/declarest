@@ -24,6 +24,7 @@ Define component boundaries, dependency direction, and orchestration ownership f
 7. `internal/operator/controllers` MUST remain an operator adapter layer (Kubernetes reconciliation/watch/webhook handling) and MUST delegate resource-sync behavior to domain/application contracts via bootstrapped sessions.
 8. Refactors affecting public contracts MUST update `agents/reference/interfaces.md` before implementation changes.
 9. Refactors SHOULD be decomposed into reversible steps unless explicitly requested otherwise.
+10. OLM packaging artifacts (`config/manifests/`, `config/olm/`, `bundle/`, `catalog/`, `bundle.Dockerfile`, `catalog.Dockerfile`) MUST remain packaging-only overlays over the existing kustomize base in `config/default/` and MUST NOT introduce a new runtime dependency layer; generated bundle/catalog manifests MUST be derived from that base and MUST NOT hand-duplicate controller or webhook logic.
 
 ## Layer Model
 1. `cmd/declarest`: executable entrypoint only.
@@ -35,6 +36,7 @@ Define component boundaries, dependency direction, and orchestration ownership f
 7. Public shared primitives: `faults`.
 8. Private provider implementations: `internal/providers/*`.
 9. Bootstrap/wiring: `internal/bootstrap`.
+10. Packaging artifacts: `config/` (kustomize base + release/manifests/OLM overlays), `bundle/` (operator-sdk `registry+v1` bundle), and `catalog/` (file-based catalog). These layers MUST wrap the same Deployment/RBAC/CRDs and MUST NOT host reconcile or webhook code.
 
 ## Allowed Dependency Directions
 1. `cmd/declarest` -> `internal/bootstrap`, `internal/cli`.
@@ -76,6 +78,11 @@ Define component boundaries, dependency direction, and orchestration ownership f
 1. `SyncPolicy` reconcile resolves referenced CRDs (`ResourceRepository`, `ManagedService`, `SecretStore`) and validates overlap/schedule/dependency constraints.
 2. Controller builds a runtime `config.Context` and bootstraps domain services through `internal/bootstrap`.
 3. Controller executes apply/prune orchestration through domain/application contracts and persists deterministic status/condition updates.
+
+### OLM Packaging Flow
+1. `make bundle` renders the CSV template from `config/manifests/` into `bundle/manifests/` via `operator-sdk generate bundle --manifests`, preserving the hand-authored `bundle.Dockerfile`, `bundle/metadata/annotations.yaml`, and scorecard config.
+2. `make bundle-build`/`make bundle-push` publish `ghcr.io/crmarques/declarest-operator-bundle:<VERSION>`; `make catalog-build`/`make catalog-push` publish `ghcr.io/crmarques/declarest-operator-catalog:<VERSION>` from `catalog/declarest-operator/catalog.yaml`.
+3. `make olm-install` applies `config/olm/` (Namespace/OperatorGroup/CatalogSource/Subscription) against a target cluster; OLM then reconciles CSVs and injects webhook certificates for the operator `Deployment`.
 
 ## Failure Modes
 1. Circular dependencies between domain contracts and providers.

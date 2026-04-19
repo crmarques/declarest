@@ -1,0 +1,28 @@
+resource:
+  id: "{{/name}}"
+  alias: "{{/name}}"
+  requiredAttributes:
+    - /name
+operations:
+  list:
+    path: /services/haproxy/configuration/frontends
+  get:
+    path: /services/haproxy/configuration/frontends/{{/id}}
+  create:
+    method: POST
+    path: /services/haproxy/configuration/frontends
+    validate:
+      requiredAttributes:
+        - /name
+      schemaRef: openapi:request-body
+  update:
+    method: PUT
+    path: /services/haproxy/configuration/frontends/{{/id}}
+    validate:
+      requiredAttributes:
+        - /name
+      schemaRef: openapi:request-body
+  delete:
+    path: /services/haproxy/configuration/frontends/{{/id}}
+  compare:
+    path: /services/haproxy/configuration/frontends/{{/id}}

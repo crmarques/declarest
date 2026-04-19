@@ -1,0 +1,28 @@
+{
+  "name": "platform",
+  "service": {
+    "mode": "http",
+    "listeners": [
+      {
+        "name": "main",
+        "address": "*",
+        "port": 8000
+      }
+    ],
+    "http_connection_mode": "httpclose"
+  },
+  "farms": [
+    {
+      "name": "platform-backend",
+      "mode": "http",
+      "use_as": "default",
+      "servers": [
+        {
+          "name": "srv1",
+          "address": "127.0.0.1",
+          "port": 8080
+        }
+      ]
+    }
+  ]
+}

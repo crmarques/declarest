@@ -34,6 +34,7 @@ nav:
       - Metadata and API Modeling: guide/metadata-and-api-modeling.md
       - Repository and Git Workflows: guide/repository-and-git-workflows.md
       - Running the Operator: guide/running-the-operator.md
+      - Installing with OLM: guide/installing-with-olm.md
   - Reference:
       - CLI: reference/cli.md
       - Configuration: reference/configuration.md

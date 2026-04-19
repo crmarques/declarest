@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: managed-service-haproxy
+  labels:
+    app.kubernetes.io/name: managed-service-haproxy
+    declarest.e2e/component-key: managed-service-haproxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: managed-service-haproxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: managed-service-haproxy
+        declarest.e2e/component-key: managed-service-haproxy
+    spec:
+      securityContext:
+        runAsUser: 0
+      containers:
+        - name: haproxy
+          image: docker.io/haproxytech/haproxy-alpine:3.0
+          command: ["/bin/sh", "/var/lib/haproxy-seed/entrypoint.sh"]
+          ports:
+            - name: dpa
+              containerPort: 5555
+          readinessProbe:
+            httpGet:
+              path: /v3/info
+              port: 5555
+              httpHeaders:
+                - name: Authorization
+                  value: "Basic YWRtaW46YWRtaW4="
+            initialDelaySeconds: 5
+            periodSeconds: 3
+            timeoutSeconds: 2
+            failureThreshold: 60
+          volumeMounts:
+            - name: seed
+              mountPath: /var/lib/haproxy-seed
+      volumes:
+        - name: seed
+          configMap:
+            name: managed-service-haproxy-config
+            defaultMode: 0755
