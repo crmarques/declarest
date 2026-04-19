@@ -902,7 +902,7 @@ spec:
     spec:
       containers:
         - name: app
-          image: docker.io/rundeck/rundeck:5.19.0
+          image: docker.io/rundeck/rundeck:5.20.0
 EOF
 
   E2E_PLATFORM='kubernetes'
@@ -945,8 +945,8 @@ EOF
   e2e_components_start_local
 
   local save_count load_count
-  save_count=$(grep -c '^save docker.io/rundeck/rundeck:5.19.0 ' "${podman_log}" || true)
-  load_count=$(grep -c '^load image-archive .*/k8s-image-cache/docker.io_rundeck_rundeck_5.19.0.tar --name declarest-e2e-hooks-' "${kind_log}" || true)
+  save_count=$(grep -c '^save docker.io/rundeck/rundeck:5.20.0 ' "${podman_log}" || true)
+  load_count=$(grep -c '^load image-archive .*/k8s-image-cache/docker.io_rundeck_rundeck_5.20.0.tar --name declarest-e2e-hooks-' "${kind_log}" || true)
 
   assert_eq "${save_count}" "1" "expected exported image archive to be reused across runs"
   assert_eq "${load_count}" "2" "expected cached archive to still be loaded into each kind cluster"

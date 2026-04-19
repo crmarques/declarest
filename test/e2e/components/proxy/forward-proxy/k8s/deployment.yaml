@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: forward-proxy
-          image: docker.io/python:3.12-alpine
+          image: docker.io/library/python:3.14.4-alpine3.22
           command:
             - python
             - ${E2E_KIND_NODE_ROOT}/test/e2e/components/proxy/forward-proxy/app/proxy.py

@@ -1,6 +1,6 @@
 services:
   vault:
-    image: docker.io/hashicorp/vault:1.21
+    image: docker.io/hashicorp/vault:2.0.0
     cap_add:
       - IPC_LOCK
     environment:

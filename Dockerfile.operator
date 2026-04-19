@@ -14,7 +14,7 @@ COPY . .
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -o /out/manager ./cmd/declarest-operator-manager
 
-FROM gcr.io/distroless/static:nonroot
+FROM gcr.io/distroless/static-debian13:nonroot
 WORKDIR /
 COPY --from=builder /out/manager /manager
 USER 65532:65532

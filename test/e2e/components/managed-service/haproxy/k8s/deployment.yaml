@@ -20,7 +20,8 @@ spec:
         runAsUser: 0
       containers:
         - name: haproxy
-          image: docker.io/haproxytech/haproxy-alpine:3.0
+          image: ${HAPROXY_IMAGE}
+          imagePullPolicy: IfNotPresent
           command: ["/bin/sh", "/var/lib/haproxy-seed/entrypoint.sh"]
           ports:
             - name: dpa

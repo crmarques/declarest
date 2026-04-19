@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: rundeck
-          image: docker.io/rundeck/rundeck:5.19.0
+          image: docker.io/rundeck/rundeck:5.20.0
           env:
             - name: RUNDECK_GRAILS_URL
               value: "${RUNDECK_BASE_URL}"

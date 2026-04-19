@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/resource"
-	"github.com/pmezard/go-difflib/difflib"
 	"golang.org/x/term"
 )
 
@@ -140,19 +139,116 @@ func buildUnifiedDiffText(document diffDocument) (string, error) {
 		return "", nil
 	}
 
-	diff, err := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
-		A:        difflib.SplitLines(localText),
-		B:        difflib.SplitLines(remoteText),
-		FromFile: "repository",
-		ToFile:   "managed-service",
-		Context:  3,
-		Eol:      "\n",
-	})
-	if err != nil {
-		return "", err
+	return strings.TrimRight(buildFullUnifiedDiff(localText, remoteText, "repository", "managed-service"), "\n"), nil
+}
+
+type diffLineKind int
+
+const (
+	diffLineEqual diffLineKind = iota
+	diffLineRemoved
+	diffLineAdded
+)
+
+type diffLineOp struct {
+	Kind diffLineKind
+	Line string
+}
+
+func buildFullUnifiedDiff(localText string, remoteText string, fromFile string, toFile string) string {
+	localLines := splitUnifiedDiffLines(localText)
+	remoteLines := splitUnifiedDiffLines(remoteText)
+	ops := computeDiffLineOps(localLines, remoteLines)
+
+	var builder strings.Builder
+	_, _ = fmt.Fprintf(&builder, "--- %s\n", fromFile)
+	_, _ = fmt.Fprintf(&builder, "+++ %s\n", toFile)
+	_, _ = fmt.Fprintf(
+		&builder,
+		"@@ -%s +%s @@\n",
+		unifiedDiffRange(1, len(localLines)),
+		unifiedDiffRange(1, len(remoteLines)),
+	)
+	for _, op := range ops {
+		prefix := " "
+		switch op.Kind {
+		case diffLineRemoved:
+			prefix = "-"
+		case diffLineAdded:
+			prefix = "+"
+		}
+		_, _ = fmt.Fprintf(&builder, "%s%s\n", prefix, strings.TrimSuffix(op.Line, "\n"))
+	}
+	return builder.String()
+}
+
+func splitUnifiedDiffLines(text string) []string {
+	if text == "" {
+		return nil
+	}
+	lines := strings.SplitAfter(text, "\n")
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
+}
+
+func computeDiffLineOps(localLines []string, remoteLines []string) []diffLineOp {
+	localCount := len(localLines)
+	remoteCount := len(remoteLines)
+	lcs := make([][]int, localCount+1)
+	for idx := range lcs {
+		lcs[idx] = make([]int, remoteCount+1)
+	}
+	for i := localCount - 1; i >= 0; i-- {
+		for j := remoteCount - 1; j >= 0; j-- {
+			if localLines[i] == remoteLines[j] {
+				lcs[i][j] = lcs[i+1][j+1] + 1
+				continue
+			}
+			if lcs[i+1][j] >= lcs[i][j+1] {
+				lcs[i][j] = lcs[i+1][j]
+			} else {
+				lcs[i][j] = lcs[i][j+1]
+			}
+		}
 	}
 
-	return strings.TrimRight(diff, "\n"), nil
+	ops := make([]diffLineOp, 0, localCount+remoteCount)
+	i, j := 0, 0
+	for i < localCount && j < remoteCount {
+		switch {
+		case localLines[i] == remoteLines[j]:
+			ops = append(ops, diffLineOp{Kind: diffLineEqual, Line: localLines[i]})
+			i++
+			j++
+		case lcs[i+1][j] >= lcs[i][j+1]:
+			ops = append(ops, diffLineOp{Kind: diffLineRemoved, Line: localLines[i]})
+			i++
+		default:
+			ops = append(ops, diffLineOp{Kind: diffLineAdded, Line: remoteLines[j]})
+			j++
+		}
+	}
+	for i < localCount {
+		ops = append(ops, diffLineOp{Kind: diffLineRemoved, Line: localLines[i]})
+		i++
+	}
+	for j < remoteCount {
+		ops = append(ops, diffLineOp{Kind: diffLineAdded, Line: remoteLines[j]})
+		j++
+	}
+	return ops
+}
+
+func unifiedDiffRange(start int, count int) string {
+	if count == 0 {
+		return "0,0"
+	}
+	if count == 1 {
+		return fmt.Sprintf("%d", start)
+	}
+	return fmt.Sprintf("%d,%d", start, count)
 }
 
 func encodeNormalizedDiffContent(content resource.Content, fallback resource.PayloadDescriptor) (string, error) {

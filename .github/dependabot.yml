@@ -1,0 +1,199 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go-modules:
+        patterns:
+          - "*"
+
+  - package-ecosystem: pip
+    directory: /docs
+    schedule:
+      interval: weekly
+    groups:
+      docs-python:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      root-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker
+    directory: /test/e2e/components/managed-service/haproxy
+    schedule:
+      interval: weekly
+    groups:
+      haproxy-image:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker
+    directory: /test/e2e/components/managed-service/simple-api-server
+    schedule:
+      interval: weekly
+    groups:
+      simple-api-image:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker-compose
+    directory: /test/e2e/components/git-provider/gitea/compose
+    schedule:
+      interval: weekly
+    groups:
+      gitea-compose-image:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker-compose
+    directory: /test/e2e/components/git-provider/gitlab/compose
+    schedule:
+      interval: weekly
+    groups:
+      gitlab-compose-image:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker-compose
+    directory: /test/e2e/components/secret-provider/vault/compose
+    schedule:
+      interval: weekly
+    groups:
+      secret-vault-compose-image:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker-compose
+    directory: /test/e2e/components/managed-service/keycloak/compose
+    schedule:
+      interval: weekly
+    groups:
+      keycloak-compose-image:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker-compose
+    directory: /test/e2e/components/managed-service/rundeck/compose
+    schedule:
+      interval: weekly
+    groups:
+      rundeck-compose-image:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker-compose
+    directory: /test/e2e/components/managed-service/vault/compose
+    schedule:
+      interval: weekly
+    groups:
+      managed-vault-compose-image:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker-compose
+    directory: /test/e2e/components/proxy/forward-proxy/compose
+    schedule:
+      interval: weekly
+    groups:
+      proxy-compose-image:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker
+    directory: /test/e2e/components/git-provider/gitea/k8s
+    schedule:
+      interval: weekly
+    groups:
+      gitea-k8s-image:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker
+    directory: /test/e2e/components/git-provider/gitlab/k8s
+    schedule:
+      interval: weekly
+    groups:
+      gitlab-k8s-image:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker
+    directory: /test/e2e/components/secret-provider/vault/k8s
+    schedule:
+      interval: weekly
+    groups:
+      secret-vault-k8s-image:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker
+    directory: /test/e2e/components/managed-service/haproxy/k8s
+    schedule:
+      interval: weekly
+    groups:
+      haproxy-k8s-image:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker
+    directory: /test/e2e/components/managed-service/keycloak/k8s
+    schedule:
+      interval: weekly
+    groups:
+      keycloak-k8s-image:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker
+    directory: /test/e2e/components/managed-service/rundeck/k8s
+    schedule:
+      interval: weekly
+    groups:
+      rundeck-k8s-image:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker
+    directory: /test/e2e/components/managed-service/simple-api-server/k8s
+    schedule:
+      interval: weekly
+    groups:
+      simple-api-k8s-image:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker
+    directory: /test/e2e/components/managed-service/vault/k8s
+    schedule:
+      interval: weekly
+    groups:
+      managed-vault-k8s-image:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker
+    directory: /test/e2e/components/proxy/forward-proxy/k8s
+    schedule:
+      interval: weekly
+    groups:
+      proxy-k8s-image:
+        patterns:
+          - "*"

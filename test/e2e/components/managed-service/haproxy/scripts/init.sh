@@ -21,8 +21,14 @@ if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   admin_user='admin'
   admin_password='admin'
   base_url="http://127.0.0.1:${haproxy_port}"
+  haproxy_image="localhost/declarest-${E2E_RUN_ID}-managed-service-haproxy:latest"
+
+  if [[ "${E2E_PLATFORM}" == 'kubernetes' ]]; then
+    e2e_run_cmd "${E2E_CONTAINER_ENGINE}" build -f "${E2E_COMPONENT_DIR}/Dockerfile" -t "${haproxy_image}" "${E2E_COMPONENT_DIR}" || exit 1
+  fi
 
   e2e_write_state_value "${state_file}" HAPROXY_DPA_PORT "${haproxy_port}"
+  e2e_write_state_value "${state_file}" HAPROXY_IMAGE "${haproxy_image}"
   e2e_write_state_value "${state_file}" HAPROXY_BASE_URL "${base_url}"
   e2e_write_state_value "${state_file}" HAPROXY_ADMIN_USER "${admin_user}"
   e2e_write_state_value "${state_file}" HAPROXY_ADMIN_PASSWORD "${admin_password}"

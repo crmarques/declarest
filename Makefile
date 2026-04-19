@@ -181,15 +181,15 @@ CATALOG_IMG ?= $(IMAGE_TAG_BASE)-catalog:$(VERSION)
 OPERATOR_IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
 BUNDLE_GEN_FLAGS ?= -q --manifests --version $(VERSION) --channels $(CHANNELS) --default-channel $(DEFAULT_CHANNEL)
 BUNDLE_IMAGE_BUILDER ?= podman
-OPM_VERSION ?= v1.48.0
-OPERATOR_SDK_VERSION ?= v1.41.0
+OPM_VERSION ?= v1.65.0
+OPERATOR_SDK_VERSION ?= v1.42.2
 OPM := $(BIN_DIR_ABS)/opm
 OPERATOR_SDK := $(BIN_DIR_ABS)/operator-sdk
 OPM_URL := https://github.com/operator-framework/operator-registry/releases/download/$(OPM_VERSION)/linux-amd64-opm
 OPERATOR_SDK_URL := https://github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_linux_amd64
 
 opm: ## Install opm locally into bin/ when missing
-	@if [ -x "$(OPM)" ]; then \
+	@if [ -x "$(OPM)" ] && "$(OPM)" version 2>/dev/null | grep -q "$(OPM_VERSION)"; then \
 		exit 0; \
 	fi; \
 	mkdir -p "$(BIN_DIR_ABS)"; \
@@ -198,7 +198,7 @@ opm: ## Install opm locally into bin/ when missing
 	chmod +x "$(OPM)"
 
 operator-sdk: ## Install operator-sdk locally into bin/ when missing
-	@if [ -x "$(OPERATOR_SDK)" ]; then \
+	@if [ -x "$(OPERATOR_SDK)" ] && "$(OPERATOR_SDK)" version 2>/dev/null | grep -q "$(OPERATOR_SDK_VERSION)"; then \
 		exit 0; \
 	fi; \
 	mkdir -p "$(BIN_DIR_ABS)"; \

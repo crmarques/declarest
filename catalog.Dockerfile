@@ -1,4 +1,4 @@
-FROM quay.io/operator-framework/opm:v1.48.0
+FROM quay.io/operator-framework/opm:v1.65.0
 
 LABEL operators.operatorframework.io.index.configs.v1=/configs
 LABEL org.opencontainers.image.source=https://github.com/crmarques/declarest

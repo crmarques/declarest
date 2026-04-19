@@ -110,7 +110,7 @@ e2e_write_operator_runtime_dockerfile() {
   local operator_binary_rel=$2
 
   cat >"${dockerfile_path}" <<EOF
-FROM gcr.io/distroless/static:nonroot
+FROM gcr.io/distroless/static-debian13:nonroot
 WORKDIR /
 COPY ${operator_binary_rel} /manager
 USER 65532:65532
