@@ -67,7 +67,7 @@ jobs:
           cp catalog/declarest-operator/catalog.yaml .release-assets/declarest-operator-catalog.yaml
           echo "Staged OLM bundle for version ${version}"
       - name: Validate GoReleaser config
-        uses: goreleaser/goreleaser-action@v7.0.0
+        uses: goreleaser/goreleaser-action@v7.1.0
         with:
           version: v2.15.3
           args: check
@@ -75,7 +75,7 @@ jobs:
         run: go test -race ./...
       - name: Run GoReleaser (tag release)
         if: ${{ github.event_name != 'workflow_dispatch' }}
-        uses: goreleaser/goreleaser-action@v7.0.0
+        uses: goreleaser/goreleaser-action@v7.1.0
         with:
           version: v2.15.3
           args: release --clean
@@ -83,7 +83,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Run GoReleaser (snapshot smoke test)
         if: ${{ github.event_name == 'workflow_dispatch' }}
-        uses: goreleaser/goreleaser-action@v7.0.0
+        uses: goreleaser/goreleaser-action@v7.1.0
         with:
           version: v2.15.3
           args: release --snapshot --clean
