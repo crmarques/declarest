@@ -31,20 +31,20 @@ import (
 	"github.com/crmarques/declarest/internal/promptauth"
 )
 
-func TestVaultSecretServiceKV2TokenAuth(t *testing.T) {
+func TestStoreKV2TokenAuth(t *testing.T) {
 	t.Parallel()
 
 	fake := newFakeVault()
 	server := httptest.NewServer(fake.handler())
 	defer server.Close()
 
-	service, err := NewVaultSecretService(config.VaultSecretStore{
+	service, err := New(config.VaultSecretStore{
 		Address:   server.URL,
 		KVVersion: 2,
 		Auth:      &config.VaultAuth{Token: fake.clientToken},
 	})
 	if err != nil {
-		t.Fatalf("NewVaultSecretService returned error: %v", err)
+		t.Fatalf("New returned error: %v", err)
 	}
 
 	if err := service.Init(context.Background()); err != nil {
@@ -98,14 +98,14 @@ func TestVaultSecretServiceKV2TokenAuth(t *testing.T) {
 	assertTypedCategory(t, err, faults.NotFoundError)
 }
 
-func TestVaultSecretServiceUserPassAuth(t *testing.T) {
+func TestStoreUserPassAuth(t *testing.T) {
 	t.Parallel()
 
 	fake := newFakeVault()
 	server := httptest.NewServer(fake.handler())
 	defer server.Close()
 
-	service, err := NewVaultSecretService(config.VaultSecretStore{
+	service, err := New(config.VaultSecretStore{
 		Address:   server.URL,
 		KVVersion: 2,
 		Auth: &config.VaultAuth{
@@ -116,7 +116,7 @@ func TestVaultSecretServiceUserPassAuth(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("NewVaultSecretService returned error: %v", err)
+		t.Fatalf("New returned error: %v", err)
 	}
 
 	if err := service.Init(context.Background()); err != nil {
@@ -135,7 +135,7 @@ func TestVaultSecretServiceUserPassAuth(t *testing.T) {
 	}
 }
 
-func TestVaultSecretServicePromptAuth(t *testing.T) {
+func TestStorePromptAuth(t *testing.T) {
 	t.Parallel()
 
 	fake := newFakeVault()
@@ -152,7 +152,7 @@ func TestVaultSecretServicePromptAuth(t *testing.T) {
 		t.Fatalf("promptauth.New returned error: %v", err)
 	}
 
-	service, err := NewVaultSecretService(
+	service, err := New(
 		config.VaultSecretStore{
 			Address:   server.URL,
 			KVVersion: 2,
@@ -167,7 +167,7 @@ func TestVaultSecretServicePromptAuth(t *testing.T) {
 		WithPromptRuntime(runtime),
 	)
 	if err != nil {
-		t.Fatalf("NewVaultSecretService returned error: %v", err)
+		t.Fatalf("New returned error: %v", err)
 	}
 
 	if err := service.Init(context.Background()); err != nil {
@@ -186,20 +186,20 @@ func TestVaultSecretServicePromptAuth(t *testing.T) {
 	}
 }
 
-func TestVaultSecretServiceListRecursesNestedPaths(t *testing.T) {
+func TestStoreListRecursesNestedPaths(t *testing.T) {
 	t.Parallel()
 
 	fake := newFakeVault()
 	server := httptest.NewServer(fake.handler())
 	defer server.Close()
 
-	service, err := NewVaultSecretService(config.VaultSecretStore{
+	service, err := New(config.VaultSecretStore{
 		Address:   server.URL,
 		KVVersion: 2,
 		Auth:      &config.VaultAuth{Token: fake.clientToken},
 	})
 	if err != nil {
-		t.Fatalf("NewVaultSecretService returned error: %v", err)
+		t.Fatalf("New returned error: %v", err)
 	}
 
 	if err := service.Init(context.Background()); err != nil {
@@ -231,10 +231,10 @@ func TestVaultSecretServiceListRecursesNestedPaths(t *testing.T) {
 	}
 }
 
-func TestVaultSecretServiceValidationAndAuth(t *testing.T) {
+func TestStoreValidationAndAuth(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewVaultSecretService(config.VaultSecretStore{
+	_, err := New(config.VaultSecretStore{
 		Address: "bad-url",
 		Auth:    &config.VaultAuth{Token: "token"},
 	})
@@ -244,19 +244,19 @@ func TestVaultSecretServiceValidationAndAuth(t *testing.T) {
 	server := httptest.NewServer(fake.handler())
 	defer server.Close()
 
-	service, err := NewVaultSecretService(config.VaultSecretStore{
+	service, err := New(config.VaultSecretStore{
 		Address: server.URL,
 		Auth:    &config.VaultAuth{Token: "wrong-token"},
 	})
 	if err != nil {
-		t.Fatalf("NewVaultSecretService returned error: %v", err)
+		t.Fatalf("New returned error: %v", err)
 	}
 
 	err = service.Store(context.Background(), "apiToken", "x")
 	assertTypedCategory(t, err, faults.AuthError)
 }
 
-func TestVaultSecretServiceRejectsOversizedResponseBody(t *testing.T) {
+func TestStoreRejectsOversizedResponseBody(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -272,12 +272,12 @@ func TestVaultSecretServiceRejectsOversizedResponseBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service, err := NewVaultSecretService(config.VaultSecretStore{
+	service, err := New(config.VaultSecretStore{
 		Address: server.URL,
 		Auth:    &config.VaultAuth{Token: "token"},
 	})
 	if err != nil {
-		t.Fatalf("NewVaultSecretService returned error: %v", err)
+		t.Fatalf("New returned error: %v", err)
 	}
 
 	_, err = service.List(context.Background())

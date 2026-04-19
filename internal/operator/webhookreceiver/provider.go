@@ -30,8 +30,8 @@ type WebhookEvent struct {
 	IsPing     bool
 }
 
-// Provider defines the interface for webhook provider adapters.
-type Provider interface {
+// WebhookProvider defines the interface for webhook provider adapters.
+type WebhookProvider interface {
 	// Name returns the provider identifier.
 	Name() declarestv1alpha1.RepositoryWebhookProvider
 
@@ -42,12 +42,12 @@ type Provider interface {
 	ParseEvent(req *http.Request, body []byte) (WebhookEvent, error)
 }
 
-// ProviderRegistry maps provider names to their adapter implementations.
-type ProviderRegistry map[declarestv1alpha1.RepositoryWebhookProvider]Provider
+// WebhookProviderRegistry maps provider names to their adapter implementations.
+type WebhookProviderRegistry map[declarestv1alpha1.RepositoryWebhookProvider]WebhookProvider
 
-// NewProviderRegistry returns a registry with all built-in providers.
-func NewProviderRegistry() ProviderRegistry {
-	return ProviderRegistry{
+// NewWebhookProviderRegistry returns a registry with all built-in providers.
+func NewWebhookProviderRegistry() WebhookProviderRegistry {
+	return WebhookProviderRegistry{
 		declarestv1alpha1.RepositoryWebhookProviderGitHub:      &GitHubProvider{},
 		declarestv1alpha1.RepositoryWebhookProviderGitLab:      &GitLabProvider{},
 		declarestv1alpha1.RepositoryWebhookProviderGitea:       &GiteaProvider{},

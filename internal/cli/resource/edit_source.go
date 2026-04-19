@@ -22,7 +22,7 @@ import (
 	resourcedomain "github.com/crmarques/declarest/resource"
 )
 
-type localResourceResolver interface {
+type editSourceResolver interface {
 	ResolveLocalResource(ctx context.Context, logicalPath string) (resourcedomain.Resource, error)
 }
 
@@ -61,7 +61,7 @@ func resolveEditLocalSource(
 	deps cliutil.CommandDependencies,
 	normalizedPath string,
 ) (string, resourcedomain.Content, bool, error) {
-	if resolver, ok := deps.Orchestrator.(localResourceResolver); ok {
+	if resolver, ok := deps.Orchestrator.(editSourceResolver); ok {
 		item, err := resolver.ResolveLocalResource(ctx, normalizedPath)
 		if err == nil {
 			return item.LogicalPath, resourcedomain.Content{

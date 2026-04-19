@@ -14,13 +14,14 @@
 
 package orchestrator
 
-type DeletePolicy struct {
-	Recursive bool
-}
+import "github.com/crmarques/declarest/repository"
 
-type ListPolicy struct {
-	Recursive bool
-}
+// DeletePolicy is an alias for repository.DeletePolicy — the recursive-scope
+// directive is the same at both boundaries.
+type DeletePolicy = repository.DeletePolicy
+
+// ListPolicy is an alias for repository.ListPolicy.
+type ListPolicy = repository.ListPolicy
 
 type ApplyPolicy struct {
 	Force bool

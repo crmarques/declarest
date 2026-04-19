@@ -130,13 +130,13 @@ func buildOrchestratorFromResolvedContext(
 	if resolvedContext.SecretStore != nil {
 		switch {
 		case resolvedContext.SecretStore.File != nil:
-			secretService, err := filesecrets.NewFileSecretService(*resolvedContext.SecretStore.File)
+			secretService, err := filesecrets.New(*resolvedContext.SecretStore.File)
 			if err != nil {
 				return nil, err
 			}
 			sec = secretService
 		case resolvedContext.SecretStore.Vault != nil:
-			secretService, err := vaultsecrets.NewVaultSecretService(
+			secretService, err := vaultsecrets.New(
 				*resolvedContext.SecretStore.Vault,
 				vaultsecrets.WithPromptRuntime(authRuntime),
 			)

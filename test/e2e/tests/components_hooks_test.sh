@@ -19,6 +19,7 @@ prepare_runtime_globals() {
   E2E_CONTEXT_DIR="${tmp}/context"
   E2E_CONTEXT_FILE="${tmp}/contexts.yaml"
   E2E_BUILD_CACHE_DIR="${tmp}/build-cache"
+  E2E_LOCKS_DIR="${tmp}/locks"
   E2E_METADATA_DIR=''
   E2E_METADATA_BUNDLE=''
   E2E_METADATA='bundle'
@@ -31,7 +32,7 @@ prepare_runtime_globals() {
   E2E_GIT_PROVIDER_CONNECTION='local'
   E2E_SECRET_PROVIDER='none'
   E2E_SECRET_PROVIDER_CONNECTION='local'
-  mkdir -p "${E2E_RUN_DIR}" "${E2E_STATE_DIR}" "${E2E_LOG_DIR}" "${E2E_CONTEXT_DIR}" "${E2E_BUILD_CACHE_DIR}"
+  mkdir -p "${E2E_RUN_DIR}" "${E2E_STATE_DIR}" "${E2E_LOG_DIR}" "${E2E_CONTEXT_DIR}" "${E2E_BUILD_CACHE_DIR}" "${E2E_LOCKS_DIR}"
 }
 
 create_hook_component() {

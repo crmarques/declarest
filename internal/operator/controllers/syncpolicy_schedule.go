@@ -19,7 +19,7 @@ import (
 	"time"
 
 	declarestv1alpha1 "github.com/crmarques/declarest/api/v1alpha1"
-	"github.com/crmarques/declarest/internal/cronexpr"
+	"github.com/crmarques/declarest/cronexpr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

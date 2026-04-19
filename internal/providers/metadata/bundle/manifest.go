@@ -32,43 +32,22 @@ const (
 
 var semverPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$`)
 
-type BundleManifest struct {
-	APIVersion  string             `yaml:"apiVersion"`
-	Kind        string             `yaml:"kind"`
-	Name        string             `yaml:"name"`
-	Version     string             `yaml:"version"`
-	Description string             `yaml:"description"`
-	Home        string             `yaml:"home,omitempty"`
-	Sources     []string           `yaml:"sources,omitempty"`
-	Keywords    []string           `yaml:"keywords,omitempty"`
-	Maintainers []BundleMaintainer `yaml:"maintainers,omitempty"`
-	License     string             `yaml:"license,omitempty"`
-	Deprecated  bool               `yaml:"deprecated,omitempty"`
-	Icon        string             `yaml:"icon,omitempty"`
-	Annotations map[string]string  `yaml:"annotations,omitempty"`
+var metadataFileCandidates = []string{"metadata.yaml", "metadata.yml", "metadata.json"}
 
+type BundleManifest struct {
+	APIVersion   string             `yaml:"apiVersion"`
+	Kind         string             `yaml:"kind"`
+	Name         string             `yaml:"name"`
+	Version      string             `yaml:"version"`
+	Description  string             `yaml:"description"`
+	Deprecated   bool               `yaml:"deprecated,omitempty"`
 	Declarest    BundleDeclarest    `yaml:"declarest"`
 	Distribution BundleDistribution `yaml:"distribution,omitempty"`
 }
 
-type BundleMaintainer struct {
-	Name  string `yaml:"name"`
-	Email string `yaml:"email,omitempty"`
-	URL   string `yaml:"url,omitempty"`
-}
-
 type BundleDeclarest struct {
-	Shorthand                string                         `yaml:"shorthand"`
-	MetadataRoot             string                         `yaml:"metadataRoot"`
-	OpenAPI                  string                         `yaml:"openapi,omitempty"`
-	MetadataFileName         string                         `yaml:"metadataFileName,omitempty"`
-	CompatibleDeclarest      string                         `yaml:"compatibleDeclarest,omitempty"`
-	CompatibleManagedService BundleCompatibleManagedService `yaml:"compatibleManagedService,omitempty"`
-}
-
-type BundleCompatibleManagedService struct {
-	Product  string `yaml:"product,omitempty"`
-	Versions string `yaml:"versions,omitempty"`
+	MetadataRoot string `yaml:"metadataRoot"`
+	OpenAPI      string `yaml:"openapi,omitempty"`
 }
 
 type BundleDistribution struct {
@@ -107,9 +86,6 @@ func (m BundleManifest) Validate() error {
 	if strings.TrimSpace(m.Declarest.MetadataRoot) == "" {
 		return faults.NewValidationError("bundle.yaml declarest.metadataRoot is required", nil)
 	}
-	if strings.TrimSpace(m.Declarest.Shorthand) == "" {
-		return faults.NewValidationError("bundle.yaml declarest.shorthand is required", nil)
-	}
 
 	if strings.TrimSpace(m.APIVersion) != bundleManifestAPIVersion {
 		return faults.NewValidationError(
@@ -128,18 +104,8 @@ func (m BundleManifest) Validate() error {
 		return faults.NewValidationError("bundle.yaml version must be a valid semver", err)
 	}
 
-	if strings.TrimSpace(m.Name) != strings.TrimSpace(m.Declarest.Shorthand) {
-		return faults.NewValidationError("bundle.yaml name must match declarest.shorthand", nil)
-	}
-
 	if _, err := normalizeBundleRelativePath(m.Declarest.MetadataRoot); err != nil {
 		return faults.NewValidationError("bundle.yaml declarest.metadataRoot is invalid", err)
-	}
-
-	if fileName := strings.TrimSpace(m.Declarest.MetadataFileName); fileName != "" {
-		if strings.Contains(fileName, "/") || strings.Contains(fileName, string(filepath.Separator)) {
-			return faults.NewValidationError("bundle.yaml declarest.metadataFileName must be a file name", nil)
-		}
 	}
 
 	if openAPIRef := strings.TrimSpace(m.Declarest.OpenAPI); openAPIRef != "" {
@@ -166,14 +132,6 @@ func (m BundleManifest) Validate() error {
 
 func (m BundleManifest) NormalizedMetadataRoot() (string, error) {
 	return normalizeBundleRelativePath(m.Declarest.MetadataRoot)
-}
-
-func (m BundleManifest) MetadataFileNameOrDefault() string {
-	value := strings.TrimSpace(m.Declarest.MetadataFileName)
-	if value == "" {
-		return "metadata.json"
-	}
-	return value
 }
 
 func normalizeSemver(raw string) (string, error) {

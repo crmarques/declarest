@@ -892,6 +892,7 @@ func TestPathCompletionAvailableForAllPathAwareCommands(t *testing.T) {
 			target := commandByPath(command, commandPath...)
 			if target == nil {
 				t.Fatalf("expected command path %q to exist", joinPath(commandPath))
+				return
 			}
 			if target.Flags().Lookup("path") == nil {
 				t.Fatalf("expected command %q to declare --path", joinPath(commandPath))

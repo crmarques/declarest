@@ -1408,6 +1408,7 @@ func assertProxyConfig(t *testing.T, component string, proxy *config.HTTPProxy, 
 	t.Helper()
 	if proxy == nil {
 		t.Fatalf("expected %s proxy to be configured, got nil", component)
+		return
 	}
 	if proxy.HTTPURL != httpURL {
 		t.Fatalf("expected %s proxy http %q, got %q", component, httpURL, proxy.HTTPURL)

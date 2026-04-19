@@ -515,8 +515,8 @@ distribution:
 		if _, ok := orch.ManagedServiceClient().(*httpmanagedservice.Client); !ok {
 			t.Fatalf("expected Client, got %T", orch.ManagedServiceClient())
 		}
-		if _, ok := orch.SecretProvider().(*filesecrets.FileSecretService); !ok {
-			t.Fatalf("expected FileSecretService, got %T", orch.SecretProvider())
+		if _, ok := orch.SecretProvider().(*filesecrets.Store); !ok {
+			t.Fatalf("expected filesecrets.Store, got %T", orch.SecretProvider())
 		}
 	})
 
@@ -548,8 +548,8 @@ distribution:
 		if _, ok := orch.RepositoryStore().(*fsstore.LocalResourceRepository); !ok {
 			t.Fatalf("expected LocalResourceRepository, got %T", orch.RepositoryStore())
 		}
-		if _, ok := orch.SecretProvider().(*vaultsecrets.VaultSecretService); !ok {
-			t.Fatalf("expected VaultSecretService, got %T", orch.SecretProvider())
+		if _, ok := orch.SecretProvider().(*vaultsecrets.Store); !ok {
+			t.Fatalf("expected vaultsecrets.Store, got %T", orch.SecretProvider())
 		}
 	})
 }

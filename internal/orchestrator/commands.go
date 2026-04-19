@@ -26,7 +26,6 @@ import (
 	resourcediffapp "github.com/crmarques/declarest/internal/app/resource/diff"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/orchestrator"
-	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
 	"github.com/crmarques/declarest/secrets"
 )
@@ -255,7 +254,7 @@ func (r *Orchestrator) ListLocal(ctx context.Context, logicalPath string, policy
 		return nil, err
 	}
 
-	items, err := manager.List(ctx, logicalPath, repository.ListPolicy{Recursive: policy.Recursive})
+	items, err := manager.List(ctx, logicalPath, policy)
 	if err != nil {
 		return nil, err
 	}

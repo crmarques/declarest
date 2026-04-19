@@ -642,6 +642,7 @@ func TestInferFromOpenAPISetsOperationValidationFromRequestBodySchema(t *testing
 	createValidation := inferred.Operations[string(OperationCreate)].Validate
 	if createValidation == nil {
 		t.Fatal("expected inferred create validate block")
+		return
 	}
 	if createValidation.SchemaRef != "openapi:request-body" {
 		t.Fatalf("expected create validate.schemaRef, got %#v", createValidation.SchemaRef)
@@ -655,6 +656,7 @@ func TestInferFromOpenAPISetsOperationValidationFromRequestBodySchema(t *testing
 	updateValidation := inferred.Operations[string(OperationUpdate)].Validate
 	if updateValidation == nil {
 		t.Fatal("expected inferred update validate block")
+		return
 	}
 	if updateValidation.SchemaRef != "openapi:request-body" {
 		t.Fatalf("expected update validate.schemaRef, got %#v", updateValidation.SchemaRef)

@@ -86,7 +86,7 @@ type inferTemplateItem struct {
 	localContent resource.Content
 }
 
-type localResourceResolver interface {
+type defaultsLocalResolver interface {
 	ResolveLocalResource(ctx context.Context, logicalPath string) (resource.Resource, error)
 }
 
@@ -330,7 +330,7 @@ func resolveResolvedLocalTarget(
 	orchestratorService orchestratordomain.Orchestrator,
 	normalizedPath string,
 ) (resource.Resource, error) {
-	if resolver, ok := orchestratorService.(localResourceResolver); ok {
+	if resolver, ok := orchestratorService.(defaultsLocalResolver); ok {
 		return resolver.ResolveLocalResource(ctx, normalizedPath)
 	}
 	content, err := orchestratorService.GetLocal(ctx, normalizedPath)

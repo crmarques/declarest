@@ -23,8 +23,8 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/config"
+	"github.com/crmarques/declarest/envref"
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/internal/envref"
 )
 
 var _ config.ContextService = (*Service)(nil)

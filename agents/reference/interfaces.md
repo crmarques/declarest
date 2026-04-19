@@ -358,16 +358,10 @@ Optional fields:
 1. `Body`.
 
 ### Type: `orchestrator.DeletePolicy`
-Represents local delete behavior options.
-
-Fields:
-1. `Recursive`.
+Type alias for `repository.DeletePolicy`. Orchestrator and repository boundaries share one canonical recursive-scope directive.
 
 ### Type: `orchestrator.ListPolicy`
-Represents local/remote list behavior options.
-
-Fields:
-1. `Recursive`.
+Type alias for `repository.ListPolicy`. Orchestrator and repository boundaries share one canonical recursive-scope directive.
 
 ### Type: `orchestrator.ApplyPolicy`
 Represents apply behavior options.

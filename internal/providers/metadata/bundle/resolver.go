@@ -402,7 +402,7 @@ func buildResolution(root string, manifest BundleManifest, source bundleSource) 
 		return BundleResolution{}, faults.NewValidationError("bundle metadata root is not a directory", nil)
 	}
 
-	if err := ensureMetadataTreeHasDefinition(metadataDir, manifest.MetadataFileNameOrDefault()); err != nil {
+	if err := ensureMetadataTreeHasDefinition(metadataDir, metadataFileCandidates); err != nil {
 		return BundleResolution{}, err
 	}
 
@@ -417,7 +417,7 @@ func buildResolution(root string, manifest BundleManifest, source bundleSource) 
 		Manifest:    manifest,
 		Shorthand:   source.kind == sourceKindShort,
 	}
-	if resolution.Shorthand && manifest.Deprecated {
+	if manifest.Deprecated {
 		resolution.DeprecatedWarning = fmt.Sprintf(
 			"metadata bundle %q version %q is deprecated",
 			manifest.Name,
@@ -566,7 +566,7 @@ func ensureBundleFilePath(root string, path string, field string) error {
 	return nil
 }
 
-func ensureMetadataTreeHasDefinition(metadataDir string, metadataFileName string) error {
+func ensureMetadataTreeHasDefinition(metadataDir string, candidates []string) error {
 	found := false
 	walkErr := filepath.WalkDir(metadataDir, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
@@ -575,9 +575,11 @@ func ensureMetadataTreeHasDefinition(metadataDir string, metadataFileName string
 		if entry.IsDir() {
 			return nil
 		}
-		if strings.EqualFold(entry.Name(), metadataFileName) {
-			found = true
-			return io.EOF
+		for _, candidate := range candidates {
+			if strings.EqualFold(entry.Name(), candidate) {
+				found = true
+				return io.EOF
+			}
 		}
 		return nil
 	})
@@ -586,7 +588,7 @@ func ensureMetadataTreeHasDefinition(metadataDir string, metadataFileName string
 	}
 	if !found {
 		return faults.NewValidationError(
-			fmt.Sprintf("bundle metadata root does not contain %q", metadataFileName),
+			fmt.Sprintf("bundle metadata root does not contain any of %v", candidates),
 			nil,
 		)
 	}

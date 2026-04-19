@@ -145,8 +145,8 @@ func TestGenericHMACProviderVerifySignature(t *testing.T) {
 	}
 }
 
-func TestNewProviderRegistry(t *testing.T) {
-	reg := NewProviderRegistry()
+func TestNewWebhookProviderRegistry(t *testing.T) {
+	reg := NewWebhookProviderRegistry()
 	expected := []declarestv1alpha1.RepositoryWebhookProvider{
 		declarestv1alpha1.RepositoryWebhookProviderGitHub,
 		declarestv1alpha1.RepositoryWebhookProviderGitLab,

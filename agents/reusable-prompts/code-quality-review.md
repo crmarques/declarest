@@ -99,3 +99,5 @@ SUCCESS CRITERIA
 - Less duplication and fewer one-off implementations across packages.
 - Names and structure are understandable at first glance.
 - The codebase becomes easier to evolve safely and at scale.
+- All unused, dead or backward-compatibility code are removed.
+- Code as lean, clean and effective as possible.

@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/crmarques/declarest/internal/envref"
+	"github.com/crmarques/declarest/envref"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"

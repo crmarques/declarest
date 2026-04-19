@@ -36,7 +36,7 @@ const (
 	defaultVaultKV      = 2
 )
 
-var _ secretdomain.SecretProvider = (*VaultSecretService)(nil)
+var _ secretdomain.SecretProvider = (*Store)(nil)
 
 type vaultAuthMode int
 
@@ -46,7 +46,7 @@ const (
 	vaultAuthAppRole
 )
 
-type VaultSecretService struct {
+type Store struct {
 	address    string
 	mount      string
 	pathPrefix string
@@ -79,10 +79,10 @@ type vaultAuthInfo struct {
 	ClientToken string `json:"client_token"`
 }
 
-type Option func(*VaultSecretService)
+type Option func(*Store)
 
 func WithPromptRuntime(runtime *promptauth.Runtime) Option {
-	return func(service *VaultSecretService) {
+	return func(service *Store) {
 		if service == nil {
 			return
 		}
@@ -90,7 +90,7 @@ func WithPromptRuntime(runtime *promptauth.Runtime) Option {
 	}
 }
 
-func NewVaultSecretService(cfg config.VaultSecretStore, opts ...Option) (*VaultSecretService, error) {
+func New(cfg config.VaultSecretStore, opts ...Option) (*Store, error) {
 	address, err := normalizeVaultAddress(cfg.Address)
 	if err != nil {
 		return nil, err
@@ -130,7 +130,7 @@ func NewVaultSecretService(cfg config.VaultSecretStore, opts ...Option) (*VaultS
 	transport.TLSClientConfig = tlsConfig
 	transport.Proxy = nil
 
-	service := &VaultSecretService{
+	service := &Store{
 		address:    address,
 		mount:      mount,
 		pathPrefix: pathPrefix,
@@ -168,14 +168,14 @@ func NewVaultSecretService(cfg config.VaultSecretStore, opts ...Option) (*VaultS
 	return service, nil
 }
 
-func (s *VaultSecretService) Init(ctx context.Context) error {
+func (s *Store) Init(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	return s.initLocked(ctx)
 }
 
-func (s *VaultSecretService) Store(ctx context.Context, key string, value string) error {
+func (s *Store) Store(ctx context.Context, key string, value string) error {
 	normalizedKey, err := secretdomain.NormalizeKey(key)
 	if err != nil {
 		return err
@@ -200,7 +200,7 @@ func (s *VaultSecretService) Store(ctx context.Context, key string, value string
 	return mapVaultStatus(status, response, false, "")
 }
 
-func (s *VaultSecretService) Get(ctx context.Context, key string) (string, error) {
+func (s *Store) Get(ctx context.Context, key string) (string, error) {
 	normalizedKey, err := secretdomain.NormalizeKey(key)
 	if err != nil {
 		return "", err
@@ -226,7 +226,7 @@ func (s *VaultSecretService) Get(ctx context.Context, key string) (string, error
 	return value, nil
 }
 
-func (s *VaultSecretService) Delete(ctx context.Context, key string) error {
+func (s *Store) Delete(ctx context.Context, key string) error {
 	normalizedKey, err := secretdomain.NormalizeKey(key)
 	if err != nil {
 		return err
@@ -249,7 +249,7 @@ func (s *VaultSecretService) Delete(ctx context.Context, key string) error {
 	return mapVaultStatus(status, response, false, "")
 }
 
-func (s *VaultSecretService) List(ctx context.Context) ([]string, error) {
+func (s *Store) List(ctx context.Context) ([]string, error) {
 	if err := s.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}
@@ -298,7 +298,7 @@ func (s *VaultSecretService) List(ctx context.Context) ([]string, error) {
 	return keys, nil
 }
 
-func (s *VaultSecretService) listEntries(ctx context.Context, key string) ([]string, error) {
+func (s *Store) listEntries(ctx context.Context, key string) ([]string, error) {
 	endpoint := s.listEndpoint(key)
 	response, status, err := s.request(ctx, "LIST", endpoint, nil)
 	if err != nil {
@@ -369,34 +369,34 @@ func joinVaultListPath(prefix string, entry string) string {
 	}
 }
 
-func (s *VaultSecretService) MaskPayload(ctx context.Context, value resource.Value) (resource.Value, error) {
+func (s *Store) MaskPayload(ctx context.Context, value resource.Value) (resource.Value, error) {
 	return secretdomain.MaskPayload(value, func(key string, secretValue string) error {
 		return s.Store(ctx, key, secretValue)
 	})
 }
 
-func (s *VaultSecretService) ResolvePayload(ctx context.Context, value resource.Value) (resource.Value, error) {
+func (s *Store) ResolvePayload(ctx context.Context, value resource.Value) (resource.Value, error) {
 	return secretdomain.ResolvePayload(value, func(key string) (string, error) {
 		return s.Get(ctx, key)
 	})
 }
 
-func (s *VaultSecretService) NormalizeSecretPlaceholders(_ context.Context, value resource.Value) (resource.Value, error) {
+func (s *Store) NormalizeSecretPlaceholders(_ context.Context, value resource.Value) (resource.Value, error) {
 	return secretdomain.NormalizePlaceholders(value)
 }
 
-func (s *VaultSecretService) DetectSecretCandidates(_ context.Context, value resource.Value) ([]string, error) {
+func (s *Store) DetectSecretCandidates(_ context.Context, value resource.Value) ([]string, error) {
 	return secretdomain.DetectSecretCandidates(value)
 }
 
-func (s *VaultSecretService) ensureInitialized(ctx context.Context) error {
+func (s *Store) ensureInitialized(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	return s.initLocked(ctx)
 }
 
-func (s *VaultSecretService) initLocked(ctx context.Context) error {
+func (s *Store) initLocked(ctx context.Context) error {
 	if s == nil {
 		return faults.NewValidationError("vault secret service must not be nil", nil)
 	}
@@ -430,7 +430,7 @@ func (s *VaultSecretService) initLocked(ctx context.Context) error {
 	return nil
 }
 
-func (s *VaultSecretService) loginUserPass(ctx context.Context) error {
+func (s *Store) loginUserPass(ctx context.Context) error {
 	credentials := s.auth.userPass
 	if credentials == nil {
 		return faults.NewValidationError("vault userpass auth configuration is invalid", nil)
@@ -463,7 +463,7 @@ func (s *VaultSecretService) loginUserPass(ctx context.Context) error {
 	return s.loginUserPassWithCredentials(ctx, username, password, mount)
 }
 
-func (s *VaultSecretService) loginUserPassWithCredentials(
+func (s *Store) loginUserPassWithCredentials(
 	ctx context.Context,
 	username string,
 	password string,
@@ -487,7 +487,7 @@ func (s *VaultSecretService) loginUserPassWithCredentials(
 	return nil
 }
 
-func (s *VaultSecretService) loginAppRole(ctx context.Context) error {
+func (s *Store) loginAppRole(ctx context.Context) error {
 	credentials := s.auth.appRole
 	if credentials == nil {
 		return faults.NewValidationError("vault approle auth configuration is invalid", nil)
@@ -528,7 +528,7 @@ func (s *VaultSecretService) loginAppRole(ctx context.Context) error {
 	return nil
 }
 
-func (s *VaultSecretService) extractValue(response vaultResponse) (string, error) {
+func (s *Store) extractValue(response vaultResponse) (string, error) {
 	if response.Data == nil {
 		return "", internalError("vault response missing secret payload", nil)
 	}

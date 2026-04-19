@@ -974,12 +974,37 @@ e2e_operator_olm_wait_for_core_crds_ready() {
   return 0
 }
 
+e2e_operator_olm_wait_for_deployment_created() {
+  local namespace=$1
+  local deployment=$2
+  local timeout_seconds=$3
+  local deadline
+  deadline=$(( $(date +%s) + timeout_seconds ))
+
+  while true; do
+    if kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" \
+      get "deployment/${deployment}" >/dev/null 2>&1; then
+      return 0
+    fi
+
+    if (( $(date +%s) >= deadline )); then
+      e2e_error "OLM deployment ${deployment} was not created within ${timeout_seconds}s"
+      return 1
+    fi
+    sleep 1
+  done
+}
+
 e2e_operator_olm_wait_for_core_deployments_ready() {
   local ready_timeout_seconds
   ready_timeout_seconds=$(e2e_operator_ready_timeout_seconds) || return 1
 
   local deployment
   for deployment in olm-operator catalog-operator packageserver; do
+    e2e_operator_olm_wait_for_deployment_created 'olm' "${deployment}" "${ready_timeout_seconds}" || {
+      kubectl --kubeconfig "${E2E_KUBECONFIG}" -n olm get pods -o wide || true
+      return 1
+    }
     if ! e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" -n olm \
       wait --for=condition=Available "deployment/${deployment}" --timeout="${ready_timeout_seconds}s"; then
       e2e_error "OLM deployment ${deployment} did not become Available"

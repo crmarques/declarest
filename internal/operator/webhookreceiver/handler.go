@@ -40,7 +40,7 @@ const (
 // Handler serves webhook deliveries for RepositoryWebhook objects.
 type Handler struct {
 	Client    client.Client
-	Providers ProviderRegistry
+	Providers WebhookProviderRegistry
 	Dedupe    *DedupeCache
 }
 

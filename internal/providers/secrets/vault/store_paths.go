@@ -21,29 +21,29 @@ import (
 	"github.com/crmarques/declarest/faults"
 )
 
-func (s *VaultSecretService) readEndpoint(key string) string {
+func (s *Store) readEndpoint(key string) string {
 	if s.kvVersion == 2 {
 		return buildEndpoint(s.mount, "data", s.fullSecretPath(key))
 	}
 	return buildEndpoint(s.mount, s.fullSecretPath(key))
 }
 
-func (s *VaultSecretService) writeEndpoint(key string) string {
+func (s *Store) writeEndpoint(key string) string {
 	return s.readEndpoint(key)
 }
 
-func (s *VaultSecretService) deleteEndpoint(key string) string {
+func (s *Store) deleteEndpoint(key string) string {
 	return s.readEndpoint(key)
 }
 
-func (s *VaultSecretService) listEndpoint(key string) string {
+func (s *Store) listEndpoint(key string) string {
 	if s.kvVersion == 2 {
 		return buildEndpoint(s.mount, "metadata", s.fullSecretPath(key))
 	}
 	return buildEndpoint(s.mount, s.fullSecretPath(key))
 }
 
-func (s *VaultSecretService) fullSecretPath(key string) string {
+func (s *Store) fullSecretPath(key string) string {
 	normalized := strings.TrimSpace(key)
 	if s.pathPrefix == "" {
 		return normalized

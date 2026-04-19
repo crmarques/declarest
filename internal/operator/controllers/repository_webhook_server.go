@@ -77,7 +77,7 @@ func (s *RepositoryWebhookServer) Start(ctx context.Context) error {
 	// Register the CRD-based RepositoryWebhook handler.
 	crdHandler := &webhookreceiver.Handler{
 		Client:    s.Client,
-		Providers: webhookreceiver.NewProviderRegistry(),
+		Providers: webhookreceiver.NewWebhookProviderRegistry(),
 		Dedupe:    webhookreceiver.NewDedupeCache(10 * time.Minute),
 	}
 	mux.Handle("/hooks/v1/repositorywebhooks/", crdHandler)

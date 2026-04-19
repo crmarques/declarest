@@ -357,7 +357,7 @@ e2e_kind_create_cluster_with_retry_locked() {
 
     if ((attempt < attempts)) && [[ "${E2E_CONTAINER_ENGINE}" == 'podman' ]] && e2e_kind_create_retryable_failure "${kind_log_file}"; then
       e2e_warn "retryable kind podman bootstrap failure detected; retrying create attempt $((attempt + 1))/${attempts}"
-      e2e_kind_delete_cluster_quiet "${cluster_name}" || true
+      e2e_kind_delete_cluster_quiet_locked "${cluster_name}" || true
       sleep 2
       continue
     fi

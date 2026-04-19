@@ -27,8 +27,8 @@ import (
 	"time"
 
 	declarestv1alpha1 "github.com/crmarques/declarest/api/v1alpha1"
+	"github.com/crmarques/declarest/envref"
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/internal/envref"
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"

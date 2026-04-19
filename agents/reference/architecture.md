@@ -32,11 +32,16 @@ Define component boundaries, dependency direction, and orchestration ownership f
 3. `internal/cli`: command parsing, validation, and output formatting.
 4. `internal/app`: application use-case services composed from domain interfaces.
 5. `internal/operator/controllers`: Kubernetes reconcilers/webhook server that adapt CRD intent into domain workflows.
-6. Public domain packages: `config`, `resource`, `metadata`, `repository`, `managedservice`, `secrets`, `orchestrator`.
+6. Public domain packages: `config`, `resource`, `metadata`, `repository`, `managedservice`, `secrets`, `orchestrator`, `cronexpr`, `envref`.
 7. Public shared primitives: `faults`.
 8. Private provider implementations: `internal/providers/*`.
 9. Bootstrap/wiring: `internal/bootstrap`.
 10. Packaging artifacts: `config/` (kustomize base + release/manifests/OLM overlays), `bundle/` (operator-sdk `registry+v1` bundle), and `catalog/` (file-based catalog). These layers MUST wrap the same Deployment/RBAC/CRDs and MUST NOT host reconcile or webhook code.
+
+## Orchestrator vs App Split
+1. `internal/orchestrator/*` owns the default `orchestrator.Orchestrator` implementation: pure domain workflow. It MUST NOT host prompts, confirmation/dry-run shims, progress reporting, or interactive retry UX. Errors MUST propagate as `faults.TypedError` values.
+2. `internal/app/*` owns CLI/operator-facing use-case services that compose domain interfaces. Side-effects around the core belong here: interactive prompts, confirmation gates, progress output, retry UX, batching loops, and CLI/operator-specific error shaping.
+3. New workflow behavior SHOULD land in `internal/orchestrator/*` when it is pure domain logic reused across CLI and operator, and in `internal/app/*` when it is specific to the CLI or operator invocation context.
 
 ## Allowed Dependency Directions
 1. `cmd/declarest` -> `internal/bootstrap`, `internal/cli`.

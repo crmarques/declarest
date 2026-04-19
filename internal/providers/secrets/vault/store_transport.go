@@ -27,7 +27,7 @@ import (
 
 const maxVaultResponseBytes = 4 << 20
 
-func (s *VaultSecretService) request(
+func (s *Store) request(
 	ctx context.Context,
 	method string,
 	endpoint string,

@@ -100,6 +100,7 @@ func TestBuildTLSConfigAppliesBaseTLSSettings(t *testing.T) {
 	}
 	if tlsConfig == nil {
 		t.Fatal("expected tls config")
+		return
 	}
 	if tlsConfig.MinVersion != tls.VersionTLS12 {
 		t.Fatalf("expected MinVersion TLS1.2, got %v", tlsConfig.MinVersion)

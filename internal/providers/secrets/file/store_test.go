@@ -28,16 +28,16 @@ import (
 	"github.com/crmarques/declarest/faults"
 )
 
-func TestFileSecretServiceCRUD(t *testing.T) {
+func TestStoreCRUD(t *testing.T) {
 	t.Parallel()
 
 	secretFilePath := filepath.Join(t.TempDir(), "secrets.enc")
-	service, err := NewFileSecretService(config.FileSecretStore{
+	service, err := New(config.FileSecretStore{
 		Path:       secretFilePath,
 		Passphrase: "change-me",
 	})
 	if err != nil {
-		t.Fatalf("NewFileSecretService returned error: %v", err)
+		t.Fatalf("New returned error: %v", err)
 	}
 
 	if err := service.Init(context.Background()); err != nil {
@@ -79,15 +79,15 @@ func TestFileSecretServiceCRUD(t *testing.T) {
 	assertTypedCategory(t, err, faults.NotFoundError)
 }
 
-func TestFileSecretServicePayloadOperations(t *testing.T) {
+func TestStorePayloadOperations(t *testing.T) {
 	t.Parallel()
 
-	service, err := NewFileSecretService(config.FileSecretStore{
+	service, err := New(config.FileSecretStore{
 		Path:       filepath.Join(t.TempDir(), "secrets.enc"),
 		Passphrase: "change-me",
 	})
 	if err != nil {
-		t.Fatalf("NewFileSecretService returned error: %v", err)
+		t.Fatalf("New returned error: %v", err)
 	}
 
 	input := map[string]any{
@@ -135,18 +135,18 @@ func TestFileSecretServicePayloadOperations(t *testing.T) {
 	}
 }
 
-func TestFileSecretServiceValidation(t *testing.T) {
+func TestStoreValidation(t *testing.T) {
 	t.Parallel()
 
 	t.Run("invalid_config", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := NewFileSecretService(config.FileSecretStore{
+		_, err := New(config.FileSecretStore{
 			Path: filepath.Join(t.TempDir(), "secrets.enc"),
 		})
 		assertTypedCategory(t, err, faults.ValidationError)
 
-		_, err = NewFileSecretService(config.FileSecretStore{
+		_, err = New(config.FileSecretStore{
 			Path: filepath.Join(t.TempDir(), "secrets.enc"),
 			Key:  "short",
 		})
@@ -156,12 +156,12 @@ func TestFileSecretServiceValidation(t *testing.T) {
 	t.Run("rejects_ambiguous_masking", func(t *testing.T) {
 		t.Parallel()
 
-		service, err := NewFileSecretService(config.FileSecretStore{
+		service, err := New(config.FileSecretStore{
 			Path:       filepath.Join(t.TempDir(), "secrets.enc"),
 			Passphrase: "change-me",
 		})
 		if err != nil {
-			t.Fatalf("NewFileSecretService returned error: %v", err)
+			t.Fatalf("New returned error: %v", err)
 		}
 
 		input := map[string]any{
@@ -174,19 +174,19 @@ func TestFileSecretServiceValidation(t *testing.T) {
 	})
 }
 
-func TestFileSecretServiceKDFEnvelopeParams(t *testing.T) {
+func TestStoreKDFEnvelopeParams(t *testing.T) {
 	t.Parallel()
 
 	t.Run("new_store_embeds_kdf_params", func(t *testing.T) {
 		t.Parallel()
 
 		secretFilePath := filepath.Join(t.TempDir(), "secrets.enc")
-		service, err := NewFileSecretService(config.FileSecretStore{
+		service, err := New(config.FileSecretStore{
 			Path:       secretFilePath,
 			Passphrase: "change-me",
 		})
 		if err != nil {
-			t.Fatalf("NewFileSecretService returned error: %v", err)
+			t.Fatalf("New returned error: %v", err)
 		}
 
 		if err := service.Store(context.Background(), "key1", "val1"); err != nil {
@@ -218,12 +218,12 @@ func TestFileSecretServiceKDFEnvelopeParams(t *testing.T) {
 		t.Parallel()
 
 		secretFilePath := filepath.Join(t.TempDir(), "secrets.enc")
-		service, err := NewFileSecretService(config.FileSecretStore{
+		service, err := New(config.FileSecretStore{
 			Path:       secretFilePath,
 			Passphrase: "change-me",
 		})
 		if err != nil {
-			t.Fatalf("NewFileSecretService returned error: %v", err)
+			t.Fatalf("New returned error: %v", err)
 		}
 		if err := service.Store(context.Background(), "legacyKey", "legacyValue"); err != nil {
 			t.Fatalf("Store returned error: %v", err)
@@ -248,12 +248,12 @@ func TestFileSecretServiceKDFEnvelopeParams(t *testing.T) {
 			t.Fatalf("failed to write stripped envelope: %v", err)
 		}
 
-		newService, err := NewFileSecretService(config.FileSecretStore{
+		newService, err := New(config.FileSecretStore{
 			Path:       secretFilePath,
 			Passphrase: "change-me",
 		})
 		if err != nil {
-			t.Fatalf("NewFileSecretService returned error: %v", err)
+			t.Fatalf("New returned error: %v", err)
 		}
 
 		_, err = newService.Get(context.Background(), "legacyKey")
@@ -267,12 +267,12 @@ func TestFileSecretServiceKDFEnvelopeParams(t *testing.T) {
 		t.Parallel()
 
 		secretFilePath := filepath.Join(t.TempDir(), "secrets.enc")
-		service, err := NewFileSecretService(config.FileSecretStore{
+		service, err := New(config.FileSecretStore{
 			Path: secretFilePath,
 			Key:  "0123456789abcdef0123456789abcdef",
 		})
 		if err != nil {
-			t.Fatalf("NewFileSecretService returned error: %v", err)
+			t.Fatalf("New returned error: %v", err)
 		}
 
 		if err := service.Store(context.Background(), "key1", "val1"); err != nil {

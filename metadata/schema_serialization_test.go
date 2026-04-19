@@ -421,6 +421,7 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 		createValidate := decoded.Operations[string(OperationCreate)].Validate
 		if createValidate == nil {
 			t.Fatal("expected create validate block to be decoded")
+			return
 		}
 		if !reflect.DeepEqual(createValidate.RequiredAttributes, []string{"/realm"}) {
 			t.Fatalf("unexpected create validate.requiredAttributes: %#v", createValidate.RequiredAttributes)
@@ -667,6 +668,7 @@ func TestResourceMetadataUnmarshalJSONSupportsScalarValidateRequiredAttributes(t
 	createValidate := decoded.Operations[string(OperationCreate)].Validate
 	if createValidate == nil {
 		t.Fatal("expected create validate block to be decoded")
+		return
 	}
 	if !reflect.DeepEqual(createValidate.RequiredAttributes, []string{"/realm"}) {
 		t.Fatalf("expected scalar requiredAttributes to decode as single-item list, got %#v", createValidate.RequiredAttributes)

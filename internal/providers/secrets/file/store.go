@@ -48,9 +48,9 @@ const (
 	defaultKDFThreads = 4
 )
 
-var _ secretdomain.SecretProvider = (*FileSecretService)(nil)
+var _ secretdomain.SecretProvider = (*Store)(nil)
 
-type FileSecretService struct {
+type Store struct {
 	path       string
 	key        []byte
 	passphrase []byte
@@ -89,7 +89,7 @@ func cloneSnapshot(src secretSnapshot) secretSnapshot {
 	return clone
 }
 
-func NewFileSecretService(cfg config.FileSecretStore) (*FileSecretService, error) {
+func New(cfg config.FileSecretStore) (*Store, error) {
 	path := strings.TrimSpace(cfg.Path)
 	if path == "" {
 		return nil, faults.NewValidationError("secret-store.file.path is required", nil)
@@ -110,7 +110,7 @@ func NewFileSecretService(cfg config.FileSecretStore) (*FileSecretService, error
 		return nil, err
 	}
 
-	service := &FileSecretService{
+	service := &Store{
 		path: filepath.Clean(path),
 		kdf:  kdf,
 	}
@@ -151,14 +151,14 @@ func NewFileSecretService(cfg config.FileSecretStore) (*FileSecretService, error
 	return service, nil
 }
 
-func (s *FileSecretService) Init(context.Context) error {
+func (s *Store) Init(context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	return s.initLocked()
 }
 
-func (s *FileSecretService) Store(_ context.Context, key string, value string) error {
+func (s *Store) Store(_ context.Context, key string, value string) error {
 	normalizedKey, err := secretdomain.NormalizeKey(key)
 	if err != nil {
 		return err
@@ -180,7 +180,7 @@ func (s *FileSecretService) Store(_ context.Context, key string, value string) e
 	return s.writeSnapshotLocked(snapshot)
 }
 
-func (s *FileSecretService) Get(_ context.Context, key string) (string, error) {
+func (s *Store) Get(_ context.Context, key string) (string, error) {
 	normalizedKey, err := secretdomain.NormalizeKey(key)
 	if err != nil {
 		return "", err
@@ -205,7 +205,7 @@ func (s *FileSecretService) Get(_ context.Context, key string) (string, error) {
 	return value, nil
 }
 
-func (s *FileSecretService) Delete(_ context.Context, key string) error {
+func (s *Store) Delete(_ context.Context, key string) error {
 	normalizedKey, err := secretdomain.NormalizeKey(key)
 	if err != nil {
 		return err
@@ -227,7 +227,7 @@ func (s *FileSecretService) Delete(_ context.Context, key string) error {
 	return s.writeSnapshotLocked(snapshot)
 }
 
-func (s *FileSecretService) List(context.Context) ([]string, error) {
+func (s *Store) List(context.Context) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -249,27 +249,27 @@ func (s *FileSecretService) List(context.Context) ([]string, error) {
 	return keys, nil
 }
 
-func (s *FileSecretService) MaskPayload(ctx context.Context, value resource.Value) (resource.Value, error) {
+func (s *Store) MaskPayload(ctx context.Context, value resource.Value) (resource.Value, error) {
 	return secretdomain.MaskPayload(value, func(key string, secretValue string) error {
 		return s.Store(ctx, key, secretValue)
 	})
 }
 
-func (s *FileSecretService) ResolvePayload(ctx context.Context, value resource.Value) (resource.Value, error) {
+func (s *Store) ResolvePayload(ctx context.Context, value resource.Value) (resource.Value, error) {
 	return secretdomain.ResolvePayload(value, func(key string) (string, error) {
 		return s.Get(ctx, key)
 	})
 }
 
-func (s *FileSecretService) NormalizeSecretPlaceholders(_ context.Context, value resource.Value) (resource.Value, error) {
+func (s *Store) NormalizeSecretPlaceholders(_ context.Context, value resource.Value) (resource.Value, error) {
 	return secretdomain.NormalizePlaceholders(value)
 }
 
-func (s *FileSecretService) DetectSecretCandidates(_ context.Context, value resource.Value) ([]string, error) {
+func (s *Store) DetectSecretCandidates(_ context.Context, value resource.Value) ([]string, error) {
 	return secretdomain.DetectSecretCandidates(value)
 }
 
-func (s *FileSecretService) initLocked() error {
+func (s *Store) initLocked() error {
 	if s == nil {
 		return faults.NewValidationError("file secret service must not be nil", nil)
 	}
@@ -306,7 +306,7 @@ func (s *FileSecretService) initLocked() error {
 	return nil
 }
 
-func (s *FileSecretService) readSnapshotLocked() (secretSnapshot, error) {
+func (s *Store) readSnapshotLocked() (secretSnapshot, error) {
 	if s.cachedSnapshot != nil {
 		return cloneSnapshot(*s.cachedSnapshot), nil
 	}
@@ -387,7 +387,7 @@ func (s *FileSecretService) readSnapshotLocked() (secretSnapshot, error) {
 	return cloneSnapshot(snapshot), nil
 }
 
-func (s *FileSecretService) writeSnapshotLocked(snapshot secretSnapshot) error {
+func (s *Store) writeSnapshotLocked(snapshot secretSnapshot) error {
 	if snapshot.Secrets == nil {
 		snapshot.Secrets = make(map[string]string)
 	}
@@ -451,11 +451,11 @@ func (s *FileSecretService) writeSnapshotLocked(snapshot secretSnapshot) error {
 	return nil
 }
 
-func (s *FileSecretService) deriveKey(salt []byte) ([]byte, error) {
+func (s *Store) deriveKey(salt []byte) ([]byte, error) {
 	return s.deriveKeyWithSettings(salt, s.kdf)
 }
 
-func (s *FileSecretService) deriveKeyWithSettings(salt []byte, kdf kdfSettings) ([]byte, error) {
+func (s *Store) deriveKeyWithSettings(salt []byte, kdf kdfSettings) ([]byte, error) {
 	if len(s.key) > 0 {
 		return s.key, nil
 	}

@@ -43,9 +43,7 @@ name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak-bundle
   metadataRoot: metadata
-  metadataFileName: metadata.json
 distribution:
   artifactTemplate: keycloak-bundle-{version}.tar.gz
 `,
@@ -102,7 +100,6 @@ name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak-bundle
   metadataRoot: metadata
 `,
 	})
@@ -134,7 +131,6 @@ name: keycloak-bundle
 version: 0.2.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak-bundle
   metadataRoot: metadata
 distribution:
   artifactTemplate: keycloak-bundle-{version}.tar.gz
@@ -175,7 +171,6 @@ name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak-bundle
   metadataRoot: metadata
 distribution:
   artifactTemplate: keycloak-{version}.tar.gz
@@ -217,7 +212,6 @@ version: 0.1.0
 description: Keycloak metadata bundle.
 deprecated: true
 declarest:
-  shorthand: keycloak-bundle
   metadataRoot: metadata
 distribution:
   artifactTemplate: keycloak-bundle-{version}.tar.gz
@@ -259,7 +253,6 @@ name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak-bundle
   metadataRoot: metadata
   openapi: https://www.keycloak.org/docs-api/26.4.7/rest-api/openapi.yaml
 `,
@@ -291,7 +284,6 @@ name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak-bundle
   metadataRoot: metadata
 `,
 		"openapi.yaml": `
@@ -332,7 +324,6 @@ name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak-bundle
   metadataRoot: metadata
 `,
 		"metadata/openapi.yaml": `
@@ -373,7 +364,6 @@ name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak-bundle
   metadataRoot: metadata
 `,
 		"docs/reference/openapi.yaml": `
@@ -414,7 +404,6 @@ name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak-bundle
   metadataRoot: metadata
   openapi: https://www.keycloak.org/docs-api/26.4.7/rest-api/openapi.yaml
 `,
@@ -450,7 +439,6 @@ name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak-bundle
   metadataRoot: metadata
   openapi: ftp://example.com/openapi.yaml
 `,
@@ -561,7 +549,6 @@ name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak-bundle
   metadataRoot: metadata
 distribution:
   artifactTemplate: keycloak-bundle-{version}.tar.gz
@@ -573,7 +560,6 @@ name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak-bundle
   metadataRoot: metadata
 distribution:
   artifactTemplate: keycloak-bundle-{version}.tar.gz
@@ -712,7 +698,6 @@ name: keycloak-bundle
 version: 1.2.3
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak-bundle
   metadataRoot: metadata
 distribution:
   artifactTemplate: keycloak-bundle-{version}.tar.gz
