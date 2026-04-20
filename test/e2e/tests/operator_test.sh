@@ -524,12 +524,18 @@ EOF
   e2e_operator_prepare_managed_service_metadata_bundle
   e2e_operator_write_manifests
 
-  local managed_service_manifest
+  local managed_service_manifest metadata_bundle_manifest
   managed_service_manifest="$(e2e_operator_manifest_dir)/managed-service.yaml"
+  metadata_bundle_manifest="$(e2e_operator_manifest_dir)/metadata-bundle.yaml"
   assert_file_contains "${managed_service_manifest}" "metadata:"
+  assert_file_contains "${managed_service_manifest}" "bundleRef:"
+  assert_file_contains "${managed_service_manifest}" "name: ${E2E_OPERATOR_METADATA_BUNDLE_CR_NAME}"
+  assert_path_exists "${metadata_bundle_manifest}"
+  assert_file_contains "${metadata_bundle_manifest}" "kind: MetadataBundle"
+  assert_file_contains "${metadata_bundle_manifest}" "name: ${E2E_OPERATOR_METADATA_BUNDLE_CR_NAME}"
   assert_file_contains \
-    "${managed_service_manifest}" \
-    "bundle: '$(e2e_operator_managed_service_metadata_bundle_mount_path)'"
+    "${metadata_bundle_manifest}" \
+    "shorthand: '${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SHORTHAND}'"
 }
 
 test_operator_prepare_managed_service_metadata_bundle_from_metadata_dir() {
@@ -650,12 +656,18 @@ EOF
   e2e_operator_prepare_managed_service_metadata_bundle
   e2e_operator_write_manifests
 
-  local managed_service_manifest
+  local managed_service_manifest metadata_bundle_manifest
   managed_service_manifest="$(e2e_operator_manifest_dir)/managed-service.yaml"
+  metadata_bundle_manifest="$(e2e_operator_manifest_dir)/metadata-bundle.yaml"
   assert_file_contains "${managed_service_manifest}" "metadata:"
+  assert_file_contains "${managed_service_manifest}" "bundleRef:"
+  assert_file_contains "${managed_service_manifest}" "name: ${E2E_OPERATOR_METADATA_BUNDLE_CR_NAME}"
+  assert_path_exists "${metadata_bundle_manifest}"
+  assert_file_contains "${metadata_bundle_manifest}" "kind: MetadataBundle"
+  assert_file_contains "${metadata_bundle_manifest}" "name: ${E2E_OPERATOR_METADATA_BUNDLE_CR_NAME}"
   assert_file_contains \
-    "${managed_service_manifest}" \
-    "bundle: '$(e2e_operator_managed_service_metadata_bundle_mount_path)'"
+    "${metadata_bundle_manifest}" \
+    "shorthand: '${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SHORTHAND}'"
 }
 
 test_secretstore_crd_does_not_require_legacy_provider_field() {

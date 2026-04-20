@@ -30,6 +30,13 @@ import (
 func populateMetadataConfigWithBundle(metadataPath string, metadataBundle string, resolvedContext *config.Context) error {
 	metadataBundle = strings.TrimSpace(metadataBundle)
 	if metadataBundle != "" {
+		if strings.ContainsRune(metadataBundle, os.PathSeparator) {
+			info, statErr := os.Stat(metadataBundle)
+			if statErr == nil && info.IsDir() {
+				resolvedContext.Metadata.BaseDir = metadataBundle
+				return nil
+			}
+		}
 		resolvedContext.Metadata.Bundle = metadataBundle
 		return nil
 	}
@@ -53,46 +60,67 @@ func populateMetadataConfigWithBundle(metadataPath string, metadataBundle string
 	return fmt.Errorf("metadata artifact %q must be a .tar.gz bundle or directory", metadataPath)
 }
 
+type managedServiceBundleResolution struct {
+	Source  string
+	OpenAPI string
+}
+
 // resolveManagedServiceBundleRef fetches the referenced MetadataBundle CR and
-// returns the source string consumed by the existing bundle resolver pipeline.
-// Returns the empty string when no bundleRef is set, indicating the caller
-// should fall back to the legacy metadata.url flow.
+// returns the source string (plus any bundled OpenAPI reference) consumed by
+// the downstream resolver pipeline. Returns an empty source when no bundleRef
+// is set, indicating the caller should fall back to the legacy metadata.url
+// flow.
 func resolveManagedServiceBundleRef(
 	ctx context.Context,
 	reader client.Reader,
 	namespace string,
 	managedService *declarestv1alpha1.ManagedService,
-) (string, error) {
+) (managedServiceBundleResolution, error) {
 	if managedService == nil || managedService.Spec.Metadata.BundleRef == nil {
-		return "", nil
+		return managedServiceBundleResolution{}, nil
 	}
 	refName := strings.TrimSpace(managedService.Spec.Metadata.BundleRef.Name)
 	if refName == "" {
-		return "", nil
+		return managedServiceBundleResolution{}, nil
 	}
 
 	bundle := &declarestv1alpha1.MetadataBundle{}
 	key := types.NamespacedName{Namespace: namespace, Name: refName}
 	if err := reader.Get(ctx, key, bundle); err != nil {
-		return "", fmt.Errorf("resolve metadata bundle %s/%s: %w", namespace, refName, err)
+		return managedServiceBundleResolution{}, fmt.Errorf("resolve metadata bundle %s/%s: %w", namespace, refName, err)
 	}
 	if !metadataBundleReady(bundle) {
-		return "", fmt.Errorf("metadata bundle %s/%s is not ready", namespace, refName)
+		return managedServiceBundleResolution{}, fmt.Errorf("metadata bundle %s/%s is not ready", namespace, refName)
+	}
+
+	resolution := managedServiceBundleResolution{
+		OpenAPI: strings.TrimSpace(bundle.Status.OpenAPIPath),
+	}
+	if resolution.OpenAPI == "" && bundle.Status.Manifest != nil {
+		declared := strings.TrimSpace(bundle.Status.Manifest.OpenAPI)
+		if strings.HasPrefix(declared, "/") ||
+			strings.HasPrefix(strings.ToLower(declared), "http://") ||
+			strings.HasPrefix(strings.ToLower(declared), "https://") {
+			resolution.OpenAPI = declared
+		}
 	}
 
 	if cachePath := strings.TrimSpace(bundle.Status.CachePath); cachePath != "" {
-		return cachePath, nil
+		resolution.Source = cachePath
+		return resolution, nil
 	}
 	// Fall back to the original source spec when the reconciler has not yet
 	// persisted a cache path. The downstream resolver accepts shorthand and
 	// URL forms directly.
 	if shorthand := strings.TrimSpace(bundle.Spec.Source.Shorthand); shorthand != "" {
-		return shorthand, nil
+		resolution.Source = shorthand
+		return resolution, nil
 	}
 	if url := strings.TrimSpace(bundle.Spec.Source.URL); url != "" {
-		return url, nil
+		resolution.Source = url
+		return resolution, nil
 	}
-	return "", fmt.Errorf("metadata bundle %s/%s has no resolvable source", namespace, refName)
+	return managedServiceBundleResolution{}, fmt.Errorf("metadata bundle %s/%s has no resolvable source", namespace, refName)
 }
 
 func metadataBundleReady(bundle *declarestv1alpha1.MetadataBundle) bool {

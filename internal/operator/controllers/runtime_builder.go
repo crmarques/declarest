@@ -70,16 +70,20 @@ func buildRuntimeContext(
 	}
 
 	metadataPath := strings.TrimSpace(managedService.Status.MetadataCachePath)
-	metadataBundle, metadataBundleErr := resolveManagedServiceBundleRef(ctx, reader, policy.Namespace, managedService)
+	bundleResolution, metadataBundleErr := resolveManagedServiceBundleRef(ctx, reader, policy.Namespace, managedService)
 	if metadataBundleErr != nil {
 		return runtimeContextBuildResult{}, metadataBundleErr
 	}
+	metadataBundle := bundleResolution.Source
 	if metadataBundle == "" && metadataPath == "" && strings.TrimSpace(managedService.Spec.Metadata.URL) != "" {
 		downloaded, err := downloadArtifact(ctx, managedService.Spec.Metadata.URL, filepath.Join(cacheDir, "metadata"), proxyConfig)
 		if err != nil {
 			return runtimeContextBuildResult{}, err
 		}
 		metadataPath = downloaded
+	}
+	if openAPIPath == "" && bundleResolution.OpenAPI != "" {
+		openAPIPath = bundleResolution.OpenAPI
 	}
 
 	resolvedContext := config.Context{

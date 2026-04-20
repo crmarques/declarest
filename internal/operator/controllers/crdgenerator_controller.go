@@ -42,7 +42,6 @@ import (
 
 const (
 	crdGeneratorReasonCRDApplyFailed  = "CRDApplyFailed"
-	crdGeneratorReasonAdoptionRefused = "AdoptionRefused"
 	crdGeneratorReasonBundleNotReady  = "BundleNotReady"
 	crdGeneratorReasonCRDPresent      = "GeneratedCRDPresent"
 	crdGeneratorReasonCRDEstablishing = "CRDEstablishing"

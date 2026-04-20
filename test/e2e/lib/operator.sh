@@ -58,6 +58,9 @@ e2e_operator_managed_service_metadata_bundle_mount_path() {
 e2e_operator_prepare_managed_service_metadata_bundle() {
   E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE=''
   E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH=''
+  E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_NAME=''
+  E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_VERSION=''
+  E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SHORTHAND=''
 
   local archive_path="${E2E_RUN_DIR}/operator/managed-service-metadata-bundle.tar.gz"
   mkdir -p "${E2E_RUN_DIR}/operator" || return 1
@@ -86,20 +89,35 @@ e2e_operator_prepare_managed_service_metadata_bundle() {
 
       E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE="${archive_path}"
       E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH=$(e2e_operator_managed_service_metadata_bundle_mount_path)
+      E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_NAME="${bundle_name}"
+      E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_VERSION="${bundle_version}"
+      E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SHORTHAND="${bundle_ref}"
       export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE
       export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH
+      export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_NAME
+      export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_VERSION
+      export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SHORTHAND
       return 0
     fi
 
     e2e_info "operator metadata bundle cache unavailable for bundle=${bundle_ref}; using bundle ref without local archive"
+    E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_NAME="${bundle_name}"
+    E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_VERSION="${bundle_version}"
+    E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SHORTHAND="${bundle_ref}"
     export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE
     export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH
+    export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_NAME
+    export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_VERSION
+    export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SHORTHAND
     return 0
   fi
 
   if [[ -z "${E2E_METADATA_DIR:-}" ]]; then
     export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE
     export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH
+    export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_NAME
+    export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_VERSION
+    export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SHORTHAND
     return 0
   fi
 
@@ -110,6 +128,7 @@ e2e_operator_prepare_managed_service_metadata_bundle() {
 
   local bundle_name
   bundle_name=$(e2e_operator_sanitize_name "e2e-${E2E_MANAGED_SERVICE:-managed-service}-bundle")
+  local bundle_version='0.0.1'
 
   local bundle_root="${E2E_RUN_DIR}/operator/managed-service-metadata-bundle"
 
@@ -126,10 +145,12 @@ e2e_operator_prepare_managed_service_metadata_bundle() {
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
 name: ${bundle_name}
-version: 0.0.1
+version: ${bundle_version}
 description: E2E metadata bundle for ${E2E_MANAGED_SERVICE:-managed-service}.
 declarest:
   metadataRoot: metadata
+distribution:
+  artifactTemplate: ${bundle_name}-{version}.tar.gz
 EOF_BUNDLE_MANIFEST
 
   if ! tar -C "${bundle_root}" -czf "${archive_path}" bundle.yaml metadata; then
@@ -139,8 +160,14 @@ EOF_BUNDLE_MANIFEST
 
   E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE="${archive_path}"
   E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH=$(e2e_operator_managed_service_metadata_bundle_mount_path)
+  E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_NAME="${bundle_name}"
+  E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_VERSION="${bundle_version}"
+  E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SHORTHAND="${bundle_name}:${bundle_version}"
   export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE
   export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH
+  export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_NAME
+  export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_VERSION
+  export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SHORTHAND
   return 0
 }
 
@@ -647,11 +674,18 @@ e2e_operator_olm_patch_csv() {
     metadata_mount_dir=$(e2e_operator_managed_service_metadata_bundle_mount_dir)
   fi
 
+  local metadata_bundle_name="${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_NAME:-}"
+  local metadata_bundle_version="${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_VERSION:-}"
+  local metadata_bundle_init_image="${E2E_OPERATOR_BUNDLE_INIT_IMAGE:-docker.io/library/busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f}"
+
   E2E_OLM_CSV_FILE="${csv_file}" \
   E2E_OLM_OPERATOR_IMAGE="${E2E_OPERATOR_IMAGE}" \
   E2E_OLM_WATCH_NAMESPACE="$(e2e_operator_effective_namespace)" \
   E2E_OLM_METADATA_SECRET_NAME="${metadata_secret_name}" \
   E2E_OLM_METADATA_MOUNT_DIR="${metadata_mount_dir}" \
+  E2E_OLM_BUNDLE_NAME="${metadata_bundle_name}" \
+  E2E_OLM_BUNDLE_VERSION="${metadata_bundle_version}" \
+  E2E_OLM_BUNDLE_INIT_IMAGE="${metadata_bundle_init_image}" \
   "${python_cmd}" <<'PY' || return 1
 import os
 import sys
@@ -668,6 +702,10 @@ watch_namespace = os.environ.get('E2E_OLM_WATCH_NAMESPACE', '')
 metadata_secret = os.environ.get('E2E_OLM_METADATA_SECRET_NAME', '')
 metadata_mount = os.environ.get('E2E_OLM_METADATA_MOUNT_DIR', '')
 metadata_volume_name = 'managed-service-metadata'
+bundle_name = os.environ.get('E2E_OLM_BUNDLE_NAME', '').strip()
+bundle_version = os.environ.get('E2E_OLM_BUNDLE_VERSION', '').strip()
+bundle_init_image = os.environ.get('E2E_OLM_BUNDLE_INIT_IMAGE', '').strip()
+bundle_cache_subpath = '.declarest/metadata-bundles'
 
 with open(csv_path, 'r', encoding='utf-8') as handle:
     data = yaml.safe_load(handle)
@@ -725,6 +763,53 @@ for deployment in install_spec.get('deployments', []) or []:
                     'readOnly': True,
                 })
             container['volumeMounts'] = mounts
+
+    if (metadata_secret and metadata_mount
+            and bundle_name and bundle_version and bundle_init_image):
+        state_volume_name = None
+        for container in pod_spec.get('containers', []) or []:
+            for mount in container.get('volumeMounts', []) or []:
+                if mount.get('mountPath') == '/var/lib/declarest':
+                    state_volume_name = mount.get('name')
+                    break
+            if state_volume_name:
+                break
+        if state_volume_name:
+            init_containers = pod_spec.get('initContainers', []) or []
+            init_container_name = 'declarest-bundle-seed'
+            if not any(c.get('name') == init_container_name for c in init_containers):
+                cache_dir = f'/var/lib/declarest/{bundle_cache_subpath}/{bundle_name}-{bundle_version}'
+                bundle_archive_path = f'{metadata_mount}/metadata-bundle.tar.gz'
+                seed_cmd = (
+                    'set -eu; '
+                    f'mkdir -p "{cache_dir}"; '
+                    f'tar -xzf "{bundle_archive_path}" -C "{cache_dir}"; '
+                    f'touch "{cache_dir}/.declarest-bundle-ready"'
+                )
+                init_containers.append({
+                    'name': init_container_name,
+                    'image': bundle_init_image,
+                    'imagePullPolicy': 'IfNotPresent',
+                    'command': ['sh', '-c', seed_cmd],
+                    'securityContext': {
+                        'runAsNonRoot': True,
+                        'runAsUser': 65532,
+                        'runAsGroup': 65532,
+                        'allowPrivilegeEscalation': False,
+                        'readOnlyRootFilesystem': True,
+                        'capabilities': {'drop': ['ALL']},
+                        'seccompProfile': {'type': 'RuntimeDefault'},
+                    },
+                    'volumeMounts': [
+                        {'name': state_volume_name, 'mountPath': '/var/lib/declarest'},
+                        {
+                            'name': metadata_volume_name,
+                            'mountPath': metadata_mount,
+                            'readOnly': True,
+                        },
+                    ],
+                })
+                pod_spec['initContainers'] = init_containers
 
 if deployment_names:
     default_deployment_name = deployment_names[0]
@@ -785,6 +870,7 @@ e2e_operator_olm_core_image_refs() {
   {
     grep -oE 'quay\.io/operator-framework/[a-zA-Z0-9._/-]+@sha256:[a-f0-9]+' "${manifest_path}"
     grep -oE -- '--opmImage=[^[:space:]\"]+' "${manifest_path}" | cut -d= -f2
+    printf '%s\n' "${E2E_OPERATOR_BUNDLE_INIT_IMAGE:-docker.io/library/busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f}"
   } | sort -u
 }
 
@@ -1823,9 +1909,13 @@ EOF_REPO_CR_FOOTER
   local tls_ca_file=''
   local tls_client_cert_file=''
   local tls_client_key_file=''
-  local metadata_bundle_ref="${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH:-}"
+  local metadata_bundle_ref="${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SHORTHAND:-}"
   if [[ -z "${metadata_bundle_ref}" ]]; then
     metadata_bundle_ref="${E2E_METADATA_BUNDLE:-}"
+  fi
+  local metadata_bundle_cr_name=''
+  if [[ -n "${metadata_bundle_ref}" ]]; then
+    metadata_bundle_cr_name=$(e2e_operator_scoped_name "declarest-e2e-metadata-bundle")
   fi
   if [[ "${MANAGED_SERVICE_TLS_ENABLED:-false}" == 'true' ]]; then
     managed_service_tls_enabled='true'
@@ -1942,9 +2032,25 @@ EOF_REPO_CR_FOOTER
     fi
     if [[ -n "${metadata_bundle_ref}" ]]; then
       printf '  metadata:\n'
-      printf '    bundle: %s\n' "$(e2e_operator_yaml_quote "${metadata_bundle_ref}")"
+      printf '    bundleRef:\n'
+      printf '      name: %s\n' "${metadata_bundle_cr_name}"
     fi
   } >"${manifest_dir}/managed-service.yaml"
+
+  if [[ -n "${metadata_bundle_ref}" ]]; then
+    cat >"${manifest_dir}/metadata-bundle.yaml" <<EOF_METADATA_BUNDLE_CR
+apiVersion: declarest.io/v1alpha1
+kind: MetadataBundle
+metadata:
+  name: ${metadata_bundle_cr_name}
+  namespace: ${namespace}
+spec:
+  source:
+    shorthand: $(e2e_operator_yaml_quote "${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SHORTHAND:-${metadata_bundle_ref}}")
+EOF_METADATA_BUNDLE_CR
+  else
+    rm -f -- "${manifest_dir}/metadata-bundle.yaml"
+  fi
 
   # shellcheck disable=SC1090
   source "${secret_store_state_file}"
@@ -2119,17 +2225,22 @@ EOF_SYNC_POLICY
   E2E_OPERATOR_MANAGED_SERVICE_NAME="${managed_service_name}"
   E2E_OPERATOR_SECRET_STORE_NAME="${secret_store_name}"
   E2E_OPERATOR_SYNC_POLICY_NAME="${sync_policy_name}"
+  E2E_OPERATOR_METADATA_BUNDLE_CR_NAME="${metadata_bundle_cr_name}"
   export E2E_OPERATOR_NAMESPACE
   export E2E_OPERATOR_RESOURCE_REPOSITORY_NAME
   export E2E_OPERATOR_MANAGED_SERVICE_NAME
   export E2E_OPERATOR_SECRET_STORE_NAME
   export E2E_OPERATOR_SYNC_POLICY_NAME
+  export E2E_OPERATOR_METADATA_BUNDLE_CR_NAME
 
   e2e_runtime_state_set 'OPERATOR_NAMESPACE' "${namespace}" || return 1
   e2e_runtime_state_set 'OPERATOR_RESOURCE_REPOSITORY_NAME' "${repository_name}" || return 1
   e2e_runtime_state_set 'OPERATOR_MANAGED_SERVICE_NAME' "${managed_service_name}" || return 1
   e2e_runtime_state_set 'OPERATOR_SECRET_STORE_NAME' "${secret_store_name}" || return 1
   e2e_runtime_state_set 'OPERATOR_SYNC_POLICY_NAME' "${sync_policy_name}" || return 1
+  if [[ -n "${metadata_bundle_cr_name}" ]]; then
+    e2e_runtime_state_set 'OPERATOR_METADATA_BUNDLE_CR_NAME' "${metadata_bundle_cr_name}" || return 1
+  fi
   return 0
 }
 
@@ -2195,13 +2306,21 @@ e2e_operator_apply_manifests() {
   e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/secret-secret-store-auth.yaml" || return 1
 
   e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/resource-repository.yaml" || return 1
+  if [[ -f "${manifest_dir}/metadata-bundle.yaml" ]]; then
+    e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/metadata-bundle.yaml" || return 1
+  fi
   e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/managed-service.yaml" || return 1
   e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/secret-store.yaml" || return 1
 
-  e2e_operator_wait_resources_ready_parallel \
-    "resourcerepository.declarest.io:${E2E_OPERATOR_RESOURCE_REPOSITORY_NAME}" \
-    "managedservice.declarest.io:${E2E_OPERATOR_MANAGED_SERVICE_NAME}" \
-    "secretstore.declarest.io:${E2E_OPERATOR_SECRET_STORE_NAME}" || return 1
+  local -a wait_targets=(
+    "resourcerepository.declarest.io:${E2E_OPERATOR_RESOURCE_REPOSITORY_NAME}"
+    "managedservice.declarest.io:${E2E_OPERATOR_MANAGED_SERVICE_NAME}"
+    "secretstore.declarest.io:${E2E_OPERATOR_SECRET_STORE_NAME}"
+  )
+  if [[ -n "${E2E_OPERATOR_METADATA_BUNDLE_CR_NAME:-}" ]]; then
+    wait_targets+=("metadatabundle.declarest.io:${E2E_OPERATOR_METADATA_BUNDLE_CR_NAME}")
+  fi
+  e2e_operator_wait_resources_ready_parallel "${wait_targets[@]}" || return 1
 
   e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/sync-policy.yaml" || return 1
   e2e_operator_wait_resource_ready 'syncpolicy.declarest.io' "${E2E_OPERATOR_SYNC_POLICY_NAME}" || return 1

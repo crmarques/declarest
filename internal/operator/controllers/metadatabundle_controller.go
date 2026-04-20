@@ -62,9 +62,10 @@ type MetadataBundleReconciler struct {
 }
 
 type bundleResolutionResult struct {
-	cachePath string
-	manifest  declarestv1alpha1.MetadataBundleManifest
-	warning   string
+	cachePath   string
+	openAPIPath string
+	manifest    declarestv1alpha1.MetadataBundleManifest
+	warning     string
 }
 
 func (r *MetadataBundleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -138,6 +139,7 @@ func (r *MetadataBundleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	manifest := resolution.manifest
 	bundle.Status.Manifest = &manifest
 	bundle.Status.CachePath = resolution.cachePath
+	bundle.Status.OpenAPIPath = resolution.openAPIPath
 	resolvedAt := metav1.NewTime(time.Now().UTC())
 	bundle.Status.LastResolvedTime = &resolvedAt
 	bundle.Status.Conditions = setStatusCondition(
@@ -312,9 +314,10 @@ func (r *MetadataBundleReconciler) resolveBundle(
 		return nil, fmt.Errorf("bundle resolution returned unexpected value type")
 	}
 	result := &bundleResolutionResult{
-		cachePath: resolution.MetadataDir,
-		manifest:  convertResolvedBundle(*resolution),
-		warning:   resolution.DeprecatedWarning,
+		cachePath:   resolution.MetadataDir,
+		openAPIPath: strings.TrimSpace(resolution.OpenAPI),
+		manifest:    convertResolvedBundle(*resolution),
+		warning:     resolution.DeprecatedWarning,
 	}
 	if result.manifest.OpenAPI == "" && strings.TrimSpace(resolution.OpenAPI) != "" {
 		result.manifest.OpenAPI = resolution.OpenAPI

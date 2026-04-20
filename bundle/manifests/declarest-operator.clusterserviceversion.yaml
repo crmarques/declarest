@@ -219,7 +219,7 @@ metadata:
     capabilities: Seamless Upgrades
     categories: Integration & Delivery
     containerImage: ghcr.io/crmarques/declarest-operator:latest
-    createdAt: "2026-04-20T19:20:11Z"
+    createdAt: "2026-04-20T21:05:54Z"
     description: Declarative resource sync between Git and REST APIs.
     operators.operatorframework.io/builder: operator-sdk-v1.42.2
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4

@@ -43,7 +43,6 @@ const (
 	generatedResourceWorkerCount       = 2
 	generatedResourceStatusLogKey      = "generatedResource"
 	generatedResourceOriginAnnotation  = declarestv1alpha1.CRDGeneratorOwnerAnnotation
-	generatedResourceReasonSyncFailed  = "SyncFailed"
 	generatedResourceReasonSyncSuccess = "Applied"
 )
 
@@ -106,7 +105,7 @@ func NewGeneratedResourceReconciler(
 // until ctx is cancelled.
 func (r *GeneratedResourceReconciler) Start(ctx context.Context) error {
 	r.mu.Lock()
-	r.queue = workqueue.NewTypedRateLimitingQueue[generatedWorkItem](workqueue.DefaultTypedControllerRateLimiter[generatedWorkItem]())
+	r.queue = workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[generatedWorkItem]())
 	r.factory = dynamicinformer.NewDynamicSharedInformerFactory(r.DynamicClient, generatedResourceResyncInterval)
 	r.started = true
 	r.mu.Unlock()
@@ -275,7 +274,7 @@ func (r *GeneratedResourceReconciler) reconcile(ctx context.Context, item genera
 	}
 
 	if item.IsDelete {
-		return r.handleDelete(ctx, generator, version, item)
+		return r.handleDelete(generator, version, item)
 	}
 
 	namespace, name := splitKey(item.Key)
@@ -328,7 +327,6 @@ func (r *GeneratedResourceReconciler) reconcile(ctx context.Context, item genera
 }
 
 func (r *GeneratedResourceReconciler) handleDelete(
-	ctx context.Context,
 	generator *declarestv1alpha1.CRDGenerator,
 	_ *declarestv1alpha1.CRDGeneratorVersion,
 	item generatedWorkItem,

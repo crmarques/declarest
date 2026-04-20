@@ -60,6 +60,7 @@ type MetadataBundleStatus struct {
 	ObservedGeneration int64                   `json:"observedGeneration,omitempty"`
 	Manifest           *MetadataBundleManifest `json:"manifest,omitempty"`
 	CachePath          string                  `json:"cachePath,omitempty"`
+	OpenAPIPath        string                  `json:"openAPIPath,omitempty"`
 	LastResolvedTime   *metav1.Time            `json:"lastResolvedTime,omitempty"`
 	Conditions         []metav1.Condition      `json:"conditions,omitempty"`
 }
