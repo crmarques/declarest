@@ -198,6 +198,42 @@ Contract groups:
 8. `operations.defaults.transforms` is an ordered pipeline applied before operation-specific `transforms`.
 9. metadata template helper functions include `{{payload_type .}}`, `{{payload_media_type .}}`, and `{{payload_extension .}}`, plus descendant-scope helpers `{{/descendantPath}}` and `{{/descendantCollectionPath}}` when a descendant-enabled collection selector matched the handled target; `resource.id` and `resource.alias` remain segment-safe and MUST NOT resolve to slashful values.
 
+### Type: `bundlemetadata.BundleManifest`
+Represents the persisted `bundle.yaml` manifest decoded for `metadata.bundle` / `metadata.bundleFile` consumers. Full normative shape lives in `agents/reference/metadata-bundle.md`.
+
+Required fields:
+1. `APIVersion` (`declarest.io/v1alpha1`).
+2. `Kind` (`MetadataBundle`).
+3. `Name`.
+4. `Version` (semver-2 with optional `v` prefix).
+5. `Description`.
+6. `Declarest.MetadataRoot`.
+
+Optional fields:
+1. `Deprecated`.
+2. `Declarest.OpenAPI` (repository-relative path or `http`/`https` URL).
+3. `Declarest.CompatibleDeclarest` (Masterminds/semver constraint).
+4. `Declarest.CompatibleManagedService.Product` (paired with `Versions`).
+5. `Declarest.CompatibleManagedService.Versions` (Masterminds/semver constraint, paired with `Product`).
+6. `Distribution.ArtifactTemplate` (`<name>-{version}.tar.gz` when set).
+
+Invariants:
+1. `bundle.yaml` MUST decode strictly; unknown YAML keys MUST fail with `ValidationError`.
+2. `Declarest.CompatibleDeclarest` MUST be enforced at bundle resolution against the running declarest binary version; the `dev` build MUST bypass the gate.
+3. `Declarest.CompatibleManagedService` MUST be syntactically validated at decode time; runtime evaluation against an actual managed-service version is deferred.
+
+### Type: `bundlemetadata.BundleResolution`
+Represents the resolved bundle returned by `bundlemetadata.ResolveBundle`.
+
+Required fields:
+1. `MetadataDir` (absolute filesystem path).
+2. `Manifest` (`bundlemetadata.BundleManifest`).
+3. `Shorthand` (boolean).
+
+Optional fields:
+1. `OpenAPI` (resolved OpenAPI source path or URL).
+2. `DeprecatedWarning` (populated when `Manifest.Deprecated` is `true`).
+
 ### Type: `metadata.OperationSpec`
 Represents resolved operation request intent.
 

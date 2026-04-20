@@ -25,6 +25,7 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 | `agents/reference/managed-service.md` | HTTP/OpenAPI integration | Remote operations and API contracts |
 | `agents/reference/secrets.md` | Secret handling lifecycle | Secret masking, resolution, storage |
 | `agents/reference/metadata.md` | Metadata layering and templates | Metadata merge/render/infer behavior |
+| `agents/reference/metadata-bundle.md` | Metadata bundle manifest contract | `bundle.yaml` shape, strict decode, compatibility gates |
 | `agents/reference/orchestrator.md` | Orchestration flows | Apply/refresh/diff/list workflows |
 | `agents/reference/k8s-operator.md` | Kubernetes operator contracts | CRD validation, reconcile loops, webhook refresh flows |
 | `agents/reference/cli.md` | CLI behavior and output contracts | Command design and UX behavior |
@@ -39,6 +40,7 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 | New feature touching orchestration | `agents/reference/interfaces.md`, `agents/reference/domain.md`, `agents/reference/orchestrator.md`, `agents/reference/resource-repo.md`, `agents/reference/managed-service.md`, `agents/reference/metadata.md`, `agents/reference/quality.md` |
 | CLI command or output change | `agents/reference/interfaces.md`, `agents/reference/cli.md`, `agents/reference/orchestrator.md`, `agents/reference/domain.md`, `agents/reference/quality.md` |
 | Metadata behavior change | `agents/reference/interfaces.md`, `agents/reference/metadata.md`, `agents/reference/domain.md`, `agents/reference/managed-service.md`, `agents/reference/quality.md` |
+| Metadata bundle manifest change | `agents/reference/interfaces.md`, `agents/reference/metadata-bundle.md`, `agents/reference/metadata.md`, `agents/reference/context-config.md`, `agents/reference/quality.md` |
 | Secret behavior change | `agents/reference/interfaces.md`, `agents/reference/secrets.md`, `agents/reference/orchestrator.md`, `agents/reference/quality.md` |
 | Context/config change | `agents/reference/interfaces.md`, `agents/reference/context-config.md`, `agents/reference/domain.md`, `agents/reference/quality.md` |
 | Kubernetes operator controller/CRD/webhook change | `agents/reference/interfaces.md`, `agents/reference/k8s-operator.md`, `agents/reference/architecture.md`, `agents/reference/quality.md` |

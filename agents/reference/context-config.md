@@ -42,7 +42,7 @@ Define the canonical context catalog schema, file location, validation rules, cr
 25. `metadata` MUST define at most one source: `baseDir`, `bundle`, or `bundleFile`.
 26. `metadata.baseDir` MUST default to the selected repository baseDir when all metadata sources are unset.
 27. Persisted context YAML MUST omit `metadata.baseDir` when it equals repository baseDir.
-28. When `managedService.http.openapi` is empty and `metadata.bundle` or `metadata.bundleFile` is configured, startup MUST resolve OpenAPI from bundle hints in order: `bundle.yaml declarest.openapi`, then peer `openapi.yaml` at the bundle root.
+28. When `managedService.http.openapi` is empty and `metadata.bundle` or `metadata.bundleFile` is configured, startup MUST resolve OpenAPI from bundle hints in order: `bundle.yaml declarest.openapi`, then peer `openapi.yaml` at the bundle root. The persisted `bundle.yaml` shape and its strict-decode plus compatibility-gate rules are owned by `agents/reference/metadata-bundle.md`.
 29. `repository.git.remote.autoSync` MAY be omitted; when omitted, repository-mutation commands MUST treat it as enabled and only an explicit `false` disables automatic push behavior.
 30. `managedService.http.healthCheck` MAY be configured as a relative path or an absolute `http|https` URL, and it MUST NOT include query parameters.
 31. Changes to the canonical persisted context or catalog wire shape MUST update `schemas/context.schema.json` and `schemas/contexts.schema.json` in the same change.

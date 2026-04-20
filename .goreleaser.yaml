@@ -10,9 +10,9 @@ builds:
       - CGO_ENABLED=0
     ldflags:
       - -s -w
-      - -X github.com/crmarques/declarest/internal/cli/version.Version={{.Version}}
-      - -X github.com/crmarques/declarest/internal/cli/version.Commit={{.Commit}}
-      - -X github.com/crmarques/declarest/internal/cli/version.BuildDate={{.Date}}
+      - -X github.com/crmarques/declarest/internal/version.Version={{.Version}}
+      - -X github.com/crmarques/declarest/internal/version.Commit={{.Commit}}
+      - -X github.com/crmarques/declarest/internal/version.BuildDate={{.Date}}
     goos:
       - linux
       - darwin

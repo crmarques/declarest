@@ -249,7 +249,6 @@ name: keycloak-bundle
 version: 0.0.14
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak-bundle
   metadataRoot: metadata
 distribution:
   artifactTemplate: keycloak-bundle-{version}.tar.gz
@@ -323,7 +322,6 @@ name: keycloak-bundle
 version: 0.0.14
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak-bundle
   metadataRoot: metadata
 distribution:
   artifactTemplate: keycloak-bundle-{version}.tar.gz

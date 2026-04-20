@@ -39,6 +39,7 @@ nav:
       - CLI: reference/cli.md
       - Configuration: reference/configuration.md
       - Metadata Schema: reference/metadata-schema.md
+      - Bundle Manifest: reference/bundle-manifest.md
       - Operator CRDs: reference/operator-crds.md
   - Topics:
       - Troubleshooting: topics/troubleshooting.md

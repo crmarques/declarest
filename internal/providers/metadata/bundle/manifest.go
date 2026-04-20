@@ -15,12 +15,14 @@
 package bundlemetadata
 
 import (
+	"bytes"
 	"fmt"
 	"net/url"
 	"path/filepath"
 	"regexp"
 	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/crmarques/declarest/faults"
 	"go.yaml.in/yaml/v3"
 )
@@ -30,7 +32,10 @@ const (
 	bundleManifestKind       = "MetadataBundle"
 )
 
-var semverPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$`)
+var (
+	semverPattern              = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$`)
+	managedServiceProductRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+)
 
 var metadataFileCandidates = []string{"metadata.yaml", "metadata.yml", "metadata.json"}
 
@@ -46,19 +51,26 @@ type BundleManifest struct {
 }
 
 type BundleDeclarest struct {
-	MetadataRoot string `yaml:"metadataRoot"`
-	OpenAPI      string `yaml:"openapi,omitempty"`
+	MetadataRoot             string                         `yaml:"metadataRoot"`
+	OpenAPI                  string                         `yaml:"openapi,omitempty"`
+	CompatibleDeclarest      string                         `yaml:"compatibleDeclarest,omitempty"`
+	CompatibleManagedService BundleCompatibleManagedService `yaml:"compatibleManagedService,omitempty"`
+}
+
+type BundleCompatibleManagedService struct {
+	Product  string `yaml:"product,omitempty"`
+	Versions string `yaml:"versions,omitempty"`
 }
 
 type BundleDistribution struct {
-	Repo             string `yaml:"repo,omitempty"`
-	TagTemplate      string `yaml:"tagTemplate,omitempty"`
 	ArtifactTemplate string `yaml:"artifactTemplate,omitempty"`
 }
 
 func DecodeBundleManifest(data []byte) (BundleManifest, error) {
 	var manifest BundleManifest
-	if err := yaml.Unmarshal(data, &manifest); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&manifest); err != nil {
 		return BundleManifest{}, faults.Invalid("invalid bundle.yaml", err)
 	}
 	if err := manifest.Validate(); err != nil {
@@ -114,6 +126,16 @@ func (m BundleManifest) Validate() error {
 		}
 	}
 
+	if compat := strings.TrimSpace(m.Declarest.CompatibleDeclarest); compat != "" {
+		if _, err := semver.NewConstraint(compat); err != nil {
+			return faults.Invalid("bundle.yaml declarest.compatibleDeclarest is not a valid semver constraint", err)
+		}
+	}
+
+	if err := m.Declarest.CompatibleManagedService.validate(); err != nil {
+		return err
+	}
+
 	if template := strings.TrimSpace(m.Distribution.ArtifactTemplate); template != "" {
 		expected := expectedArtifactTemplate(strings.TrimSpace(m.Name))
 		if template != expected {
@@ -127,6 +149,27 @@ func (m BundleManifest) Validate() error {
 		}
 	}
 
+	return nil
+}
+
+func (c BundleCompatibleManagedService) validate() error {
+	product := strings.TrimSpace(c.Product)
+	versions := strings.TrimSpace(c.Versions)
+	if product == "" && versions == "" {
+		return nil
+	}
+	if product == "" {
+		return faults.Invalid("bundle.yaml declarest.compatibleManagedService.product is required when versions is set", nil)
+	}
+	if versions == "" {
+		return faults.Invalid("bundle.yaml declarest.compatibleManagedService.versions is required when product is set", nil)
+	}
+	if !managedServiceProductRegex.MatchString(product) {
+		return faults.Invalid("bundle.yaml declarest.compatibleManagedService.product must match ^[a-z0-9][a-z0-9-]*$", nil)
+	}
+	if _, err := semver.NewConstraint(versions); err != nil {
+		return faults.Invalid("bundle.yaml declarest.compatibleManagedService.versions is not a valid semver constraint", err)
+	}
 	return nil
 }
 

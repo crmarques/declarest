@@ -3,6 +3,7 @@ module github.com/crmarques/declarest
 go 1.25.9
 
 require (
+	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/charmbracelet/huh v1.0.0
 	github.com/creack/pty v1.1.24
 	github.com/go-git/go-git/v5 v5.18.0

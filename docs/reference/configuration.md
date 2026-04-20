@@ -245,6 +245,8 @@ metadata:
 
 When all metadata sources are omitted, `metadata.baseDir` defaults to the repository base dir.
 
+For the canonical `bundle.yaml` manifest shape, strict-decode rules, and compatibility gates, see [Bundle Manifest](bundle-manifest.md).
+
 ## Runtime overrides
 
 Supported override keys:

@@ -23,10 +23,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/promptauth"
 	"github.com/crmarques/declarest/internal/providers/fsutil"
+	binaryversion "github.com/crmarques/declarest/internal/version"
 )
 
 type BundleResolution struct {
@@ -40,8 +42,9 @@ type BundleResolution struct {
 type BundleResolverOption func(*bundleResolverOptions)
 
 type bundleResolverOptions struct {
-	proxy   *config.HTTPProxy
-	runtime *promptauth.Runtime
+	proxy            *config.HTTPProxy
+	runtime          *promptauth.Runtime
+	declarestVersion string
 }
 
 func WithProxyConfig(proxy *config.HTTPProxy) BundleResolverOption {
@@ -53,6 +56,17 @@ func WithProxyConfig(proxy *config.HTTPProxy) BundleResolverOption {
 func WithPromptRuntime(runtime *promptauth.Runtime) BundleResolverOption {
 	return func(opts *bundleResolverOptions) {
 		opts.runtime = runtime
+	}
+}
+
+// WithDeclarestVersion sets the declarest binary version used to evaluate the
+// bundle manifest's declarest.compatibleDeclarest constraint. The literal
+// value `dev` (the unstamped development build identifier) bypasses the gate.
+// When this option is omitted the resolver falls back to the linker-stamped
+// internal/version.Version value.
+func WithDeclarestVersion(value string) BundleResolverOption {
+	return func(opts *bundleResolverOptions) {
+		opts.declarestVersion = value
 	}
 }
 
@@ -77,6 +91,25 @@ func ResolveBundle(ctx context.Context, ref string, opts ...BundleResolverOption
 	releaseCacheLock := acquireBundleCacheLock(cacheDir)
 	defer releaseCacheLock()
 
+	resolution, err := resolveBundleAt(ctx, cacheRoot, cacheDir, source, options)
+	if err != nil {
+		return BundleResolution{}, err
+	}
+
+	if err := enforceCompatibleDeclarest(resolution.Manifest, options.declarestVersion); err != nil {
+		return BundleResolution{}, err
+	}
+
+	return resolution, nil
+}
+
+func resolveBundleAt(
+	ctx context.Context,
+	cacheRoot string,
+	cacheDir string,
+	source bundleSource,
+	options bundleResolverOptions,
+) (BundleResolution, error) {
 	if cached, ok, cachedErr := loadCachedBundle(cacheDir, source); cachedErr == nil && ok {
 		return cached, nil
 	} else if cachedErr != nil {
@@ -84,6 +117,57 @@ func ResolveBundle(ctx context.Context, ref string, opts ...BundleResolverOption
 	}
 
 	return installBundle(ctx, cacheRoot, cacheDir, source, options)
+}
+
+func enforceCompatibleDeclarest(manifest BundleManifest, configuredVersion string) error {
+	constraintRaw := strings.TrimSpace(manifest.Declarest.CompatibleDeclarest)
+	if constraintRaw == "" {
+		return nil
+	}
+
+	binaryVersion := strings.TrimSpace(configuredVersion)
+	if binaryVersion == "" {
+		binaryVersion = strings.TrimSpace(binaryversion.Version)
+	}
+	if binaryVersion == "" || binaryVersion == binaryversion.DevBuild {
+		return nil
+	}
+
+	normalized, err := normalizeSemver(binaryVersion)
+	if err != nil {
+		return faults.Invalid(
+			fmt.Sprintf("declarest binary version %q is not a valid semver for compatibleDeclarest evaluation", binaryVersion),
+			err,
+		)
+	}
+
+	parsedVersion, err := semver.NewVersion(normalized)
+	if err != nil {
+		return faults.Invalid(
+			fmt.Sprintf("declarest binary version %q is not a valid semver for compatibleDeclarest evaluation", binaryVersion),
+			err,
+		)
+	}
+
+	constraint, err := semver.NewConstraint(constraintRaw)
+	if err != nil {
+		return faults.Invalid("bundle.yaml declarest.compatibleDeclarest is not a valid semver constraint", err)
+	}
+
+	if !constraint.Check(parsedVersion) {
+		return faults.Invalid(
+			fmt.Sprintf(
+				"bundle %q version %q requires declarest %q but running binary is %q",
+				strings.TrimSpace(manifest.Name),
+				strings.TrimSpace(manifest.Version),
+				constraintRaw,
+				binaryVersion,
+			),
+			nil,
+		)
+	}
+
+	return nil
 }
 
 func readBundleManifest(path string) (BundleManifest, error) {

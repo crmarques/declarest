@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DeclaREST Metadata Bundle Manifest",
+  "description": "Canonical bundle.yaml manifest schema consumed by metadata.bundle / metadata.bundleFile.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "const": "declarest.io/v1alpha1"
+    },
+    "kind": {
+      "type": "string",
+      "const": "MetadataBundle"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^v?[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "deprecated": {
+      "type": "boolean"
+    },
+    "declarest": {
+      "$ref": "#/$defs/declarest"
+    },
+    "distribution": {
+      "$ref": "#/$defs/distribution"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "name",
+    "version",
+    "description",
+    "declarest"
+  ],
+  "$defs": {
+    "declarest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "metadataRoot": {
+          "type": "string",
+          "minLength": 1
+        },
+        "openapi": {
+          "type": "string",
+          "minLength": 1
+        },
+        "compatibleDeclarest": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Masterminds/semver constraint evaluated against the running declarest binary version. The 'dev' build bypasses the gate."
+        },
+        "compatibleManagedService": {
+          "$ref": "#/$defs/compatibleManagedService"
+        }
+      },
+      "required": [
+        "metadataRoot"
+      ]
+    },
+    "compatibleManagedService": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "versions": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Masterminds/semver constraint validated at decode time. Runtime evaluation against an actual managed-service version is deferred until a managedservice.ProductVersionProvider capability is available."
+        }
+      },
+      "required": [
+        "product",
+        "versions"
+      ]
+    },
+    "distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artifactTemplate": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Release artifact name template; MUST equal '<name>-{version}.tar.gz' when set."
+        }
+      }
+    }
+  }
+}

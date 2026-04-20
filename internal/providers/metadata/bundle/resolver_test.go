@@ -881,6 +881,95 @@ func TestExtractTarGzRejectsExcessiveTotalSize(t *testing.T) {
 	}
 }
 
+func TestResolveBundleEnforcesCompatibleDeclarestGate(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	archivePath := filepath.Join(t.TempDir(), "bundle.tar.gz")
+	archive := buildTestBundleArchive(t, map[string]string{
+		"bundle.yaml": `
+apiVersion: declarest.io/v1alpha1
+kind: MetadataBundle
+name: keycloak-bundle
+version: 0.1.0
+description: Keycloak metadata bundle.
+declarest:
+  metadataRoot: metadata
+  compatibleDeclarest: ">=1.0.0"
+`,
+		"metadata/admin/realms/_/metadata.json": `{}`,
+	})
+	if err := os.WriteFile(archivePath, archive, 0o600); err != nil {
+		t.Fatalf("failed to write test bundle archive: %v", err)
+	}
+
+	_, err := ResolveBundle(context.Background(), archivePath, WithDeclarestVersion("0.5.0"))
+	if err == nil {
+		t.Fatal("expected compatibleDeclarest gate to reject older binary")
+	}
+	if !faults.IsCategory(err, faults.ValidationError) {
+		t.Fatalf("expected ValidationError, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "compatibleDeclarest") &&
+		!strings.Contains(err.Error(), "requires declarest") {
+		t.Fatalf("expected compat error to mention compatibleDeclarest, got %v", err)
+	}
+}
+
+func TestResolveBundleAllowsCompatibleDeclarestGateWhenSatisfied(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	archivePath := filepath.Join(t.TempDir(), "bundle.tar.gz")
+	archive := buildTestBundleArchive(t, map[string]string{
+		"bundle.yaml": `
+apiVersion: declarest.io/v1alpha1
+kind: MetadataBundle
+name: keycloak-bundle
+version: 0.1.0
+description: Keycloak metadata bundle.
+declarest:
+  metadataRoot: metadata
+  compatibleDeclarest: ">=1.0.0"
+`,
+		"metadata/admin/realms/_/metadata.json": `{}`,
+	})
+	if err := os.WriteFile(archivePath, archive, 0o600); err != nil {
+		t.Fatalf("failed to write test bundle archive: %v", err)
+	}
+
+	if _, err := ResolveBundle(context.Background(), archivePath, WithDeclarestVersion("v1.4.2")); err != nil {
+		t.Fatalf("expected compatibleDeclarest gate to allow satisfying binary, got %v", err)
+	}
+}
+
+func TestResolveBundleBypassesCompatibleDeclarestGateForDevBuild(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	archivePath := filepath.Join(t.TempDir(), "bundle.tar.gz")
+	archive := buildTestBundleArchive(t, map[string]string{
+		"bundle.yaml": `
+apiVersion: declarest.io/v1alpha1
+kind: MetadataBundle
+name: keycloak-bundle
+version: 0.1.0
+description: Keycloak metadata bundle.
+declarest:
+  metadataRoot: metadata
+  compatibleDeclarest: ">=99.0.0"
+`,
+		"metadata/admin/realms/_/metadata.json": `{}`,
+	})
+	if err := os.WriteFile(archivePath, archive, 0o600); err != nil {
+		t.Fatalf("failed to write test bundle archive: %v", err)
+	}
+
+	if _, err := ResolveBundle(context.Background(), archivePath, WithDeclarestVersion("dev")); err != nil {
+		t.Fatalf("expected compatibleDeclarest gate to bypass dev build, got %v", err)
+	}
+}
+
 func Example_expectedArtifactTemplate() {
 	fmt.Println(expectedArtifactTemplate("keycloak-bundle"))
 	// Output: keycloak-bundle-{version}.tar.gz

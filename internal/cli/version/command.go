@@ -19,13 +19,8 @@ import (
 	"io"
 
 	"github.com/crmarques/declarest/internal/cli/cliutil"
+	binaryversion "github.com/crmarques/declarest/internal/version"
 	"github.com/spf13/cobra"
-)
-
-var (
-	Version   = "dev"
-	Commit    = "unknown"
-	BuildDate = "unknown"
 )
 
 type info struct {
@@ -42,7 +37,11 @@ func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFla
 		Short: "Print CLI version",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			value := info{Version: Version, Commit: Commit, BuildDate: BuildDate}
+			value := info{
+				Version:   binaryversion.Version,
+				Commit:    binaryversion.Commit,
+				BuildDate: binaryversion.BuildDate,
+			}
 			return cliutil.WriteOutput(cmd, globalFlags.Output, value, func(w io.Writer, item info) error {
 				_, err := fmt.Fprintf(w, "%s (%s) %s\n", item.Version, item.Commit, item.BuildDate)
 				return err

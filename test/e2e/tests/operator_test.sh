@@ -488,10 +488,9 @@ apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
 name: keycloak-bundle
 version: 0.0.1
+description: E2E metadata bundle for keycloak.
 declarest:
-  shorthand: keycloak-bundle
   metadataRoot: metadata
-  metadataFileName: metadata.yaml
 EOF
   cat >"${HOME}/.declarest/metadata-bundles/keycloak-bundle-0.0.1/metadata/admin/realms/_/metadata.yaml" <<'EOF'
 {"resource":{"id":"{{/realm}}","alias":"{{/realm}}"}}

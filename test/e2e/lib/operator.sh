@@ -112,7 +112,6 @@ e2e_operator_prepare_managed_service_metadata_bundle() {
   bundle_name=$(e2e_operator_sanitize_name "e2e-${E2E_MANAGED_SERVICE:-managed-service}-bundle")
 
   local bundle_root="${E2E_RUN_DIR}/operator/managed-service-metadata-bundle"
-  local metadata_file_name
 
   rm -rf -- "${bundle_root}"
   rm -f -- "${archive_path}"
@@ -123,8 +122,6 @@ e2e_operator_prepare_managed_service_metadata_bundle() {
     return 1
   fi
 
-  metadata_file_name=$(e2e_metadata_file_name_for_root "${E2E_METADATA_DIR}") || return 1
-
   cat >"${bundle_root}/bundle.yaml" <<EOF_BUNDLE_MANIFEST
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
@@ -132,9 +129,7 @@ name: ${bundle_name}
 version: 0.0.1
 description: E2E metadata bundle for ${E2E_MANAGED_SERVICE:-managed-service}.
 declarest:
-  shorthand: ${bundle_name}
   metadataRoot: metadata
-  metadataFileName: ${metadata_file_name}
 EOF_BUNDLE_MANIFEST
 
   if ! tar -C "${bundle_root}" -czf "${archive_path}" bundle.yaml metadata; then
