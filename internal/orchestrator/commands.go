@@ -110,6 +110,18 @@ func (r *Orchestrator) applyDesiredState(
 	resolvedResource.Payload = resolvedPayload.Value
 	resolvedResource.PayloadDescriptor = resolvedPayload.Descriptor
 
+	if policy.Conflict != nil {
+		check := orchestrator.ConflictCheck{
+			LogicalPath:    resolvedResource.LogicalPath,
+			CollectionPath: resolvedResource.CollectionPath,
+			RemoteID:       resolvedResource.RemoteID,
+		}
+		if skip, reason := policy.Conflict(ctx, check); skip {
+			debugctx.Printf(ctx, "orchestrator apply skipped by conflict checker path=%q reason=%q", logicalPath, reason)
+			return resolvedResource, nil
+		}
+	}
+
 	remoteValue, err := r.fetchRemoteValue(ctx, resolvedResource, resourceMd)
 	if err != nil {
 		if !faults.IsCategory(err, faults.NotFoundError) {

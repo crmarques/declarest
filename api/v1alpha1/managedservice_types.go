@@ -191,14 +191,17 @@ func validateManagedServiceSpec(spec *ManagedServiceSpec) error {
 		}
 	}
 	metadataURL := strings.TrimSpace(spec.Metadata.URL)
-	metadataBundle := strings.TrimSpace(spec.Metadata.Bundle)
-	if metadataURL != "" && metadataBundle != "" {
-		return fmt.Errorf("spec.metadata must define at most one of url or bundle")
+	hasBundleRef := spec.Metadata.BundleRef != nil && strings.TrimSpace(spec.Metadata.BundleRef.Name) != ""
+	if metadataURL != "" && hasBundleRef {
+		return fmt.Errorf("spec.metadata must define at most one of url or bundleRef")
 	}
 	if metadataURL != "" {
 		if err := validateHTTPURL(metadataURL, "spec.metadata.url"); err != nil {
 			return err
 		}
+	}
+	if spec.Metadata.BundleRef != nil && strings.TrimSpace(spec.Metadata.BundleRef.Name) == "" {
+		return fmt.Errorf("spec.metadata.bundleRef.name is required when bundleRef is set")
 	}
 	if spec.HTTP.Proxy != nil {
 		if spec.HTTP.Proxy.Auth != nil {

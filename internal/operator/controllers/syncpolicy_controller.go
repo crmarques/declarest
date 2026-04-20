@@ -92,7 +92,11 @@ type SyncPolicyReconciler struct {
 	Scheme                  *runtime.Scheme
 	Recorder                k8sevents.EventRecorder
 	MaxConcurrentReconciles int
-	secretRefs              secretRefCache
+	// Conflicts is an optional shared index populated by the CRDGenerator
+	// pipeline. When non-nil, SyncPolicy consults it before applying or
+	// pruning resources and skips any entry claimed by a CRDGenerator.
+	Conflicts  *ConflictIndex
+	secretRefs secretRefCache
 }
 
 const (
@@ -471,7 +475,12 @@ func (r *syncPolicyReconciliation) buildExecutionPlan(repoPath, repoRevision str
 
 func (r *syncPolicyReconciliation) applyChanges(session bootstrap.Session, plan *syncExecutionPlan) (int32, int32, error) {
 	var targetedCount, appliedCount int32
+	conflicting := false
 	for _, target := range plan.ApplyTargets {
+		if r.skipApplyOnConflict(target.Path) {
+			conflicting = true
+			continue
+		}
 		mutationResult, mutateErr := mutateapp.Execute(r.ctx, mutateapp.Dependencies{
 			Orchestrator: session.Orchestrator,
 			Repository:   session.Services.RepositoryStore(),
@@ -491,7 +500,54 @@ func (r *syncPolicyReconciliation) applyChanges(session bootstrap.Session, plan 
 		targetedCount += int32(mutationResult.TargetedCount)
 		appliedCount += int32(len(mutationResult.Items))
 	}
+	r.updateConflictingCondition(conflicting)
 	return targetedCount, appliedCount, nil
+}
+
+// skipApplyOnConflict returns true if the logical path is already claimed by
+// a CRDGenerator-owned resource. Emits an event and increments the conflict
+// metric for observability.
+func (r *syncPolicyReconciliation) skipApplyOnConflict(logicalPath string) bool {
+	if r.Conflicts == nil {
+		return false
+	}
+	source, found := r.Conflicts.Lookup(
+		r.policy.Namespace,
+		r.policy.Spec.ManagedServiceRef.Name,
+		"",
+		logicalPath,
+		ConflictTierName,
+	)
+	if !found {
+		return false
+	}
+	crdGeneratorSourceConflictsTotal.WithLabelValues(
+		r.policy.Namespace,
+		r.policy.Name,
+		source.CRDGeneratorName,
+		source.GeneratedKind,
+		string(ConflictTierName),
+	).Inc()
+	emitEventf(r.Recorder, r.policy, corev1.EventTypeWarning, "ResourceOverriddenByCRDGenerator",
+		"skipping apply for %s: owned by CRDGenerator %s/%s (kind=%s)",
+		logicalPath, source.CRDGeneratorNamespace, source.CRDGeneratorName, source.GeneratedKind)
+	return true
+}
+
+func (r *syncPolicyReconciliation) updateConflictingCondition(active bool) {
+	status := metav1.ConditionFalse
+	message := ""
+	if active {
+		status = metav1.ConditionTrue
+		message = "one or more resources are shadowed by a CRDGenerator-owned CR"
+	}
+	r.policy.Status.Conditions = setStatusCondition(
+		r.policy.Status.Conditions,
+		declarestv1alpha1.ConditionTypeConflicting,
+		status,
+		"CRDGeneratorOverride",
+		message,
+	)
 }
 
 func (r *syncPolicyReconciliation) pruneChanges(session bootstrap.Session, plan *syncExecutionPlan) (int32, error) {

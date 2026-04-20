@@ -3374,6 +3374,54 @@ func TestOrchestratorRenderOperationSpecSupportsPayloadTemplateFunc(t *testing.T
 	}
 }
 
+func TestOrchestratorApplyHonoursConflictChecker(t *testing.T) {
+	t.Parallel()
+
+	repo := &fakeRepository{
+		getValue: map[string]any{"id": "42", "alias": "acme"},
+	}
+	md := metadatadomain.ResourceMetadata{
+		ID:    "{{/id}}",
+		Alias: "{{/alias}}",
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationCreate): {Path: "/api/customers"},
+			string(metadatadomain.OperationUpdate): {Path: "/api/customers/{{/id}}"},
+		},
+	}
+	metadataService := &fakeMetadata{resolveValue: md}
+	serverManager := &fakeServer{}
+
+	orchestrator := &Orchestrator{
+		repository: repo,
+		metadata:   metadataService,
+		server:     serverManager,
+	}
+
+	called := 0
+	policy := orch.ApplyPolicy{
+		Conflict: func(_ context.Context, check orch.ConflictCheck) (bool, string) {
+			called++
+			if check.LogicalPath != "/customers/acme" {
+				t.Fatalf("unexpected logicalPath %q", check.LogicalPath)
+			}
+			return true, "owned by CRDGenerator"
+		},
+	}
+
+	if _, err := orchestrator.Apply(context.Background(), "/customers/acme", policy); err != nil {
+		t.Fatalf("Apply returned error: %v", err)
+	}
+	if called != 1 {
+		t.Fatalf("expected ConflictChecker to be called once, got %d", called)
+	}
+	if serverManager.createCalled {
+		t.Fatal("expected Create to be skipped when ConflictChecker vetoes the mutation")
+	}
+	if serverManager.updateCalled {
+		t.Fatal("expected Update to be skipped when ConflictChecker vetoes the mutation")
+	}
+}
+
 func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory) {
 	t.Helper()
 

@@ -6,6 +6,54 @@ metadata:
       [
         {
           "apiVersion": "declarest.io/v1alpha1",
+          "kind": "CRDGenerator",
+          "metadata": {
+            "name": "realm"
+          },
+          "spec": {
+            "conversion": {
+              "strategy": "None"
+            },
+            "group": "keycloak.example.com",
+            "names": {
+              "categories": [
+                "declarest"
+              ],
+              "kind": "Realm",
+              "plural": "realms",
+              "shortNames": [
+                "rlm"
+              ],
+              "singular": "realm"
+            },
+            "scope": "Namespaced",
+            "versions": [
+              {
+                "additionalPrinterColumns": [
+                  {
+                    "jsonPath": ".spec.payload.realm",
+                    "name": "Realm",
+                    "type": "string"
+                  },
+                  {
+                    "jsonPath": ".status.lastAppliedTime",
+                    "name": "Applied",
+                    "type": "date"
+                  }
+                ],
+                "collectionPath": "/admin/realms",
+                "metadataBundleRef": {
+                  "name": "managed-service-bundle-0.0.1"
+                },
+                "name": "v1alpha1",
+                "served": true,
+                "storage": true
+              }
+            ]
+          }
+        },
+        {
+          "apiVersion": "declarest.io/v1alpha1",
           "kind": "ManagedService",
           "metadata": {
             "name": "example-managed-service"
@@ -35,10 +83,25 @@ metadata:
               }
             },
             "metadata": {
-              "bundle": "managed-service-bundle:0.0.1"
+              "bundleRef": {
+                "name": "managed-service-bundle-0.0.1"
+              }
             },
             "openapi": {
               "url": "https://managed-service.example.com/openapi.yaml"
+            }
+          }
+        },
+        {
+          "apiVersion": "declarest.io/v1alpha1",
+          "kind": "MetadataBundle",
+          "metadata": {
+            "name": "managed-service-bundle-0.0.1"
+          },
+          "spec": {
+            "pollInterval": "1h",
+            "source": {
+              "shorthand": "managed-service-bundle:0.0.1"
             }
           }
         },
@@ -156,7 +219,7 @@ metadata:
     capabilities: Seamless Upgrades
     categories: Integration & Delivery
     containerImage: ghcr.io/crmarques/declarest-operator:latest
-    createdAt: "2026-04-19T10:10:40Z"
+    createdAt: "2026-04-20T19:20:11Z"
     description: Declarative resource sync between Git and REST APIs.
     operators.operatorframework.io/builder: operator-sdk-v1.42.2
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
@@ -168,11 +231,17 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    - kind: CRDGenerator
+      name: crdgenerators.declarest.io
+      version: v1alpha1
     - description: Remote REST service targeted by DeclaREST, including OpenAPI sourcing,
         auth, throttling, and metadata bundle references.
       displayName: Managed Service
       kind: ManagedService
       name: managedservices.declarest.io
+      version: v1alpha1
+    - kind: MetadataBundle
+      name: metadatabundles.declarest.io
       version: v1alpha1
     - description: Repository webhook receiver state used by the operator to drive
         event-driven repository refresh.
@@ -231,6 +300,8 @@ spec:
           - secretstores
           - syncpolicies
           - repositorywebhooks
+          - metadatabundles
+          - crdgenerators
           verbs:
           - get
           - list
@@ -247,6 +318,8 @@ spec:
           - secretstores/status
           - syncpolicies/status
           - repositorywebhooks/status
+          - metadatabundles/status
+          - crdgenerators/status
           verbs:
           - get
           - update
@@ -259,6 +332,8 @@ spec:
           - secretstores/finalizers
           - syncpolicies/finalizers
           - repositorywebhooks/finalizers
+          - metadatabundles/finalizers
+          - crdgenerators/finalizers
           verbs:
           - update
         - apiGroups:
@@ -280,6 +355,30 @@ spec:
           - ""
           resources:
           - persistentvolumeclaims
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - apiextensions.k8s.io
+          resources:
+          - customresourcedefinitions
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - rbac.authorization.k8s.io
+          resources:
+          - clusterroles
           verbs:
           - get
           - list

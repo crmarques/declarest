@@ -73,7 +73,7 @@ func TestManagedServiceValidateSpecRejectsInvalidRequestThrottling(t *testing.T)
 	}
 }
 
-func TestManagedServiceValidateSpecAllowsMetadataBundle(t *testing.T) {
+func TestManagedServiceValidateSpecAllowsMetadataBundleRef(t *testing.T) {
 	t.Parallel()
 
 	server := &ManagedService{
@@ -88,7 +88,7 @@ func TestManagedServiceValidateSpecAllowsMetadataBundle(t *testing.T) {
 				},
 			},
 			Metadata: DeclaRESTMetadataArtifact{
-				Bundle: "keycloak-bundle:0.0.1",
+				BundleRef: &NamespacedObjectReference{Name: "keycloak-0.0.1"},
 			},
 		},
 	}
@@ -123,7 +123,7 @@ func TestManagedServiceValidateSpecAllowsSparseProxyOverride(t *testing.T) {
 	}
 }
 
-func TestManagedServiceValidateSpecRejectsMetadataURLAndBundle(t *testing.T) {
+func TestManagedServiceValidateSpecRejectsMetadataURLAndBundleRef(t *testing.T) {
 	t.Parallel()
 
 	server := &ManagedService{
@@ -138,8 +138,8 @@ func TestManagedServiceValidateSpecRejectsMetadataURLAndBundle(t *testing.T) {
 				},
 			},
 			Metadata: DeclaRESTMetadataArtifact{
-				URL:    "https://managed-service.example.com/metadata-bundle.tar.gz",
-				Bundle: "keycloak-bundle:0.0.1",
+				URL:       "https://managed-service.example.com/metadata-bundle.tar.gz",
+				BundleRef: &NamespacedObjectReference{Name: "keycloak-0.0.1"},
 			},
 		},
 	}

@@ -1,0 +1,15 @@
+apiVersion: declarest.io/v1alpha1
+kind: MetadataBundle
+metadata:
+  name: managed-service-bundle-0.0.1
+spec:
+  # Exactly one of shorthand, url, or file must be set.
+  source:
+    shorthand: managed-service-bundle:0.0.1
+    # url: https://github.com/crmarques/declarest-bundle-example/releases/download/v0.0.1/managed-service-bundle-0.0.1.tar.gz
+    # file:
+    #   storage:
+    #     existingPVC:
+    #       name: declarest-bundles
+    #   path: managed-service-bundle-0.0.1.tar.gz
+  pollInterval: 1h

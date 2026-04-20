@@ -6,3 +6,5 @@ resources:
   - bases/declarest.io_secretstores.yaml
   - bases/declarest.io_syncpolicies.yaml
   - bases/declarest.io_repositorywebhooks.yaml
+  - bases/declarest.io_metadatabundles.yaml
+  - bases/declarest.io_crdgenerators.yaml

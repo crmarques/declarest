@@ -14,7 +14,11 @@
 
 package orchestrator
 
-import "github.com/crmarques/declarest/repository"
+import (
+	"context"
+
+	"github.com/crmarques/declarest/repository"
+)
 
 // DeletePolicy is an alias for repository.DeletePolicy — the recursive-scope
 // directive is the same at both boundaries.
@@ -23,6 +27,23 @@ type DeletePolicy = repository.DeletePolicy
 // ListPolicy is an alias for repository.ListPolicy.
 type ListPolicy = repository.ListPolicy
 
+// ConflictCheck summarizes everything the orchestrator knows at apply time
+// that a higher-level arbitrator (e.g. SyncPolicy checking the CRDGenerator
+// conflict index) may need to veto the mutation.
+type ConflictCheck struct {
+	LogicalPath    string
+	CollectionPath string
+	RemoteID       string
+}
+
+// ConflictChecker is an optional tier-2 arbitrator consulted by the
+// orchestrator just before it executes a remote create/update. Returning
+// true skips the mutation and leaves remote state untouched — the caller is
+// expected to have already raised the corresponding observability signal
+// (event, metric, condition).
+type ConflictChecker func(ctx context.Context, check ConflictCheck) (skip bool, reason string)
+
 type ApplyPolicy struct {
-	Force bool
+	Force    bool
+	Conflict ConflictChecker
 }

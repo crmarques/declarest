@@ -242,28 +242,33 @@ e2e_seed_local_metadata_bundle_cache_locked() {
   local openapi_source=${3:-}
   local bundle_name=${bundle_ref%%:*}
   local bundle_version=${bundle_ref#*:}
-  local cache_dir="${HOME}/.declarest/metadata-bundles/${bundle_name}-${bundle_version}"
+  local cache_root="${HOME}/.declarest/metadata-bundles"
+  local cache_dir="${cache_root}/${bundle_name}-${bundle_version}"
 
   [[ -d "${metadata_source}" ]] || return 0
 
-  if [[ -f "${cache_dir}/bundle.yaml" && -d "${cache_dir}/metadata" && -f "${cache_dir}/.declarest-bundle-ready" ]]; then
-    e2e_info "using seeded local metadata bundle cache bundle=${bundle_ref} dir=${cache_dir}"
-    return 0
-  fi
+  mkdir -p "${cache_root}" || return 1
 
-  rm -rf -- "${cache_dir}"
-  mkdir -p "${cache_dir}/metadata" || return 1
+  local stage_dir
+  stage_dir=$(mktemp -d "${cache_dir}.stage.XXXXXX") || return 1
 
-  if ! cp -R "${metadata_source}/." "${cache_dir}/metadata/"; then
+  mkdir -p "${stage_dir}/metadata" || {
+    rm -rf -- "${stage_dir}"
+    return 1
+  }
+
+  if ! cp -R "${metadata_source}/." "${stage_dir}/metadata/"; then
+    rm -rf -- "${stage_dir}"
     e2e_die "failed to seed metadata bundle cache from ${metadata_source}"
     return 1
   fi
 
   if [[ -f "${openapi_source}" ]]; then
-    cp "${openapi_source}" "${cache_dir}/openapi.yaml" || {
+    if ! cp "${openapi_source}" "${stage_dir}/openapi.yaml"; then
+      rm -rf -- "${stage_dir}"
       e2e_die "failed to copy bundle openapi source ${openapi_source}"
       return 1
-    }
+    fi
   fi
 
   {
@@ -279,9 +284,30 @@ e2e_seed_local_metadata_bundle_cache_locked() {
     fi
     printf 'distribution:\n'
     printf '  artifactTemplate: %s-{version}.tar.gz\n' "${bundle_name}"
-  } >"${cache_dir}/bundle.yaml"
+  } >"${stage_dir}/bundle.yaml" || {
+    rm -rf -- "${stage_dir}"
+    return 1
+  }
 
-  : >"${cache_dir}/.declarest-bundle-ready"
+  : >"${stage_dir}/.declarest-bundle-ready" || {
+    rm -rf -- "${stage_dir}"
+    return 1
+  }
+
+  local retired_dir="${cache_dir}.retired.$$"
+  rm -rf -- "${retired_dir}"
+  if [[ -d "${cache_dir}" ]] && ! mv "${cache_dir}" "${retired_dir}"; then
+    rm -rf -- "${stage_dir}"
+    e2e_die "failed to retire stale metadata bundle cache at ${cache_dir}"
+    return 1
+  fi
+  if ! mv "${stage_dir}" "${cache_dir}"; then
+    [[ -d "${retired_dir}" ]] && mv "${retired_dir}" "${cache_dir}"
+    rm -rf -- "${stage_dir}"
+    e2e_die "failed to finalize metadata bundle cache at ${cache_dir}"
+    return 1
+  fi
+  rm -rf -- "${retired_dir}"
   e2e_info "seeded local metadata bundle cache bundle=${bundle_ref} dir=${cache_dir}"
 }
 

@@ -4,8 +4,8 @@ metadata:
   name: example-managed-service
 spec:
   # Context parity:
-  # - managed-service.http.*     -> spec.http.*
-  # - metadata.bundle           -> spec.metadata.bundle
+  # - managed-service.http.*      -> spec.http.*
+  # - metadata.bundle (shorthand) -> spec.metadata.bundleRef -> MetadataBundle CR
   http:
     baseURL: https://managed-service.example.com/api
     requestThrottling:
@@ -26,4 +26,5 @@ spec:
   openapi:
     url: https://managed-service.example.com/openapi.yaml
   metadata:
-    bundle: managed-service-bundle:0.0.1
+    bundleRef:
+      name: managed-service-bundle-0.0.1

@@ -1,0 +1,31 @@
+apiVersion: declarest.io/v1alpha1
+kind: CRDGenerator
+metadata:
+  name: realm
+spec:
+  group: keycloak.example.com
+  scope: Namespaced
+  names:
+    kind: Realm
+    plural: realms
+    singular: realm
+    shortNames:
+      - rlm
+    categories:
+      - declarest
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      metadataBundleRef:
+        name: managed-service-bundle-0.0.1
+      collectionPath: /admin/realms
+      additionalPrinterColumns:
+        - name: Realm
+          type: string
+          jsonPath: .spec.payload.realm
+        - name: Applied
+          type: date
+          jsonPath: .status.lastAppliedTime
+  conversion:
+    strategy: None

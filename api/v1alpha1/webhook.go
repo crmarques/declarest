@@ -53,6 +53,20 @@ func (s *SyncPolicy) SetupWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
+// +kubebuilder:webhook:path=/validate-declarest-io-v1alpha1-metadatabundle,mutating=false,failurePolicy=Fail,sideEffects=None,groups=declarest.io,resources=metadatabundles,verbs=create;update;delete,versions=v1alpha1,name=vmetadatabundle-v1alpha1.declarest.io,admissionReviewVersions=v1
+func (b *MetadataBundle) SetupWebhookWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewWebhookManagedBy(mgr, b).
+		WithValidator(&metadataBundleValidator{Client: mgr.GetClient()}).
+		Complete()
+}
+
+// +kubebuilder:webhook:path=/validate-declarest-io-v1alpha1-crdgenerator,mutating=false,failurePolicy=Fail,sideEffects=None,groups=declarest.io,resources=crdgenerators,verbs=create;update;delete,versions=v1alpha1,name=vcrdgenerator-v1alpha1.declarest.io,admissionReviewVersions=v1
+func (g *CRDGenerator) SetupWebhookWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewWebhookManagedBy(mgr, g).
+		WithValidator(&crdGeneratorValidator{Client: mgr.GetClient()}).
+		Complete()
+}
+
 // --- ResourceRepository Validator ---
 
 type resourceRepositoryValidator struct {
@@ -83,11 +97,24 @@ type managedServiceValidator struct {
 	Client client.Reader
 }
 
-func (v *managedServiceValidator) ValidateCreate(_ context.Context, obj *ManagedService) (admission.Warnings, error) {
+func (v *managedServiceValidator) ValidateCreate(ctx context.Context, obj *ManagedService) (admission.Warnings, error) {
 	candidate := obj.DeepCopy()
 	envref.ExpandExactEnvPlaceholdersInPlace(&candidate.Spec)
 	candidate.Default()
-	return nil, candidate.ValidateSpec()
+	if err := candidate.ValidateSpec(); err != nil {
+		return nil, err
+	}
+	if ref := candidate.Spec.Metadata.BundleRef; ref != nil && strings.TrimSpace(ref.Name) != "" {
+		bundle := &MetadataBundle{}
+		key := client.ObjectKey{Namespace: candidate.Namespace, Name: strings.TrimSpace(ref.Name)}
+		if err := v.Client.Get(ctx, key, bundle); err != nil {
+			return nil, fmt.Errorf("spec.metadata.bundleRef %q: %w", ref.Name, err)
+		}
+		if bundle.DeletionTimestamp != nil {
+			return nil, fmt.Errorf("spec.metadata.bundleRef %q is being deleted", ref.Name)
+		}
+	}
+	return nil, nil
 }
 
 func (v *managedServiceValidator) ValidateUpdate(ctx context.Context, _ *ManagedService, newObj *ManagedService) (admission.Warnings, error) {
@@ -99,6 +126,115 @@ func (v *managedServiceValidator) ValidateDelete(ctx context.Context, obj *Manag
 	return checkDependencyRef(ctx, v.Client, ms.Namespace, "ManagedService", ms.Name, func(sp *SyncPolicy) string {
 		return sp.Spec.ManagedServiceRef.Name
 	})
+}
+
+// --- MetadataBundle Validator ---
+
+type metadataBundleValidator struct {
+	Client client.Reader
+}
+
+func (v *metadataBundleValidator) ValidateCreate(_ context.Context, obj *MetadataBundle) (admission.Warnings, error) {
+	candidate := obj.DeepCopy()
+	envref.ExpandExactEnvPlaceholdersInPlace(&candidate.Spec)
+	candidate.Default()
+	return nil, candidate.ValidateSpec()
+}
+
+func (v *metadataBundleValidator) ValidateUpdate(ctx context.Context, _ *MetadataBundle, newObj *MetadataBundle) (admission.Warnings, error) {
+	return v.ValidateCreate(ctx, newObj)
+}
+
+func (v *metadataBundleValidator) ValidateDelete(ctx context.Context, obj *MetadataBundle) (admission.Warnings, error) {
+	// Delete-gate via controller finalizer — webhook cannot return pending.
+	// Surface a warning when dependents still reference the bundle.
+	var warnings admission.Warnings
+	services := &ManagedServiceList{}
+	if err := v.Client.List(ctx, services, client.InNamespace(obj.Namespace)); err == nil {
+		for idx := range services.Items {
+			svc := &services.Items[idx]
+			if svc.DeletionTimestamp != nil {
+				continue
+			}
+			if ref := svc.Spec.Metadata.BundleRef; ref != nil && strings.TrimSpace(ref.Name) == obj.Name {
+				warnings = append(warnings, fmt.Sprintf(
+					"MetadataBundle %q is still referenced by ManagedService %q; deletion will be blocked by the controller finalizer until the reference is removed",
+					obj.Name, svc.Name,
+				))
+			}
+		}
+	}
+	generators := &CRDGeneratorList{}
+	if err := v.Client.List(ctx, generators, client.InNamespace(obj.Namespace)); err == nil {
+		for idx := range generators.Items {
+			gen := &generators.Items[idx]
+			if gen.DeletionTimestamp != nil {
+				continue
+			}
+			for _, version := range gen.Spec.Versions {
+				if strings.TrimSpace(version.MetadataBundleRef.Name) == obj.Name {
+					warnings = append(warnings, fmt.Sprintf(
+						"MetadataBundle %q is still referenced by CRDGenerator %q (version %q); deletion will be blocked by the controller finalizer until the reference is removed",
+						obj.Name, gen.Name, version.Name,
+					))
+					break
+				}
+			}
+		}
+	}
+	return warnings, nil
+}
+
+// --- CRDGenerator Validator ---
+
+type crdGeneratorValidator struct {
+	Client client.Reader
+}
+
+func (v *crdGeneratorValidator) ValidateCreate(ctx context.Context, obj *CRDGenerator) (admission.Warnings, error) {
+	candidate := obj.DeepCopy()
+	envref.ExpandExactEnvPlaceholdersInPlace(&candidate.Spec)
+	candidate.Default()
+	if err := candidate.ValidateSpec(); err != nil {
+		return nil, err
+	}
+	return nil, v.validateNoGroupKindConflict(ctx, candidate)
+}
+
+func (v *crdGeneratorValidator) ValidateUpdate(ctx context.Context, _ *CRDGenerator, newObj *CRDGenerator) (admission.Warnings, error) {
+	return v.ValidateCreate(ctx, newObj)
+}
+
+func (v *crdGeneratorValidator) ValidateDelete(_ context.Context, _ *CRDGenerator) (admission.Warnings, error) {
+	return nil, nil
+}
+
+func (v *crdGeneratorValidator) validateNoGroupKindConflict(ctx context.Context, candidate *CRDGenerator) error {
+	generators := &CRDGeneratorList{}
+	if err := v.Client.List(ctx, generators); err != nil {
+		// Allow operation but the controller will also guard via Conflicting condition.
+		return nil
+	}
+	for idx := range generators.Items {
+		existing := &generators.Items[idx]
+		if existing.Namespace == candidate.Namespace && existing.Name == candidate.Name {
+			continue
+		}
+		if existing.DeletionTimestamp != nil {
+			continue
+		}
+		if strings.EqualFold(existing.Spec.Group, candidate.Spec.Group) &&
+			strings.EqualFold(existing.Spec.Names.Kind, candidate.Spec.Names.Kind) {
+			return fmt.Errorf(
+				"spec.group + spec.names.kind (%s/%s) is already claimed by CRDGenerator %s/%s",
+				candidate.Spec.Group,
+				candidate.Spec.Names.Kind,
+				existing.Namespace,
+				existing.Name,
+			)
+		}
+	}
+	return nil
 }
 
 // --- SecretStore Validator ---

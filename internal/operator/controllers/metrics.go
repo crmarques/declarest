@@ -77,6 +77,16 @@ var (
 		},
 		[]string{"namespace", "name"},
 	)
+
+	crdGeneratorSourceConflictsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "declarest",
+			Subsystem: "operator",
+			Name:      "crdgenerator_source_conflicts_total",
+			Help:      "Total number of conflicts detected between CRDGenerator-sourced and SyncPolicy-sourced resources.",
+		},
+		[]string{"namespace", "syncpolicy", "crdgenerator", "kind", "tier"},
+	)
 )
 
 func init() {
@@ -87,5 +97,6 @@ func init() {
 		syncPolicyReconcileDurationSeconds,
 		syncPolicyResourcesAppliedTotal,
 		syncPolicyResourcesPrunedTotal,
+		crdGeneratorSourceConflictsTotal,
 	)
 }

@@ -488,7 +488,7 @@ spec:
                 - --global-namespace
                 - olm
                 image: quay.io/operator-framework/olm@sha256:36563571fdddf266ab871efcec0fbd98d3b74bff14506718aa79f9853712d640
-                imagePullPolicy: Always
+                imagePullPolicy: IfNotPresent
                 ports:
                 - containerPort: 5443
                   protocol: TCP

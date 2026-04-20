@@ -430,15 +430,20 @@ spec:
                 type: object
               metadata:
                 properties:
-                  bundle:
-                    type: string
+                  bundleRef:
+                    properties:
+                      name:
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
                   url:
                     type: string
                 type: object
                 x-kubernetes-validations:
-                - message: metadata must define at most one of url or bundle
-                  rule: '!(has(self.url) && size(self.url) > 0 && has(self.bundle)
-                    && size(self.bundle) > 0)'
+                - message: metadata must define at most one of url or bundleRef
+                  rule: '!(has(self.url) && size(self.url) > 0 && has(self.bundleRef))'
               openapi:
                 properties:
                   url:

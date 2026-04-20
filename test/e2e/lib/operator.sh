@@ -477,7 +477,7 @@ e2e_operator_prepare_repository_webhook() {
 }
 
 e2e_operator_ready_timeout_seconds() {
-  local timeout_seconds=${E2E_OPERATOR_READY_TIMEOUT_SECONDS:-120}
+  local timeout_seconds=${E2E_OPERATOR_READY_TIMEOUT_SECONDS:-300}
 
   if ! [[ "${timeout_seconds}" =~ ^[0-9]+$ ]] || ((timeout_seconds <= 0)); then
     e2e_die "invalid operator readiness timeout: ${timeout_seconds} (set DECLAREST_E2E_OPERATOR_READY_TIMEOUT_SECONDS to a positive integer up to 600)"
@@ -777,6 +777,80 @@ e2e_operator_olm_save_oci_archive() {
   return 0
 }
 
+e2e_operator_olm_core_image_refs() {
+  local manifest_path
+  manifest_path=$(e2e_operator_olm_core_runtime_manifest_path)
+  [[ -f "${manifest_path}" ]] || return 0
+
+  {
+    grep -oE 'quay\.io/operator-framework/[a-zA-Z0-9._/-]+@sha256:[a-f0-9]+' "${manifest_path}"
+    grep -oE -- '--opmImage=[^[:space:]\"]+' "${manifest_path}" | cut -d= -f2
+  } | sort -u
+}
+
+e2e_operator_olm_core_image_cache_dir() {
+  printf '%s\n' "${HOME}/.cache/declarest-e2e/olm-core-archives"
+}
+
+e2e_operator_olm_core_image_cache_path() {
+  local image=$1
+  local safe
+  safe=$(printf '%s' "${image}" | tr ':/@' '___')
+  printf '%s/%s.oci.tar\n' "$(e2e_operator_olm_core_image_cache_dir)" "${safe}"
+}
+
+e2e_operator_olm_pull_and_save_core_image_locked() {
+  local image=$1
+  local archive=$2
+
+  if [[ -s "${archive}" ]]; then
+    return 0
+  fi
+
+  mkdir -p -- "$(dirname -- "${archive}")" || return 1
+
+  e2e_info "operator profile pulling OLM core image image=${image}"
+  e2e_run_cmd "${E2E_CONTAINER_ENGINE}" pull "${image}" || return 1
+
+  local tmp_archive="${archive}.tmp.$$"
+  rm -f -- "${tmp_archive}"
+  if ! e2e_operator_olm_save_oci_archive "${image}" "${tmp_archive}"; then
+    rm -f -- "${tmp_archive}"
+    return 1
+  fi
+  mv -f -- "${tmp_archive}" "${archive}" || {
+    rm -f -- "${tmp_archive}"
+    return 1
+  }
+  return 0
+}
+
+e2e_operator_olm_preload_core_images() {
+  local image
+  local archive
+  local locked_rc
+  while IFS= read -r image; do
+    [[ -n "${image}" ]] || continue
+    archive=$(e2e_operator_olm_core_image_cache_path "${image}")
+
+    if [[ ! -s "${archive}" ]]; then
+      e2e_with_lock_timeout \
+        "olm-core-image-$(printf '%s' "${image}" | tr ':/@' '___')" \
+        600 \
+        e2e_operator_olm_pull_and_save_core_image_locked "${image}" "${archive}"
+      locked_rc=$?
+      if ((locked_rc != 0)); then
+        e2e_die "failed to preload OLM core image ${image}"
+        return 1
+      fi
+    fi
+
+    e2e_info "operator profile importing OLM core image into kind nodes image=${image}"
+    e2e_operator_olm_import_oci_archive_into_nodes "${archive}" "${image}" '' || return 1
+  done < <(e2e_operator_olm_core_image_refs)
+  return 0
+}
+
 e2e_operator_olm_build_bundle_image() {
   local run_dir
   run_dir=$(e2e_operator_olm_run_dir)
@@ -934,6 +1008,7 @@ e2e_operator_olm_load_images_into_cluster() {
   e2e_operator_olm_import_oci_archive_into_nodes "${bundle_archive}" "${bundle_image}" "${E2E_OPERATOR_OLM_BUNDLE_DIGEST}" || return 1
   e2e_operator_olm_import_oci_archive_into_nodes "${catalog_archive}" "${catalog_image}" "${E2E_OPERATOR_OLM_CATALOG_DIGEST}" || return 1
   e2e_operator_olm_import_oci_archive_into_nodes "${manager_archive}" "${E2E_OPERATOR_IMAGE}" '' || return 1
+  e2e_operator_olm_preload_core_images || return 1
   return 0
 }
 
@@ -1244,6 +1319,11 @@ e2e_operator_olm_wait_for_csv_succeeded() {
     e2e_error "operator CSV ${csv_name} did not reach Succeeded within timeout"
     kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" describe "csv/${csv_name}" || true
     kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" describe "subscription/${subscription_name}" || true
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" get pods -o wide || true
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" describe deployment/declarest-operator || true
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" describe pods -l app.kubernetes.io/name=declarest-operator || true
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" logs -l app.kubernetes.io/name=declarest-operator --all-containers --tail=200 --prefix=true || true
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" logs -l app.kubernetes.io/name=declarest-operator --all-containers --tail=200 --prefix=true --previous || true
     return 1
   fi
 

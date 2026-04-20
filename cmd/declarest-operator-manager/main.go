@@ -24,8 +24,10 @@ import (
 	declarestv1alpha1 "github.com/crmarques/declarest/api/v1alpha1"
 	"github.com/crmarques/declarest/internal/operator/controllers"
 	"github.com/crmarques/declarest/internal/operator/observability"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/dynamic"
 	k8sscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -65,6 +67,7 @@ func main() {
 	scheme := runtime.NewScheme()
 	utilruntime.Must(k8sscheme.AddToScheme(scheme))
 	utilruntime.Must(declarestv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 
 	ctx := ctrl.SetupSignalHandler()
 	shutdownTelemetry, err := observability.Setup(ctx, "declarest-operator")
@@ -134,11 +137,14 @@ func main() {
 		ctrl.Log.WithName("setup").Error(err, "unable to create SecretStore controller")
 		os.Exit(1)
 	}
+	conflictIndex := controllers.NewConflictIndex()
+
 	if err := (&controllers.SyncPolicyReconciler{
 		Client:                  manager.GetClient(),
 		Scheme:                  manager.GetScheme(),
 		Recorder:                manager.GetEventRecorder("syncpolicy-controller"),
 		MaxConcurrentReconciles: maxConcurrentReconciles,
+		Conflicts:               conflictIndex,
 	}).SetupWithManager(manager); err != nil {
 		ctrl.Log.WithName("setup").Error(err, "unable to create SyncPolicy controller")
 		os.Exit(1)
@@ -150,6 +156,43 @@ func main() {
 		MaxConcurrentReconciles: maxConcurrentReconciles,
 	}).SetupWithManager(manager); err != nil {
 		ctrl.Log.WithName("setup").Error(err, "unable to create RepositoryWebhook controller")
+		os.Exit(1)
+	}
+	if err := (&controllers.MetadataBundleReconciler{
+		Client:                  manager.GetClient(),
+		Scheme:                  manager.GetScheme(),
+		Recorder:                manager.GetEventRecorder("metadatabundle-controller"),
+		MaxConcurrentReconciles: maxConcurrentReconciles,
+	}).SetupWithManager(manager); err != nil {
+		ctrl.Log.WithName("setup").Error(err, "unable to create MetadataBundle controller")
+		os.Exit(1)
+	}
+
+	dynamicClient, err := dynamic.NewForConfig(manager.GetConfig())
+	if err != nil {
+		ctrl.Log.WithName("setup").Error(err, "unable to build dynamic client")
+		os.Exit(1)
+	}
+	generatedResourceReconciler := controllers.NewGeneratedResourceReconciler(
+		manager.GetClient(),
+		dynamicClient,
+		manager.GetEventRecorder("generated-resource-controller"),
+		conflictIndex,
+	)
+	if err := manager.Add(generatedResourceReconciler); err != nil {
+		ctrl.Log.WithName("setup").Error(err, "unable to register generated-resource reconciler")
+		os.Exit(1)
+	}
+	if err := (&controllers.CRDGeneratorReconciler{
+		Client:                  manager.GetClient(),
+		Scheme:                  manager.GetScheme(),
+		Recorder:                manager.GetEventRecorder("crdgenerator-controller"),
+		MaxConcurrentReconciles: maxConcurrentReconciles,
+		RESTMapper:              manager.GetRESTMapper(),
+		Watches:                 generatedResourceReconciler,
+		Conflicts:               conflictIndex,
+	}).SetupWithManager(manager); err != nil {
+		ctrl.Log.WithName("setup").Error(err, "unable to create CRDGenerator controller")
 		os.Exit(1)
 	}
 	if err := manager.Add(&controllers.RepositoryWebhookServer{
@@ -176,6 +219,14 @@ func main() {
 		}
 		if err := (&declarestv1alpha1.SyncPolicy{}).SetupWebhookWithManager(manager); err != nil {
 			ctrl.Log.WithName("setup").Error(err, "unable to create SyncPolicy webhook")
+			os.Exit(1)
+		}
+		if err := (&declarestv1alpha1.MetadataBundle{}).SetupWebhookWithManager(manager); err != nil {
+			ctrl.Log.WithName("setup").Error(err, "unable to create MetadataBundle webhook")
+			os.Exit(1)
+		}
+		if err := (&declarestv1alpha1.CRDGenerator{}).SetupWebhookWithManager(manager); err != nil {
+			ctrl.Log.WithName("setup").Error(err, "unable to create CRDGenerator webhook")
 			os.Exit(1)
 		}
 	}

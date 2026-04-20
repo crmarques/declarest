@@ -33,10 +33,10 @@ type DeclaRESTExternalArtifact struct {
 	URL string `json:"url,omitempty"`
 }
 
-// +kubebuilder:validation:XValidation:rule="!(has(self.url) && size(self.url) > 0 && has(self.bundle) && size(self.bundle) > 0)",message="metadata must define at most one of url or bundle"
+// +kubebuilder:validation:XValidation:rule="!(has(self.url) && size(self.url) > 0 && has(self.bundleRef))",message="metadata must define at most one of url or bundleRef"
 type DeclaRESTMetadataArtifact struct {
-	URL    string `json:"url,omitempty"`
-	Bundle string `json:"bundle,omitempty"`
+	URL       string                     `json:"url,omitempty"`
+	BundleRef *NamespacedObjectReference `json:"bundleRef,omitempty"`
 }
 
 type HTTPProxySpec struct {

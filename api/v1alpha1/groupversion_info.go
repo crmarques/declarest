@@ -26,6 +26,24 @@ const (
 	ConditionTypeStalled     = "Stalled"
 )
 
+// Finalizer attached to every DeclaREST-owned CR. Shared so controllers and
+// webhook delete-gates agree on the name.
+const FinalizerName = "declarest.io/cleanup"
+
+// Label and annotation keys used by the CRDGenerator controller to adopt and
+// track CustomResourceDefinitions it generates. Label values cannot contain
+// "/", so the full owner coordinates live in the annotation.
+const (
+	CRDGeneratorOwnerLabel      = "declarest.io/owned-by"
+	CRDGeneratorOwnerLabelValue = "crdgenerator"
+	CRDGeneratorOwnerAnnotation = "declarest.io/crdgenerator"
+
+	// Label applied to aggregated ClusterRoles generated for CRDGenerator CRDs
+	// so the operator ClusterRole aggregates them via matchLabels.
+	AggregateToOperatorLabel      = "declarest.io/aggregate-to-operator"
+	AggregateToOperatorLabelValue = "true"
+)
+
 var (
 	GroupVersion = schema.GroupVersion{Group: "declarest.io", Version: "v1alpha1"}
 
@@ -45,6 +63,10 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&SyncPolicyList{},
 		&RepositoryWebhook{},
 		&RepositoryWebhookList{},
+		&MetadataBundle{},
+		&MetadataBundleList{},
+		&CRDGenerator{},
+		&CRDGeneratorList{},
 	)
 	metav1.AddToGroupVersion(scheme, GroupVersion)
 	return nil
