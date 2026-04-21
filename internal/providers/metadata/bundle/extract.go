@@ -16,6 +16,7 @@ package bundlemetadata
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"fmt"
@@ -103,6 +104,21 @@ func openBundleStream(ctx context.Context, source bundleSource, opts bundleResol
 		return file, nil
 	case sourceKindOCI:
 		return openOCIBundleStream(ctx, source, opts)
+	case sourceKindConfigMap:
+		data, ok := opts.inMemoryBundles[source.inMemoryKey]
+		if !ok {
+			return nil, faults.NotFound(
+				fmt.Sprintf("metadata bundle configmap bytes not supplied for %q", source.inMemoryKey),
+				nil,
+			)
+		}
+		if len(data) == 0 {
+			return nil, faults.Invalid(
+				fmt.Sprintf("metadata bundle configmap bytes for %q are empty", source.inMemoryKey),
+				nil,
+			)
+		}
+		return io.NopCloser(bytes.NewReader(data)), nil
 	case sourceKindURL, sourceKindShort:
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, source.remoteURL, nil)
 		if err != nil {

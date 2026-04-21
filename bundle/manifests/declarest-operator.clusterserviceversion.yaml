@@ -101,7 +101,7 @@ metadata:
           "spec": {
             "pollInterval": "1h",
             "source": {
-              "shorthand": "managed-service-bundle:0.0.1"
+              "url": "oci://ghcr.io/crmarques/declarest-metadata-bundles/managed-service-bundle:0.0.1"
             }
           }
         },
@@ -354,6 +354,14 @@ spec:
         - apiGroups:
           - ""
           resources:
+          - configmaps
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
           - persistentvolumeclaims
           verbs:
           - get
@@ -422,6 +430,8 @@ spec:
                   value: /var/lib/declarest/repos
                 - name: DECLAREST_OPERATOR_CACHE_BASE_DIR
                   value: /var/lib/declarest/cache
+                - name: DECLAREST_BUNDLE_CACHE_DIR
+                  value: /var/lib/declarest/cache/bundles
                 - name: HOME
                   value: /var/lib/declarest
                 image: ghcr.io/crmarques/declarest-operator:0.0.1

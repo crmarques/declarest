@@ -42,9 +42,22 @@ type BundleResolution struct {
 type BundleResolverOption func(*bundleResolverOptions)
 
 type bundleResolverOptions struct {
-	proxy            *config.HTTPProxy
-	runtime          *promptauth.Runtime
-	declarestVersion string
+	proxy               *config.HTTPProxy
+	runtime             *promptauth.Runtime
+	declarestVersion    string
+	cacheRoot           string
+	registryCredentials []RegistryCredential
+	inMemoryBundles     map[string][]byte
+}
+
+// RegistryCredential is a static username/password pair for an OCI registry
+// host. Used by WithRegistryCredentials to authenticate OCI pulls without
+// relying on an ambient docker config.
+type RegistryCredential struct {
+	// Registry is the host[:port] of the OCI registry (e.g. "ghcr.io").
+	Registry string
+	Username string
+	Password string
 }
 
 func WithProxyConfig(proxy *config.HTTPProxy) BundleResolverOption {
@@ -70,6 +83,44 @@ func WithDeclarestVersion(value string) BundleResolverOption {
 	}
 }
 
+// WithCacheRoot overrides the default cache root directory. When unset the
+// resolver falls back to defaultCacheRoot (~/.declarest/metadata-bundles).
+func WithCacheRoot(path string) BundleResolverOption {
+	return func(opts *bundleResolverOptions) {
+		opts.cacheRoot = strings.TrimSpace(path)
+	}
+}
+
+// WithRegistryCredentials installs static per-host OCI credentials that
+// override any ambient docker-config auth. When the list is empty the
+// resolver continues to use the default oras-go auth discovery path.
+func WithRegistryCredentials(credentials []RegistryCredential) BundleResolverOption {
+	return func(opts *bundleResolverOptions) {
+		if len(credentials) == 0 {
+			return
+		}
+		opts.registryCredentials = append(opts.registryCredentials, credentials...)
+	}
+}
+
+// WithInMemoryBundles registers tarball bytes addressable by an internal URL
+// form (for example `configmap://<namespace>/<name>/<key>`). The operator
+// controller uses this to hand ConfigMap- or Secret-sourced bundle bytes to
+// the provider without leaking Kubernetes types into the provider boundary.
+func WithInMemoryBundles(bundles map[string][]byte) BundleResolverOption {
+	return func(opts *bundleResolverOptions) {
+		if len(bundles) == 0 {
+			return
+		}
+		if opts.inMemoryBundles == nil {
+			opts.inMemoryBundles = make(map[string][]byte, len(bundles))
+		}
+		for key, value := range bundles {
+			opts.inMemoryBundles[key] = value
+		}
+	}
+}
+
 func ResolveBundle(ctx context.Context, ref string, opts ...BundleResolverOption) (BundleResolution, error) {
 	options := bundleResolverOptions{}
 	for _, opt := range opts {
@@ -82,9 +133,26 @@ func ResolveBundle(ctx context.Context, ref string, opts ...BundleResolverOption
 		return BundleResolution{}, err
 	}
 
-	cacheRoot, err := defaultCacheRoot()
-	if err != nil {
-		return BundleResolution{}, err
+	if source.kind == sourceKindLocal {
+		if info, statErr := os.Stat(source.localPath); statErr == nil && info.IsDir() {
+			resolution, err := resolveLocalDirectory(source)
+			if err != nil {
+				return BundleResolution{}, err
+			}
+			if err := enforceCompatibleDeclarest(resolution.Manifest, options.declarestVersion); err != nil {
+				return BundleResolution{}, err
+			}
+			return resolution, nil
+		}
+	}
+
+	cacheRoot := strings.TrimSpace(options.cacheRoot)
+	if cacheRoot == "" {
+		defaultRoot, err := defaultCacheRoot()
+		if err != nil {
+			return BundleResolution{}, err
+		}
+		cacheRoot = defaultRoot
 	}
 
 	cacheDir := filepath.Join(cacheRoot, source.cacheDirName)
@@ -101,6 +169,15 @@ func ResolveBundle(ctx context.Context, ref string, opts ...BundleResolverOption
 	}
 
 	return resolution, nil
+}
+
+func resolveLocalDirectory(source bundleSource) (BundleResolution, error) {
+	manifestPath := filepath.Join(source.localPath, "bundle.yaml")
+	manifest, err := readBundleManifest(manifestPath)
+	if err != nil {
+		return BundleResolution{}, err
+	}
+	return buildResolution(source.localPath, manifest, source)
 }
 
 func resolveBundleAt(

@@ -61,7 +61,7 @@ func openOCIBundleStream(ctx context.Context, source bundleSource, opts bundleRe
 		return nil, err
 	}
 
-	repository, err := buildOCIRepository(source, httpClient)
+	repository, err := buildOCIRepository(source, httpClient, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func openOCIBundleStream(ctx context.Context, source bundleSource, opts bundleRe
 	return blob, nil
 }
 
-func buildOCIRepository(source bundleSource, httpClient *http.Client) (*remote.Repository, error) {
+func buildOCIRepository(source bundleSource, httpClient *http.Client, opts bundleResolverOptions) (*remote.Repository, error) {
 	reference := registry.Reference{
 		Registry:   source.ociRegistry,
 		Repository: source.ociRepository,
@@ -97,17 +97,45 @@ func buildOCIRepository(source bundleSource, httpClient *http.Client) (*remote.R
 	if err != nil {
 		return nil, faults.Invalid("metadata bundle OCI reference is invalid", err)
 	}
-	repository.Client = &auth.Client{
+	authClient := &auth.Client{
 		Client: httpClient,
 		Header: http.Header{
 			"User-Agent": []string{"declarest/bundle-resolver"},
 		},
 		Cache: auth.NewCache(),
 	}
+	if len(opts.registryCredentials) > 0 {
+		authClient.Credential = buildStaticCredentialFunc(opts.registryCredentials)
+	}
+	repository.Client = authClient
 	if _, ok := ociPlainHTTPRegistries[source.ociRegistry]; ok {
 		repository.PlainHTTP = true
 	}
 	return repository, nil
+}
+
+// buildStaticCredentialFunc returns a CredentialFunc that answers from the
+// supplied RegistryCredential list. Hosts are compared case-insensitively and
+// only full `host[:port]` matches resolve; unknown hosts fall back to
+// EmptyCredential, letting ORAS attempt anonymous access.
+func buildStaticCredentialFunc(credentials []RegistryCredential) auth.CredentialFunc {
+	lookup := make(map[string]auth.Credential, len(credentials))
+	for _, credential := range credentials {
+		host := strings.ToLower(strings.TrimSpace(credential.Registry))
+		if host == "" {
+			continue
+		}
+		lookup[host] = auth.Credential{
+			Username: credential.Username,
+			Password: credential.Password,
+		}
+	}
+	return func(_ context.Context, hostport string) (auth.Credential, error) {
+		if credential, ok := lookup[strings.ToLower(strings.TrimSpace(hostport))]; ok {
+			return credential, nil
+		}
+		return auth.EmptyCredential, nil
+	}
 }
 
 func fetchOCIBundleManifest(ctx context.Context, repository *remote.Repository, reference string) (ocispec.Manifest, error) {

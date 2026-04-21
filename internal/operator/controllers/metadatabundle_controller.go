@@ -16,9 +16,12 @@ package controllers
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	declarestv1alpha1 "github.com/crmarques/declarest/api/v1alpha1"
@@ -28,14 +31,18 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	k8sevents "k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
@@ -56,9 +63,83 @@ type MetadataBundleReconciler struct {
 	Recorder                k8sevents.EventRecorder
 	MaxConcurrentReconciles int
 
+	// CacheRoot is the directory the resolver uses to cache extracted
+	// bundles. When empty, the resolver falls back to
+	// ~/.declarest/metadata-bundles. Operator deployments SHOULD set this to
+	// a path on a writable volume (for example
+	// "$DECLAREST_OPERATOR_CACHE_BASE_DIR/bundles").
+	CacheRoot string
+
 	// resolveGroup deduplicates concurrent resolutions for the same bundle
-	// identity to avoid stampeding the origin (e.g. GitHub releases).
+	// identity to avoid stampeding the origin (e.g. GitHub releases, OCI
+	// registries) from parallel reconciles of the same CR.
 	resolveGroup singleflight.Group
+
+	// refCache maps MetadataBundle NamespacedName to the Secret and
+	// ConfigMap names it currently references, so the Watch mappers can
+	// enqueue the right bundles in O(1) when a credential or ConfigMap
+	// rotates.
+	refCache bundleRefCache
+}
+
+// bundleRefCache indexes per-bundle Secret and ConfigMap dependencies.
+// Modelled after the syncpolicy secretRefCache pattern.
+type bundleRefCache struct {
+	mu         sync.RWMutex
+	secrets    map[types.NamespacedName]sets.Set[string]
+	configMaps map[types.NamespacedName]sets.Set[string]
+}
+
+func (c *bundleRefCache) update(key types.NamespacedName, secretNames []string, configMapNames []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.secrets == nil {
+		c.secrets = make(map[types.NamespacedName]sets.Set[string])
+	}
+	if c.configMaps == nil {
+		c.configMaps = make(map[types.NamespacedName]sets.Set[string])
+	}
+	if len(secretNames) == 0 {
+		delete(c.secrets, key)
+	} else {
+		c.secrets[key] = sets.New(secretNames...)
+	}
+	if len(configMapNames) == 0 {
+		delete(c.configMaps, key)
+	} else {
+		c.configMaps[key] = sets.New(configMapNames...)
+	}
+}
+
+func (c *bundleRefCache) remove(key types.NamespacedName) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.secrets, key)
+	delete(c.configMaps, key)
+}
+
+func (c *bundleRefCache) bundlesForSecret(namespace string, secretName string) []reconcile.Request {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var requests []reconcile.Request
+	for key, names := range c.secrets {
+		if key.Namespace == namespace && names.Has(secretName) {
+			requests = append(requests, reconcile.Request{NamespacedName: key})
+		}
+	}
+	return requests
+}
+
+func (c *bundleRefCache) bundlesForConfigMap(namespace string, configMapName string) []reconcile.Request {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var requests []reconcile.Request
+	for key, names := range c.configMaps {
+		if key.Namespace == namespace && names.Has(configMapName) {
+			requests = append(requests, reconcile.Request{NamespacedName: key})
+		}
+	}
+	return requests
 }
 
 type bundleResolutionResult struct {
@@ -121,7 +202,23 @@ func (r *MetadataBundleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		)
 	}
 
-	resolution, err := r.resolveBundle(ctx, bundle, ref)
+	sourceInputs, err := r.loadBundleSourceInputs(ctx, runtimeBundle)
+	if err != nil {
+		emitEventf(r.Recorder, bundle, corev1.EventTypeWarning, bundleResolveFailed, "dependency invalid: %v", err)
+		r.refCache.update(req.NamespacedName, sourceInputs.SecretNames, sourceInputs.ConfigMapNames)
+		return returnAfterSetNotReady(
+			ctx,
+			func(innerCtx context.Context, reason, message string) error {
+				return r.setNotReady(innerCtx, bundle, reason, message)
+			},
+			conditionReasonDependencyInvalid,
+			err.Error(),
+			pollInterval,
+		)
+	}
+	r.refCache.update(req.NamespacedName, sourceInputs.SecretNames, sourceInputs.ConfigMapNames)
+
+	resolution, err := r.resolveBundle(ctx, bundle, ref, sourceInputs)
 	if err != nil {
 		emitEventf(r.Recorder, bundle, corev1.EventTypeWarning, bundleResolveFailed, "resolve failed: %v", err)
 		return returnAfterSetNotReady(
@@ -199,6 +296,7 @@ func (r *MetadataBundleReconciler) handleDeletion(
 	if err := r.Update(ctx, bundle); err != nil {
 		return ctrl.Result{}, err
 	}
+	r.refCache.remove(types.NamespacedName{Namespace: bundle.Namespace, Name: bundle.Name})
 	return ctrl.Result{}, nil
 }
 
@@ -262,30 +360,35 @@ func dependentsReason(dependents []metadataBundleDependent) (string, string) {
 
 func metadataBundleSourceRef(bundle *declarestv1alpha1.MetadataBundle) (string, error) {
 	source := bundle.Spec.Source
-	if value := strings.TrimSpace(source.Shorthand); value != "" {
-		return value, nil
-	}
 	if value := strings.TrimSpace(source.URL); value != "" {
 		return value, nil
 	}
-	if source.File != nil {
-		return filepath.Clean(filepath.Join(resolveBundleFileRootPath(bundle), source.File.Path)), nil
+	if source.PVC != nil {
+		return filepath.Clean(filepath.Join(resolveBundlePVCRootPath(bundle), source.PVC.Path)), nil
+	}
+	if source.ConfigMap != nil {
+		name := strings.TrimSpace(source.ConfigMap.Name)
+		key := strings.TrimSpace(source.ConfigMap.Key)
+		if name == "" || key == "" {
+			return "", fmt.Errorf("bundle configMap source is missing name or key")
+		}
+		return fmt.Sprintf("configmap://%s/%s/%s", bundle.Namespace, name, key), nil
 	}
 	return "", fmt.Errorf("bundle source is empty")
 }
 
-// resolveBundleFileRootPath maps the configured PVC to a canonical filesystem
+// resolveBundlePVCRootPath maps the configured PVC to a canonical filesystem
 // root. When the operator runs in-cluster the PVC is mounted at
 // /var/lib/declarest/bundles/<namespace>/<pvc>; otherwise the root falls back
 // to the cache base directory so developer runs outside the cluster still
 // work.
-func resolveBundleFileRootPath(bundle *declarestv1alpha1.MetadataBundle) string {
-	if bundle == nil || bundle.Spec.Source.File == nil {
+func resolveBundlePVCRootPath(bundle *declarestv1alpha1.MetadataBundle) string {
+	if bundle == nil || bundle.Spec.Source.PVC == nil {
 		return ""
 	}
 	pvcName := ""
-	if bundle.Spec.Source.File.Storage.ExistingPVC != nil {
-		pvcName = bundle.Spec.Source.File.Storage.ExistingPVC.Name
+	if bundle.Spec.Source.PVC.Storage.ExistingPVC != nil {
+		pvcName = bundle.Spec.Source.PVC.Storage.ExistingPVC.Name
 	}
 	if pvcName == "" {
 		pvcName = bundle.Name
@@ -293,14 +396,185 @@ func resolveBundleFileRootPath(bundle *declarestv1alpha1.MetadataBundle) string 
 	return filepath.Join("/var/lib/declarest/bundles", bundle.Namespace, pvcName)
 }
 
+// bundleSourceInputs carries the runtime-resolved dependencies (registry
+// credentials, in-memory tarball bytes) and the resourceVersion fingerprints
+// used to invalidate singleflight dedup when the underlying Secret or
+// ConfigMap rotates.
+type bundleSourceInputs struct {
+	RegistryAuths    []bootstrap.RegistryAuth
+	InMemoryBundles  map[string][]byte
+	SecretNames      []string
+	ConfigMapNames   []string
+	DependencyDigest string
+}
+
+func (r *MetadataBundleReconciler) loadBundleSourceInputs(
+	ctx context.Context,
+	bundle *declarestv1alpha1.MetadataBundle,
+) (bundleSourceInputs, error) {
+	inputs := bundleSourceInputs{}
+	source := bundle.Spec.Source
+
+	if source.PullSecretRef != nil && strings.TrimSpace(source.PullSecretRef.Name) != "" &&
+		strings.HasPrefix(strings.ToLower(strings.TrimSpace(source.URL)), "oci://") {
+		secretName := strings.TrimSpace(source.PullSecretRef.Name)
+		secret := &corev1.Secret{}
+		key := types.NamespacedName{Namespace: bundle.Namespace, Name: secretName}
+		if err := r.Get(ctx, key, secret); err != nil {
+			return inputs, fmt.Errorf("load oci pull secret %s/%s: %w", bundle.Namespace, secretName, err)
+		}
+		if secret.Type != corev1.SecretTypeDockerConfigJson {
+			return inputs, fmt.Errorf(
+				"oci pull secret %s/%s must be of type %s, got %s",
+				bundle.Namespace, secretName, corev1.SecretTypeDockerConfigJson, secret.Type,
+			)
+		}
+		payload, ok := secret.Data[corev1.DockerConfigJsonKey]
+		if !ok || len(payload) == 0 {
+			return inputs, fmt.Errorf(
+				"oci pull secret %s/%s is missing %q",
+				bundle.Namespace, secretName, corev1.DockerConfigJsonKey,
+			)
+		}
+		auths, err := parseDockerConfigAuths(payload)
+		if err != nil {
+			return inputs, fmt.Errorf("parse oci pull secret %s/%s: %w", bundle.Namespace, secretName, err)
+		}
+		if len(auths) == 0 {
+			return inputs, fmt.Errorf("oci pull secret %s/%s has no usable auths entry", bundle.Namespace, secretName)
+		}
+		inputs.RegistryAuths = auths
+		inputs.SecretNames = []string{secretName}
+		inputs.DependencyDigest = "secret:" + secretName + ":" + secret.ResourceVersion
+	}
+
+	if source.ConfigMap != nil {
+		cmName := strings.TrimSpace(source.ConfigMap.Name)
+		cmKey := strings.TrimSpace(source.ConfigMap.Key)
+		if cmName == "" || cmKey == "" {
+			return inputs, fmt.Errorf("configMap source name and key are required")
+		}
+		cm := &corev1.ConfigMap{}
+		key := types.NamespacedName{Namespace: bundle.Namespace, Name: cmName}
+		if err := r.Get(ctx, key, cm); err != nil {
+			return inputs, fmt.Errorf("load configMap %s/%s: %w", bundle.Namespace, cmName, err)
+		}
+		data, err := extractConfigMapBundleBytes(cm, cmKey)
+		if err != nil {
+			return inputs, err
+		}
+		inMemoryKey := fmt.Sprintf("configmap://%s/%s/%s", bundle.Namespace, cmName, cmKey)
+		inputs.InMemoryBundles = map[string][]byte{inMemoryKey: data}
+		inputs.ConfigMapNames = []string{cmName}
+		if existing := inputs.DependencyDigest; existing != "" {
+			inputs.DependencyDigest = existing + "|"
+		}
+		inputs.DependencyDigest += "configmap:" + cmName + ":" + cm.ResourceVersion
+	}
+
+	return inputs, nil
+}
+
+// parseDockerConfigAuths decodes a kubernetes.io/dockerconfigjson payload
+// into bootstrap.RegistryAuth entries. Hosts with both a separate
+// username/password and an `auth` (base64 user:pass) field prefer the former
+// when present, falling back to decoding `auth` otherwise.
+func parseDockerConfigAuths(payload []byte) ([]bootstrap.RegistryAuth, error) {
+	var config struct {
+		Auths map[string]struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+			Auth     string `json:"auth"`
+		} `json:"auths"`
+	}
+	if err := json.Unmarshal(payload, &config); err != nil {
+		return nil, fmt.Errorf("decode dockerconfigjson: %w", err)
+	}
+	out := make([]bootstrap.RegistryAuth, 0, len(config.Auths))
+	for registry, entry := range config.Auths {
+		registry = strings.TrimSpace(registry)
+		if registry == "" {
+			continue
+		}
+		username := entry.Username
+		password := entry.Password
+		if username == "" && password == "" && strings.TrimSpace(entry.Auth) != "" {
+			decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(entry.Auth))
+			if err != nil {
+				return nil, fmt.Errorf("decode auth for registry %q: %w", registry, err)
+			}
+			parts := strings.SplitN(string(decoded), ":", 2)
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("auth for registry %q is not in user:password form", registry)
+			}
+			username, password = parts[0], parts[1]
+		}
+		if username == "" && password == "" {
+			continue
+		}
+		out = append(out, bootstrap.RegistryAuth{
+			Registry: normalizeRegistryHost(registry),
+			Username: username,
+			Password: password,
+		})
+	}
+	return out, nil
+}
+
+// normalizeRegistryHost strips URL scheme and path components commonly found
+// in dockerconfigjson keys (for example "https://index.docker.io/v1/").
+func normalizeRegistryHost(raw string) string {
+	value := strings.TrimSpace(raw)
+	value = strings.TrimPrefix(value, "https://")
+	value = strings.TrimPrefix(value, "http://")
+	if idx := strings.Index(value, "/"); idx >= 0 {
+		value = value[:idx]
+	}
+	return strings.ToLower(value)
+}
+
+// extractConfigMapBundleBytes returns the gzipped tarball bytes stored in the
+// referenced ConfigMap key. binaryData takes precedence; data is base64-
+// decoded when binaryData is unset so `kubectl create configmap
+// --from-file=<key>=<tarball>` just works for small bundles.
+func extractConfigMapBundleBytes(cm *corev1.ConfigMap, key string) ([]byte, error) {
+	if cm == nil {
+		return nil, fmt.Errorf("configMap is nil")
+	}
+	if bytes, ok := cm.BinaryData[key]; ok {
+		if len(bytes) == 0 {
+			return nil, fmt.Errorf("configMap %s/%s key %q is empty", cm.Namespace, cm.Name, key)
+		}
+		return bytes, nil
+	}
+	if encoded, ok := cm.Data[key]; ok {
+		trimmed := strings.TrimSpace(encoded)
+		if trimmed == "" {
+			return nil, fmt.Errorf("configMap %s/%s key %q is empty", cm.Namespace, cm.Name, key)
+		}
+		decoded, err := base64.StdEncoding.DecodeString(trimmed)
+		if err != nil {
+			return nil, fmt.Errorf("decode configMap %s/%s key %q: %w", cm.Namespace, cm.Name, key, err)
+		}
+		return decoded, nil
+	}
+	return nil, fmt.Errorf("configMap %s/%s has no key %q", cm.Namespace, cm.Name, key)
+}
+
 func (r *MetadataBundleReconciler) resolveBundle(
 	ctx context.Context,
 	bundle *declarestv1alpha1.MetadataBundle,
 	ref string,
+	inputs bundleSourceInputs,
 ) (*bundleResolutionResult, error) {
-	key := fmt.Sprintf("%s|%s", bundle.Namespace, ref)
+	key := fmt.Sprintf("%s|%s|%s", bundle.Namespace, ref, inputs.DependencyDigest)
 	value, err, _ := r.resolveGroup.Do(key, func() (any, error) {
-		resolution, resolveErr := bootstrap.ResolveMetadataBundle(ctx, ref)
+		resolveOpts := bootstrap.MetadataBundleResolveOptions{
+			CacheRoot:       strings.TrimSpace(r.CacheRoot),
+			RegistryAuths:   inputs.RegistryAuths,
+			InMemoryBundles: inputs.InMemoryBundles,
+		}
+		resolution, resolveErr := bootstrap.ResolveMetadataBundle(ctx, ref, resolveOpts)
 		if resolveErr != nil {
 			return nil, resolveErr
 		}
@@ -417,9 +691,27 @@ func (r *MetadataBundleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	bld := ctrl.NewControllerManagedBy(mgr).
-		For(&declarestv1alpha1.MetadataBundle{}, builder.WithPredicates(predicate.GenerationChangedPredicate{}))
+		For(&declarestv1alpha1.MetadataBundle{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.metadataBundlesForSecret)).
+		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(r.metadataBundlesForConfigMap))
 	if r.MaxConcurrentReconciles > 0 {
 		bld = bld.WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles})
 	}
 	return bld.Complete(r)
+}
+
+func (r *MetadataBundleReconciler) metadataBundlesForSecret(_ context.Context, obj client.Object) []reconcile.Request {
+	secret, ok := obj.(*corev1.Secret)
+	if !ok || secret == nil {
+		return nil
+	}
+	return r.refCache.bundlesForSecret(secret.Namespace, secret.Name)
+}
+
+func (r *MetadataBundleReconciler) metadataBundlesForConfigMap(_ context.Context, obj client.Object) []reconcile.Request {
+	configMap, ok := obj.(*corev1.ConfigMap)
+	if !ok || configMap == nil {
+		return nil
+	}
+	return r.refCache.bundlesForConfigMap(configMap.Namespace, configMap.Name)
 }

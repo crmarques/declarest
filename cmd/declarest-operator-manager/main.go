@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	declarestv1alpha1 "github.com/crmarques/declarest/api/v1alpha1"
@@ -163,6 +164,7 @@ func main() {
 		Scheme:                  manager.GetScheme(),
 		Recorder:                manager.GetEventRecorder("metadatabundle-controller"),
 		MaxConcurrentReconciles: maxConcurrentReconciles,
+		CacheRoot:               metadataBundleCacheRoot(),
 	}).SetupWithManager(manager); err != nil {
 		ctrl.Log.WithName("setup").Error(err, "unable to create MetadataBundle controller")
 		os.Exit(1)
@@ -253,4 +255,20 @@ func main() {
 		ctrl.Log.WithName("setup").Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+// metadataBundleCacheRoot resolves the on-disk cache directory used by the
+// provider-level bundle resolver. The explicit DECLAREST_BUNDLE_CACHE_DIR wins;
+// otherwise the shared DECLAREST_OPERATOR_CACHE_BASE_DIR is suffixed with
+// "bundles". An empty return value means "use the provider default
+// (~/.declarest/metadata-bundles)", which is fine for developer runs outside
+// the cluster.
+func metadataBundleCacheRoot() string {
+	if explicit := strings.TrimSpace(os.Getenv("DECLAREST_BUNDLE_CACHE_DIR")); explicit != "" {
+		return explicit
+	}
+	if base := strings.TrimSpace(os.Getenv("DECLAREST_OPERATOR_CACHE_BASE_DIR")); base != "" {
+		return filepath.Join(base, "bundles")
+	}
+	return ""
 }

@@ -3,13 +3,35 @@ kind: MetadataBundle
 metadata:
   name: managed-service-bundle-0.0.1
 spec:
-  # Exactly one of shorthand, url, or file must be set.
+  # Exactly one of url, pvc, or configMap must be set.
   source:
-    shorthand: managed-service-bundle:0.0.1
-    # url: https://github.com/crmarques/declarest-bundle-example/releases/download/v0.0.1/managed-service-bundle-0.0.1.tar.gz
-    # file:
+    # Primary flow: pull an OCI artifact from a registry such as GHCR, quay.io,
+    # or an internal Harbor. Tag and digest refs are both accepted; set
+    # pullSecretRef to a kubernetes.io/dockerconfigjson Secret when the
+    # registry requires authentication. Rotating the Secret triggers a
+    # reconcile automatically.
+    url: oci://ghcr.io/crmarques/declarest-metadata-bundles/managed-service-bundle:0.0.1
+    # pullSecretRef:
+    #   name: ghcr-pull
+    #
+    # Alternate URL forms (uncomment one, remove the oci block above):
+    #   url: oci://ghcr.io/crmarques/declarest-metadata-bundles/managed-service-bundle@sha256:<hex>
+    #   url: https://github.com/crmarques/declarest-bundle-example/releases/download/v0.0.1/managed-service-bundle-0.0.1.tar.gz
+    #   url: file:///srv/bundles/managed-service-bundle-0.0.1        # unpacked directory
+    #   url: file:///srv/bundles/managed-service-bundle-0.0.1.tar.gz # local tarball
+    #   url: managed-service-bundle:0.0.1                            # GitHub release shorthand
+    #
+    # PVC-backed source. `path` may point at either a .tar.gz archive or an
+    # unpacked directory containing bundle.yaml at its root.
+    # pvc:
     #   storage:
     #     existingPVC:
     #       name: declarest-bundles
     #   path: managed-service-bundle-0.0.1.tar.gz
+    #
+    # Inline ConfigMap source. Create with
+    #   kubectl create configmap managed-service-bundle --from-file=bundle.tar.gz=./bundle.tar.gz
+    # configMap:
+    #   name: managed-service-bundle
+    #   key: bundle.tar.gz
   pollInterval: 1h

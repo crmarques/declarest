@@ -38,11 +38,36 @@ type ResolvedMetadataBundle struct {
 	DeprecatedWarning   string
 }
 
+// MetadataBundleResolveOptions carries runtime options forwarded to the
+// provider-level resolver without exposing the provider package type.
+type MetadataBundleResolveOptions struct {
+	// CacheRoot overrides the default ~/.declarest/metadata-bundles cache root.
+	// An empty value preserves the default, which is appropriate for CLI
+	// usage; operator callers SHOULD set an explicit path that lives on a
+	// writable volume.
+	CacheRoot string
+
+	// RegistryAuths installs static OCI registry credentials, keyed by host.
+	// An empty list preserves the default docker-config discovery path.
+	RegistryAuths []RegistryAuth
+
+	// InMemoryBundles supplies raw tarball bytes for bundle sources resolved
+	// via an internal URL form (for example `configmap://ns/name/key`).
+	InMemoryBundles map[string][]byte
+}
+
+// RegistryAuth is a boundary-safe mirror of bundlemetadata.RegistryCredential.
+type RegistryAuth struct {
+	Registry string
+	Username string
+	Password string
+}
+
 // ResolveMetadataBundle wraps the provider-level `bundlemetadata.ResolveBundle`
 // behind a bootstrap-owned surface so the boundary rule (controllers MUST NOT
 // import `internal/providers/...`) is preserved.
-func ResolveMetadataBundle(ctx context.Context, ref string) (ResolvedMetadataBundle, error) {
-	resolution, err := bundlemetadata.ResolveBundle(ctx, ref)
+func ResolveMetadataBundle(ctx context.Context, ref string, opts MetadataBundleResolveOptions) (ResolvedMetadataBundle, error) {
+	resolution, err := bundlemetadata.ResolveBundle(ctx, ref, bundleResolverOptions(opts)...)
 	if err != nil {
 		return ResolvedMetadataBundle{}, err
 	}
@@ -60,4 +85,26 @@ func ResolveMetadataBundle(ctx context.Context, ref string) (ResolvedMetadataBun
 		Deprecated:          resolution.Manifest.Deprecated,
 		DeprecatedWarning:   resolution.DeprecatedWarning,
 	}, nil
+}
+
+func bundleResolverOptions(opts MetadataBundleResolveOptions) []bundlemetadata.BundleResolverOption {
+	var out []bundlemetadata.BundleResolverOption
+	if opts.CacheRoot != "" {
+		out = append(out, bundlemetadata.WithCacheRoot(opts.CacheRoot))
+	}
+	if len(opts.RegistryAuths) > 0 {
+		credentials := make([]bundlemetadata.RegistryCredential, 0, len(opts.RegistryAuths))
+		for _, auth := range opts.RegistryAuths {
+			credentials = append(credentials, bundlemetadata.RegistryCredential{
+				Registry: auth.Registry,
+				Username: auth.Username,
+				Password: auth.Password,
+			})
+		}
+		out = append(out, bundlemetadata.WithRegistryCredentials(credentials))
+	}
+	if len(opts.InMemoryBundles) > 0 {
+		out = append(out, bundlemetadata.WithInMemoryBundles(opts.InMemoryBundles))
+	}
+	return out
 }

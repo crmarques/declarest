@@ -95,6 +95,38 @@ func TestParseOCIRefRejectsEmptyRegistry(t *testing.T) {
 	}
 }
 
+func TestBuildStaticCredentialFuncLookup(t *testing.T) {
+	credentials := []RegistryCredential{
+		{Registry: "GHCR.IO", Username: "alice", Password: "pat"},
+		{Registry: "quay.io:443", Username: "bob", Password: "hunter2"},
+	}
+	fn := buildStaticCredentialFunc(credentials)
+
+	ghcr, err := fn(context.Background(), "ghcr.io")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ghcr.Username != "alice" || ghcr.Password != "pat" {
+		t.Fatalf("unexpected ghcr.io credential: %+v", ghcr)
+	}
+
+	quay, err := fn(context.Background(), "QUAY.IO:443")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if quay.Username != "bob" || quay.Password != "hunter2" {
+		t.Fatalf("unexpected quay credential: %+v", quay)
+	}
+
+	anon, err := fn(context.Background(), "unknown.example")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if anon != auth.EmptyCredential {
+		t.Fatalf("expected anonymous credential for unknown host, got %+v", anon)
+	}
+}
+
 func TestResolveBundleOCIPullsArchive(t *testing.T) {
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)

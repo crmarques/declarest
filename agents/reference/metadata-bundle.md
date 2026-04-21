@@ -9,7 +9,7 @@ Define the canonical `bundle.yaml` shape consumed by `metadata.bundle` / `metada
 3. `declarest.compatibleDeclarest` runtime evaluation.
 4. `declarest.compatibleManagedService` declaration shape and syntactic validation.
 5. The release-time naming contract enforced by `distribution.artifactTemplate`.
-6. The supported `metadata.bundle` reference forms resolved by `bundlemetadata.ResolveBundle` (OCI registry artifact, shorthand, `http`/`https` URL, or local tarball path).
+6. The supported `metadata.bundle` reference forms resolved by `bundlemetadata.ResolveBundle` (OCI registry artifact, shorthand, `http`/`https` URL, `file://` URL, local tarball or directory path, and the operator-internal `configmap://` form).
 
 ## Out of Scope
 1. Metadata layering, template rendering, and operation directives (see `agents/reference/metadata.md`).
@@ -18,9 +18,11 @@ Define the canonical `bundle.yaml` shape consumed by `metadata.bundle` / `metada
 4. Bundle repository GitHub release workflow internals beyond the manifest fields they read.
 
 ## Normative Rules
-0. `metadata.bundle` reference forms MUST be resolved in this priority order: an `oci://<registry>/<repository>:<tag>` or `oci://<registry>/<repository>@<digest>` reference MUST pull the bundle as an OCI artifact via the `oras-go/v2` client; a `<name>:<version>` shorthand MUST continue to resolve through the GitHub-release shorthand URL; an `http`/`https` URL MUST download the referenced tarball directly; any other non-empty value MUST be treated as a local filesystem path to a `.tar.gz` archive.
+0. `metadata.bundle` reference forms MUST be resolved in this priority order: an `oci://<registry>/<repository>:<tag>` or `oci://<registry>/<repository>@<digest>` reference MUST pull the bundle as an OCI artifact via the `oras-go/v2` client; a `configmap://<namespace>/<name>/<key>` reference MUST read tarball bytes from the corresponding entry supplied via `WithInMemoryBundles` (controller-only, not a user-facing scheme); a `<name>:<version>` shorthand MUST continue to resolve through the GitHub-release shorthand URL; an `http`/`https` URL MUST download the referenced tarball directly; a `file://` URL MUST map to a local filesystem path; any other non-empty value MUST be treated as a local filesystem path to a `.tar.gz` archive or to an unpacked directory containing `bundle.yaml` at its root.
 0. OCI-backed resolution MUST select the first layer advertised as `application/vnd.declarest.bundle.v1.tar+gzip` (falling back to `application/vnd.oci.image.layer.v1.tar+gzip` and equivalent tar+gzip media types) and MUST pass the layer stream through the same strict-decode and compatibility-gate pipeline used by other source kinds.
 0. OCI registry access MUST honour `metadata.proxy` settings through the shared HTTP client factory and MUST NOT rely on an external `oras` CLI or any other out-of-process tool.
+0. OCI registry access MUST prefer credentials supplied through `WithRegistryCredentials([]RegistryCredential)` over any ambient docker-config auth. When no caller-supplied credentials exist the resolver MAY fall back to the default oras-go auth discovery path for developer convenience; operator pods MUST always supply credentials via the option so the resolver remains reproducible.
+0. Local filesystem resolution MUST detect when the target path is a directory containing a readable `bundle.yaml`. When so detected the resolver MUST use the directory in place without copying or extracting into the cache, and `BundleResolution.MetadataDir` MUST point at `<directory>/<metadataRoot>`.
 1. `bundle.yaml` MUST decode strictly: unknown YAML keys at any level MUST fail decoding with a `ValidationError`.
 2. The persisted manifest MUST define `apiVersion: declarest.io/v1alpha1`, `kind: MetadataBundle`, `name`, `version`, `description`, and `declarest.metadataRoot`.
 3. `version` MUST be a semver-2 value (with optional leading `v`); the canonical normalized form drops the leading `v`.
@@ -65,6 +67,17 @@ Members:
 1. `WithProxyConfig(*config.HTTPProxy)` — proxy used for remote archive fetches.
 2. `WithPromptRuntime(*promptauth.Runtime)` — credential prompt runtime for proxy auth.
 3. `WithDeclarestVersion(string)` — declarest binary version used for the `compatibleDeclarest` gate; the literal string `dev` bypasses the gate.
+4. `WithCacheRoot(string)` — overrides the on-disk cache root (default `~/.declarest/metadata-bundles`). Operator deployments SHOULD set this to a path on a writable volume.
+5. `WithRegistryCredentials([]RegistryCredential)` — installs static OCI registry credentials that override any ambient docker-config auth; an empty list preserves the default discovery path.
+6. `WithInMemoryBundles(map[string][]byte)` — registers tarball bytes for internal URL forms (for example `configmap://<namespace>/<name>/<key>`). The operator controller uses this to hand ConfigMap-sourced bundle bytes to the provider without leaking Kubernetes types.
+
+### Type: `bundlemetadata.RegistryCredential`
+Static username/password pair for an OCI registry host.
+
+Required fields:
+1. `Registry` — host or `host:port` of the OCI registry (for example `ghcr.io`).
+2. `Username` — registry username.
+3. `Password` — registry password or personal access token.
 
 ### Type: `bundlemetadata.BundleResolution`
 Resolved bundle returned by `bundlemetadata.ResolveBundle`.

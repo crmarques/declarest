@@ -25,10 +25,11 @@ import (
 )
 
 const (
-	sourceKindLocal = "local"
-	sourceKindURL   = "url"
-	sourceKindShort = "shorthand"
-	sourceKindOCI   = "oci"
+	sourceKindLocal     = "local"
+	sourceKindURL       = "url"
+	sourceKindShort     = "shorthand"
+	sourceKindOCI       = "oci"
+	sourceKindConfigMap = "configmap"
 )
 
 var shorthandNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
@@ -56,6 +57,7 @@ type bundleSource struct {
 	ociRepository    string
 	ociReference     string
 	ociByDigest      bool
+	inMemoryKey      string
 }
 
 func parseBundleSource(ref string) (bundleSource, error) {
@@ -68,6 +70,12 @@ func parseBundleSource(ref string) (bundleSource, error) {
 		return bundleSource{}, err
 	} else if ok {
 		return ociSource, nil
+	}
+
+	if cmSource, ok, err := parseConfigMapRef(value); err != nil {
+		return bundleSource{}, err
+	} else if ok {
+		return cmSource, nil
 	}
 
 	if name, version, ok := parseShorthandRef(value); ok {
@@ -105,8 +113,14 @@ func parseBundleSource(ref string) (bundleSource, error) {
 				remoteURL:    parsed.String(),
 				cacheDirName: cacheDirName,
 			}, nil
+		case "file":
+			localPath, err := localPathFromFileURL(parsed)
+			if err != nil {
+				return bundleSource{}, err
+			}
+			return newLocalBundleSource(localPath), nil
 		default:
-			return bundleSource{}, faults.Invalid("metadata.bundle URL must use http or https", nil)
+			return bundleSource{}, faults.Invalid("metadata.bundle URL scheme must be http, https, oci, file, or configmap", nil)
 		}
 	}
 
@@ -114,7 +128,10 @@ func parseBundleSource(ref string) (bundleSource, error) {
 	if err != nil {
 		return bundleSource{}, faults.Invalid("metadata.bundle local path is invalid", err)
 	}
+	return newLocalBundleSource(absolutePath), nil
+}
 
+func newLocalBundleSource(absolutePath string) bundleSource {
 	cacheDirName := cacheDirNameForSourceArtifact(
 		filepath.Base(absolutePath),
 		"local:"+absolutePath,
@@ -123,7 +140,62 @@ func parseBundleSource(ref string) (bundleSource, error) {
 		kind:         sourceKindLocal,
 		localPath:    absolutePath,
 		cacheDirName: cacheDirName,
-	}, nil
+	}
+}
+
+func localPathFromFileURL(parsed *url.URL) (string, error) {
+	if parsed.Host != "" && parsed.Host != "localhost" {
+		return "", faults.Invalid("metadata.bundle file URL host must be empty or localhost", nil)
+	}
+	rawPath := parsed.Path
+	if rawPath == "" {
+		return "", faults.Invalid("metadata.bundle file URL path is empty", nil)
+	}
+	absolutePath, err := filepath.Abs(rawPath)
+	if err != nil {
+		return "", faults.Invalid("metadata.bundle file URL path is invalid", err)
+	}
+	return absolutePath, nil
+}
+
+// parseConfigMapRef parses the internal `configmap://<namespace>/<name>/<key>`
+// URL form emitted by the operator controller when the bundle bytes come from
+// a Kubernetes ConfigMap. The actual tarball bytes are passed separately via
+// WithInMemoryBundles; the key preserves the source identity so the cache
+// directory is deterministic and admission-time env expansion still works.
+func parseConfigMapRef(value string) (bundleSource, bool, error) {
+	const scheme = "configmap://"
+	trimmed := strings.TrimSpace(value)
+	if !strings.HasPrefix(strings.ToLower(trimmed), scheme) {
+		return bundleSource{}, false, nil
+	}
+	remainder := trimmed[len(scheme):]
+	parts := strings.Split(remainder, "/")
+	if len(parts) < 3 {
+		return bundleSource{}, false, faults.Invalid(
+			"metadata.bundle configmap ref must be configmap://<namespace>/<name>/<key>",
+			nil,
+		)
+	}
+	namespace := strings.TrimSpace(parts[0])
+	name := strings.TrimSpace(parts[1])
+	key := strings.TrimSpace(strings.Join(parts[2:], "/"))
+	if namespace == "" || name == "" || key == "" {
+		return bundleSource{}, false, faults.Invalid(
+			"metadata.bundle configmap ref has empty namespace, name, or key",
+			nil,
+		)
+	}
+	inMemoryKey := fmt.Sprintf("configmap://%s/%s/%s", namespace, name, key)
+	cacheDirName := cacheDirNameForSourceArtifact(
+		fmt.Sprintf("%s-%s-%s", namespace, name, key),
+		inMemoryKey,
+	)
+	return bundleSource{
+		kind:         sourceKindConfigMap,
+		inMemoryKey:  inMemoryKey,
+		cacheDirName: cacheDirName,
+	}, true, nil
 }
 
 func parseOCIRef(value string) (bundleSource, bool, error) {

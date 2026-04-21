@@ -109,13 +109,9 @@ func resolveManagedServiceBundleRef(
 		resolution.Source = cachePath
 		return resolution, nil
 	}
-	// Fall back to the original source spec when the reconciler has not yet
-	// persisted a cache path. The downstream resolver accepts shorthand and
-	// URL forms directly.
-	if shorthand := strings.TrimSpace(bundle.Spec.Source.Shorthand); shorthand != "" {
-		resolution.Source = shorthand
-		return resolution, nil
-	}
+	// Fall back to the original URL spec when the reconciler has not yet
+	// persisted a cache path. The downstream resolver accepts shorthand,
+	// oci://, https:// and file:// forms directly via the single URL field.
 	if url := strings.TrimSpace(bundle.Spec.Source.URL); url != "" {
 		resolution.Source = url
 		return resolution, nil

@@ -234,6 +234,17 @@ Optional fields:
 1. `OpenAPI` (resolved OpenAPI source path or URL).
 2. `DeprecatedWarning` (populated when `Manifest.Deprecated` is `true`).
 
+### Type: `bundlemetadata.RegistryCredential`
+Static OCI registry credential consumed by `bundlemetadata.WithRegistryCredentials`.
+
+Required fields:
+1. `Registry` (host or `host:port`, compared case-insensitively).
+2. `Username`.
+3. `Password`.
+
+Invariants:
+1. Hosts MUST match the registry reference's `host[:port]` exactly (after lower-casing); unknown hosts resolve to anonymous access.
+
 ### Type: `metadata.OperationSpec`
 Represents resolved operation request intent.
 

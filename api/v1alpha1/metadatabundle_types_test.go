@@ -22,16 +22,34 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestMetadataBundleValidateShorthandSource(t *testing.T) {
+func TestMetadataBundleValidateURLVariants(t *testing.T) {
 	t.Parallel()
 
-	bundle := &MetadataBundle{
-		Spec: MetadataBundleSpec{
-			Source: MetadataBundleSource{Shorthand: "keycloak:0.0.1"},
-		},
+	cases := []struct {
+		name string
+		url  string
+	}{
+		{"shorthand", "keycloak:0.0.1"},
+		{"oci tag", "oci://ghcr.io/acme/declarest-metadata-bundles/keycloak:0.0.1"},
+		{"oci digest", "oci://ghcr.io/acme/declarest-metadata-bundles/keycloak@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},
+		{"https tarball", "https://example.com/bundle.tar.gz"},
+		{"http tarball", "http://example.com/bundle.tar.gz"},
+		{"file url", "file:///srv/bundles/keycloak-0.0.1.tar.gz"},
 	}
-	if err := bundle.ValidateSpec(); err != nil {
-		t.Fatalf("unexpected validation error: %v", err)
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			bundle := &MetadataBundle{
+				Spec: MetadataBundleSpec{
+					Source: MetadataBundleSource{URL: tc.url},
+				},
+			}
+			if err := bundle.ValidateSpec(); err != nil {
+				t.Fatalf("unexpected validation error for %q: %v", tc.url, err)
+			}
+		})
 	}
 }
 
@@ -41,8 +59,11 @@ func TestMetadataBundleValidateRejectsMultipleSources(t *testing.T) {
 	bundle := &MetadataBundle{
 		Spec: MetadataBundleSpec{
 			Source: MetadataBundleSource{
-				Shorthand: "keycloak:0.0.1",
-				URL:       "https://example.com/bundle.tar.gz",
+				URL: "https://example.com/bundle.tar.gz",
+				PVC: &MetadataBundlePVCSource{
+					Storage: StorageSpec{ExistingPVC: &corev1.LocalObjectReference{Name: "bundles"}},
+					Path:    "bundle.tar.gz",
+				},
 			},
 		},
 	}
@@ -60,13 +81,39 @@ func TestMetadataBundleValidateRejectsMissingSource(t *testing.T) {
 	}
 }
 
-func TestMetadataBundleValidateRejectsParentTraversalFilePath(t *testing.T) {
+func TestMetadataBundleValidateRejectsEmptyURL(t *testing.T) {
+	t.Parallel()
+
+	bundle := &MetadataBundle{
+		Spec: MetadataBundleSpec{
+			Source: MetadataBundleSource{URL: "   "},
+		},
+	}
+	if err := bundle.ValidateSpec(); err == nil {
+		t.Fatal("expected validation error for empty url")
+	}
+}
+
+func TestMetadataBundleValidateRejectsUnknownURLScheme(t *testing.T) {
+	t.Parallel()
+
+	bundle := &MetadataBundle{
+		Spec: MetadataBundleSpec{
+			Source: MetadataBundleSource{URL: "ftp://example.com/bundle.tar.gz"},
+		},
+	}
+	if err := bundle.ValidateSpec(); err == nil {
+		t.Fatal("expected validation error for unsupported url scheme")
+	}
+}
+
+func TestMetadataBundleValidateRejectsParentTraversalPVCPath(t *testing.T) {
 	t.Parallel()
 
 	bundle := &MetadataBundle{
 		Spec: MetadataBundleSpec{
 			Source: MetadataBundleSource{
-				File: &MetadataBundleFileSource{
+				PVC: &MetadataBundlePVCSource{
 					Storage: StorageSpec{ExistingPVC: &corev1.LocalObjectReference{Name: "bundles"}},
 					Path:    "../outside.tar.gz",
 				},
@@ -74,7 +121,88 @@ func TestMetadataBundleValidateRejectsParentTraversalFilePath(t *testing.T) {
 		},
 	}
 	if err := bundle.ValidateSpec(); err == nil {
-		t.Fatal("expected validation error for parent traversal in file path")
+		t.Fatal("expected validation error for parent traversal in pvc path")
+	}
+}
+
+func TestMetadataBundleValidateConfigMapSource(t *testing.T) {
+	t.Parallel()
+
+	bundle := &MetadataBundle{
+		Spec: MetadataBundleSpec{
+			Source: MetadataBundleSource{
+				ConfigMap: &MetadataBundleConfigMapSource{
+					Name: "keycloak-bundle",
+					Key:  "bundle.tar.gz",
+				},
+			},
+		},
+	}
+	if err := bundle.ValidateSpec(); err != nil {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+}
+
+func TestMetadataBundleValidateRejectsConfigMapMissingFields(t *testing.T) {
+	t.Parallel()
+
+	bundle := &MetadataBundle{
+		Spec: MetadataBundleSpec{
+			Source: MetadataBundleSource{
+				ConfigMap: &MetadataBundleConfigMapSource{Name: "", Key: ""},
+			},
+		},
+	}
+	if err := bundle.ValidateSpec(); err == nil {
+		t.Fatal("expected validation error for empty configMap name/key")
+	}
+}
+
+func TestMetadataBundleValidateOCISourceWithPullSecret(t *testing.T) {
+	t.Parallel()
+
+	bundle := &MetadataBundle{
+		Spec: MetadataBundleSpec{
+			Source: MetadataBundleSource{
+				URL:           "oci://ghcr.io/acme/declarest-metadata-bundles/haproxy:0.0.1",
+				PullSecretRef: &corev1.LocalObjectReference{Name: "ghcr-pull"},
+			},
+		},
+	}
+	if err := bundle.ValidateSpec(); err != nil {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+}
+
+func TestMetadataBundleValidateRejectsPullSecretOnNonOCI(t *testing.T) {
+	t.Parallel()
+
+	bundle := &MetadataBundle{
+		Spec: MetadataBundleSpec{
+			Source: MetadataBundleSource{
+				URL:           "https://example.com/bundle.tar.gz",
+				PullSecretRef: &corev1.LocalObjectReference{Name: "ghcr-pull"},
+			},
+		},
+	}
+	if err := bundle.ValidateSpec(); err == nil {
+		t.Fatal("expected validation error for pullSecretRef without oci:// url")
+	}
+}
+
+func TestMetadataBundleValidateRejectsPullSecretMissingName(t *testing.T) {
+	t.Parallel()
+
+	bundle := &MetadataBundle{
+		Spec: MetadataBundleSpec{
+			Source: MetadataBundleSource{
+				URL:           "oci://ghcr.io/acme/declarest-metadata-bundles/haproxy:0.0.1",
+				PullSecretRef: &corev1.LocalObjectReference{Name: ""},
+			},
+		},
+	}
+	if err := bundle.ValidateSpec(); err == nil {
+		t.Fatal("expected validation error for empty pullSecretRef name")
 	}
 }
 
@@ -83,7 +211,7 @@ func TestMetadataBundleDefaultPollInterval(t *testing.T) {
 
 	bundle := &MetadataBundle{
 		Spec: MetadataBundleSpec{
-			Source: MetadataBundleSource{Shorthand: "keycloak:0.0.1"},
+			Source: MetadataBundleSource{URL: "keycloak:0.0.1"},
 		},
 	}
 	bundle.Default()
@@ -100,7 +228,7 @@ func TestMetadataBundleValidateRejectsNegativePollInterval(t *testing.T) {
 
 	bundle := &MetadataBundle{
 		Spec: MetadataBundleSpec{
-			Source:       MetadataBundleSource{Shorthand: "keycloak:0.0.1"},
+			Source:       MetadataBundleSource{URL: "keycloak:0.0.1"},
 			PollInterval: &metav1.Duration{Duration: -time.Minute},
 		},
 	}

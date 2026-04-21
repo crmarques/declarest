@@ -57,8 +57,51 @@ spec:
               pollInterval:
                 type: string
               source:
+                description: |-
+                  MetadataBundleSource identifies where the operator fetches a metadata
+                  bundle from. Exactly one of url, pvc, or configMap must be set. The
+                  pullSecretRef sibling only takes effect when url carries an `oci://` scheme.
                 properties:
-                  file:
+                  configMap:
+                    description: |-
+                      ConfigMap-backed source. The referenced ConfigMap key carries a
+                      gzipped tarball (binaryData preferred; data is base64-decoded).
+                    properties:
+                      key:
+                        description: |-
+                          Key inside binaryData (preferred) or data (base64) holding the
+                          gzipped tarball bytes.
+                        minLength: 1
+                        type: string
+                      name:
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  pullSecretRef:
+                    description: |-
+                      PullSecretRef names a Secret of type kubernetes.io/dockerconfigjson in
+                      the same namespace as the MetadataBundle. Consulted only when URL uses
+                      the oci:// scheme. Rotation of the referenced Secret triggers a
+                      reconcile.
+                    properties:
+                      name:
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  pvc:
+                    description: |-
+                      PVC-backed source. Path may point at a .tar.gz archive or at an
+                      unpacked directory containing bundle.yaml at its root.
                     properties:
                       path:
                         minLength: 1
@@ -114,15 +157,21 @@ spec:
                     - path
                     - storage
                     type: object
-                  shorthand:
-                    type: string
                   url:
+                    description: |-
+                      URL is a scheme-dispatched reference to the bundle archive. Supported
+                      schemes:
+                        oci://<registry>/<repo>:<tag>            pulled via ORAS; auth via pullSecretRef
+                        oci://<registry>/<repo>@sha256:<hex>     pinned by digest
+                        https:// | http://                       HTTP(S) tarball download
+                        file:///absolute/path                    controller-pod filesystem (tarball or directory)
+                        <name>:<version>                         GitHub release shorthand (legacy; accepted as-is)
                     type: string
                 type: object
                 x-kubernetes-validations:
-                - message: source must define exactly one of shorthand, url, or file
-                  rule: '(has(self.shorthand) ? 1 : 0) + (has(self.url) ? 1 : 0) +
-                    (has(self.file) ? 1 : 0) == 1'
+                - message: source must define exactly one of url, pvc, or configMap
+                  rule: '(has(self.url) ? 1 : 0) + (has(self.pvc) ? 1 : 0) + (has(self.configMap)
+                    ? 1 : 0) == 1'
             required:
             - source
             type: object

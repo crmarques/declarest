@@ -49,6 +49,8 @@ spec:
               value: /var/lib/declarest/repos
             - name: DECLAREST_OPERATOR_CACHE_BASE_DIR
               value: /var/lib/declarest/cache
+            - name: DECLAREST_BUNDLE_CACHE_DIR
+              value: /var/lib/declarest/cache/bundles
             - name: HOME
               value: /var/lib/declarest
           securityContext:
