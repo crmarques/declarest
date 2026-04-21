@@ -101,6 +101,8 @@ func openBundleStream(ctx context.Context, source bundleSource, opts bundleResol
 			return nil, faults.Internal("failed to open local metadata bundle archive", err)
 		}
 		return file, nil
+	case sourceKindOCI:
+		return openOCIBundleStream(ctx, source, opts)
 	case sourceKindURL, sourceKindShort:
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, source.remoteURL, nil)
 		if err != nil {

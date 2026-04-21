@@ -600,13 +600,15 @@ func TestBuildRequestFromMetadataRundeckFixtureSelectors(t *testing.T) {
 		"..",
 		"..",
 		"..",
-		"test",
-		"e2e",
-		"components",
-		"managed-service",
+		"..",
+		"declarest-metadata-bundles",
+		"bundles",
 		"rundeck",
 		"metadata",
 	)
+	if _, err := os.Stat(metadataDir); err != nil {
+		t.Skipf("rundeck metadata fixture not available at %s: %v", metadataDir, err)
+	}
 	service := fsmetadata.NewFSMetadataService(metadataDir)
 	client := mustManagedServiceClient(
 		t,

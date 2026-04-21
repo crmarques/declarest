@@ -67,8 +67,10 @@ e2e_operator_prepare_managed_service_metadata_bundle() {
 
   if [[ -n "${E2E_METADATA_BUNDLE:-}" ]]; then
     local bundle_ref="${E2E_METADATA_BUNDLE}"
-    local bundle_name=${bundle_ref%%:*}
-    local bundle_version=${bundle_ref#*:}
+    local bundle_name
+    local bundle_version
+    bundle_name=$(e2e_bundle_ref_name "${bundle_ref}") || return 1
+    bundle_version=$(e2e_bundle_ref_version "${bundle_ref}") || return 1
     local cache_dir="${HOME}/.declarest/metadata-bundles/${bundle_name}-${bundle_version}"
 
     if [[ -f "${cache_dir}/bundle.yaml" && -d "${cache_dir}/metadata" ]]; then

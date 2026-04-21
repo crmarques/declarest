@@ -28,6 +28,7 @@ const (
 	sourceKindLocal = "local"
 	sourceKindURL   = "url"
 	sourceKindShort = "shorthand"
+	sourceKindOCI   = "oci"
 )
 
 var shorthandNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
@@ -35,6 +36,12 @@ var shorthandNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 var versionedArtifactStemPattern = regexp.MustCompile(
 	`^([a-z0-9][a-z0-9-]*)-(v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$`,
 )
+
+var ociDigestPattern = regexp.MustCompile(`^[a-z0-9]+(?:[+._-][a-z0-9]+)*:[A-Fa-f0-9]{32,}$`)
+
+var ociRegistryHostPattern = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]+)?$`)
+
+var ociRepositoryPattern = regexp.MustCompile(`^[a-z0-9]+(?:(?:[._]|__|[-]+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:[._]|__|[-]+)[a-z0-9]+)*)*$`)
 
 var shorthandReleaseBaseURL = "https://github.com"
 
@@ -45,12 +52,22 @@ type bundleSource struct {
 	remoteURL        string
 	shorthandName    string
 	shorthandVersion string
+	ociRegistry      string
+	ociRepository    string
+	ociReference     string
+	ociByDigest      bool
 }
 
 func parseBundleSource(ref string) (bundleSource, error) {
 	value := strings.TrimSpace(ref)
 	if value == "" {
 		return bundleSource{}, faults.Invalid("metadata.bundle is empty", nil)
+	}
+
+	if ociSource, ok, err := parseOCIRef(value); err != nil {
+		return bundleSource{}, err
+	} else if ok {
+		return ociSource, nil
 	}
 
 	if name, version, ok := parseShorthandRef(value); ok {
@@ -107,6 +124,76 @@ func parseBundleSource(ref string) (bundleSource, error) {
 		localPath:    absolutePath,
 		cacheDirName: cacheDirName,
 	}, nil
+}
+
+func parseOCIRef(value string) (bundleSource, bool, error) {
+	const scheme = "oci://"
+	trimmed := strings.TrimSpace(value)
+	if !strings.HasPrefix(strings.ToLower(trimmed), scheme) {
+		return bundleSource{}, false, nil
+	}
+	remainder := trimmed[len(scheme):]
+	if remainder == "" {
+		return bundleSource{}, false, faults.Invalid("metadata.bundle oci ref is empty", nil)
+	}
+
+	reference := ""
+	byDigest := false
+	if digestIdx := strings.Index(remainder, "@"); digestIdx >= 0 {
+		reference = remainder[digestIdx+1:]
+		remainder = remainder[:digestIdx]
+		byDigest = true
+		if !ociDigestPattern.MatchString(reference) {
+			return bundleSource{}, false, faults.Invalid("metadata.bundle oci digest is invalid", nil)
+		}
+	} else if tagIdx := strings.LastIndex(remainder, ":"); tagIdx >= 0 && !strings.Contains(remainder[tagIdx+1:], "/") {
+		reference = remainder[tagIdx+1:]
+		remainder = remainder[:tagIdx]
+		if reference == "" {
+			return bundleSource{}, false, faults.Invalid("metadata.bundle oci tag is empty", nil)
+		}
+	}
+
+	if reference == "" {
+		return bundleSource{}, false, faults.Invalid("metadata.bundle oci ref must include a tag or digest", nil)
+	}
+
+	slashIdx := strings.Index(remainder, "/")
+	if slashIdx < 0 {
+		return bundleSource{}, false, faults.Invalid("metadata.bundle oci ref must include a repository path", nil)
+	}
+	registry := remainder[:slashIdx]
+	repository := remainder[slashIdx+1:]
+	if registry == "" || repository == "" {
+		return bundleSource{}, false, faults.Invalid("metadata.bundle oci ref is malformed", nil)
+	}
+	if !ociRegistryHostPattern.MatchString(registry) {
+		return bundleSource{}, false, faults.Invalid("metadata.bundle oci registry host is invalid", nil)
+	}
+	if !ociRepositoryPattern.MatchString(repository) {
+		return bundleSource{}, false, faults.Invalid("metadata.bundle oci repository path is invalid", nil)
+	}
+
+	cacheIdentifier := fmt.Sprintf("oci:%s/%s:%s", registry, repository, reference)
+	segments := strings.Split(repository, "/")
+	artifactHint := segments[len(segments)-1]
+	cacheArtifactName := fmt.Sprintf("%s-%s", artifactHint, reference)
+	if !byDigest {
+		cacheArtifactName = fmt.Sprintf("%s.tar.gz", cacheArtifactName)
+	}
+	cacheDirName := cacheDirNameForSourceArtifact(
+		cacheArtifactName,
+		cacheIdentifier,
+	)
+
+	return bundleSource{
+		kind:          sourceKindOCI,
+		ociRegistry:   registry,
+		ociRepository: repository,
+		ociReference:  reference,
+		ociByDigest:   byDigest,
+		cacheDirName:  cacheDirName,
+	}, true, nil
 }
 
 func parseShorthandRef(value string) (name string, version string, ok bool) {

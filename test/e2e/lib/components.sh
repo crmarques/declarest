@@ -236,6 +236,45 @@ e2e_component_k8s_label_key() {
   printf '%s-%s\n' "${component_type}" "${component_name}"
 }
 
+e2e_bundle_ref_is_oci() {
+  local bundle_ref=$1
+  [[ "${bundle_ref,,}" == oci://* ]]
+}
+
+e2e_bundle_ref_name() {
+  local bundle_ref=$1
+  local path version
+  if e2e_bundle_ref_is_oci "${bundle_ref}"; then
+    path=${bundle_ref#oci://}
+    path=${path#OCI://}
+    if [[ "${path}" == *@* ]]; then
+      path=${path%@*}
+    else
+      path=${path%:*}
+    fi
+    printf '%s\n' "${path##*/}"
+    return 0
+  fi
+  printf '%s\n' "${bundle_ref%%:*}"
+}
+
+e2e_bundle_ref_version() {
+  local bundle_ref=$1
+  local path version
+  if e2e_bundle_ref_is_oci "${bundle_ref}"; then
+    path=${bundle_ref#oci://}
+    path=${path#OCI://}
+    if [[ "${path}" == *@* ]]; then
+      version=${path##*@}
+    else
+      version=${path##*:}
+    fi
+    printf '%s\n' "${version}"
+    return 0
+  fi
+  printf '%s\n' "${bundle_ref#*:}"
+}
+
 e2e_component_bundle_source_dir() {
   local component_name=$1
 
@@ -393,6 +432,15 @@ e2e_prepare_metadata_workspace() {
         fi
 
         e2e_info "metadata source bundle has no component-declared bundle ref for managed-service=${E2E_MANAGED_SERVICE}; continuing without metadata.bundle"
+        return 0
+      fi
+
+      local lowered_metadata_bundle
+      lowered_metadata_bundle=${metadata_bundle,,}
+      if [[ "${lowered_metadata_bundle}" == oci://* ]]; then
+        E2E_METADATA_BUNDLE="${metadata_bundle}"
+        export E2E_METADATA_BUNDLE
+        e2e_info "managed-service metadata bundle selected bundle=${metadata_bundle} source=oci-registry"
         return 0
       fi
 

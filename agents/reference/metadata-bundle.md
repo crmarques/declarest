@@ -9,6 +9,7 @@ Define the canonical `bundle.yaml` shape consumed by `metadata.bundle` / `metada
 3. `declarest.compatibleDeclarest` runtime evaluation.
 4. `declarest.compatibleManagedService` declaration shape and syntactic validation.
 5. The release-time naming contract enforced by `distribution.artifactTemplate`.
+6. The supported `metadata.bundle` reference forms resolved by `bundlemetadata.ResolveBundle` (OCI registry artifact, shorthand, `http`/`https` URL, or local tarball path).
 
 ## Out of Scope
 1. Metadata layering, template rendering, and operation directives (see `agents/reference/metadata.md`).
@@ -17,6 +18,9 @@ Define the canonical `bundle.yaml` shape consumed by `metadata.bundle` / `metada
 4. Bundle repository GitHub release workflow internals beyond the manifest fields they read.
 
 ## Normative Rules
+0. `metadata.bundle` reference forms MUST be resolved in this priority order: an `oci://<registry>/<repository>:<tag>` or `oci://<registry>/<repository>@<digest>` reference MUST pull the bundle as an OCI artifact via the `oras-go/v2` client; a `<name>:<version>` shorthand MUST continue to resolve through the GitHub-release shorthand URL; an `http`/`https` URL MUST download the referenced tarball directly; any other non-empty value MUST be treated as a local filesystem path to a `.tar.gz` archive.
+0. OCI-backed resolution MUST select the first layer advertised as `application/vnd.declarest.bundle.v1.tar+gzip` (falling back to `application/vnd.oci.image.layer.v1.tar+gzip` and equivalent tar+gzip media types) and MUST pass the layer stream through the same strict-decode and compatibility-gate pipeline used by other source kinds.
+0. OCI registry access MUST honour `metadata.proxy` settings through the shared HTTP client factory and MUST NOT rely on an external `oras` CLI or any other out-of-process tool.
 1. `bundle.yaml` MUST decode strictly: unknown YAML keys at any level MUST fail decoding with a `ValidationError`.
 2. The persisted manifest MUST define `apiVersion: declarest.io/v1alpha1`, `kind: MetadataBundle`, `name`, `version`, `description`, and `declarest.metadataRoot`.
 3. `version` MUST be a semver-2 value (with optional leading `v`); the canonical normalized form drops the leading `v`.
@@ -87,6 +91,8 @@ Optional fields:
 5. A bundle archive whose `distribution.artifactTemplate` mismatches `<name>-{version}.tar.gz` MUST fail decoding before any resolution step.
 
 ## Examples
+0. Canonical OCI reference form resolved by the default deployment: `metadata.bundle: oci://ghcr.io/crmarques/declarest-metadata-bundles/keycloak:0.0.1` MUST fetch the OCI artifact from GHCR, extract the `application/vnd.declarest.bundle.v1.tar+gzip` layer, and verify its manifest against the same strict-decode rules used for local tarballs.
+0. Shorthand form continues to work: `metadata.bundle: keycloak-bundle:0.1.0` MUST download the GitHub-release artifact `keycloak-bundle-0.1.0.tar.gz` and resolve identically to the OCI path once the tarball has been staged.
 1. Minimal valid bundle:
 ```yaml
 apiVersion: declarest.io/v1alpha1

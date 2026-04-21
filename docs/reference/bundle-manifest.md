@@ -45,3 +45,14 @@ The bundle release workflow is responsible for stamping the real `version` into 
 - `haproxy-bundle-<version>.tar.gz`
 
 The shorthand resolver (`metadata.bundle: <name>:<version>`) downloads the artifact from `https://github.com/crmarques/declarest-bundle-<base>/releases/download/v<version>/<name>-<version>.tar.gz` where `<base>` is the bundle name with the `-bundle` suffix removed.
+
+## Reference forms accepted by `metadata.bundle`
+
+`bundlemetadata.ResolveBundle` accepts four canonical reference forms, resolved in priority order:
+
+1. `oci://<registry>/<repository>:<tag>` or `oci://<registry>/<repository>@sha256:<hex>` — pulls the bundle as an OCI artifact via the `oras-go/v2` client. This is the default reference used by the official declarest metadata bundles published to GHCR, for example `oci://ghcr.io/crmarques/declarest-metadata-bundles/keycloak:0.0.1`. The resolver selects the first layer advertised as `application/vnd.declarest.bundle.v1.tar+gzip` (or equivalent tar+gzip media type) and passes it through the same strict-decode and compatibility-gate pipeline used for other sources. No external `oras` CLI is required.
+2. `<name>:<version>` shorthand — resolves through the GitHub-release URL described above (legacy path, kept for backwards compatibility).
+3. `http`/`https` URL — downloads the referenced `.tar.gz` directly.
+4. Absolute local filesystem path — loads the `.tar.gz` archive from disk (useful for offline development).
+
+Bundle resolution honours `metadata.proxy` for all remote sources (OCI registry, HTTP URL, shorthand) through the shared HTTP client factory.

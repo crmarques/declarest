@@ -236,12 +236,19 @@ Choose at most one of:
 - `metadata.bundle`
 - `metadata.bundleFile`
 
-Example:
+Example (default OCI registry reference):
 
 ```yaml
 metadata:
-  bundle: keycloak-bundle:0.0.1
+  bundle: oci://ghcr.io/crmarques/declarest-metadata-bundles/keycloak:0.0.1
 ```
+
+`metadata.bundle` accepts four canonical reference forms (resolved in priority order):
+
+1. `oci://<registry>/<repository>:<tag>` or `oci://<registry>/<repository>@sha256:<hex>` — OCI registry artifact (default for published bundles; uses the embedded `oras-go/v2` client).
+2. `<name>:<version>` — GitHub-release shorthand resolving to `https://github.com/crmarques/declarest-bundle-<base>/releases/download/v<version>/<name>-<version>.tar.gz`.
+3. `http`/`https` URL — direct `.tar.gz` download.
+4. Absolute local filesystem path — useful for offline development.
 
 When all metadata sources are omitted, `metadata.baseDir` defaults to the repository base dir.
 
