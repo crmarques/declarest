@@ -68,7 +68,7 @@ contexts:
         auth:
           token: root-token
     metadata:
-      bundle: keycloak-bundle:0.0.1
+      bundle: keycloak:0.1.0
 currentContext: e2e-basic
 EOF
 }
@@ -94,7 +94,7 @@ contexts:
           branch: main
           provider: github
     metadata:
-      bundle: keycloak-bundle:0.0.1
+      bundle: keycloak:0.1.0
 currentContext: e2e-basic
 EOF
 }

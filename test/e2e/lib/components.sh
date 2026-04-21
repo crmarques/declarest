@@ -236,16 +236,38 @@ e2e_component_k8s_label_key() {
   printf '%s-%s\n' "${component_type}" "${component_name}"
 }
 
+e2e_component_bundle_source_dir() {
+  local component_name=$1
+
+  if [[ -z "${component_name}" || -z "${E2E_METADATA_BUNDLES_ROOT:-}" ]]; then
+    return 1
+  fi
+
+  local candidate="${E2E_METADATA_BUNDLES_ROOT}/bundles/${component_name}"
+  if [[ ! -f "${candidate}/bundle.yaml" ]]; then
+    return 1
+  fi
+
+  printf '%s\n' "${candidate}"
+  return 0
+}
+
 e2e_seed_local_metadata_bundle_cache_locked() {
   local bundle_ref=$1
-  local metadata_source=$2
-  local openapi_source=${3:-}
+  local bundle_source_dir=$2
   local bundle_name=${bundle_ref%%:*}
   local bundle_version=${bundle_ref#*:}
   local cache_root="${HOME}/.declarest/metadata-bundles"
   local cache_dir="${cache_root}/${bundle_name}-${bundle_version}"
 
-  [[ -d "${metadata_source}" ]] || return 0
+  if [[ -z "${bundle_source_dir}" || ! -f "${bundle_source_dir}/bundle.yaml" ]]; then
+    e2e_die "metadata bundle source dir is missing bundle.yaml: ${bundle_source_dir:-<empty>}"
+    return 1
+  fi
+  if [[ ! -d "${bundle_source_dir}/metadata" ]]; then
+    e2e_die "metadata bundle source dir is missing metadata/: ${bundle_source_dir}"
+    return 1
+  fi
 
   mkdir -p "${cache_root}" || return 1
 
@@ -257,37 +279,25 @@ e2e_seed_local_metadata_bundle_cache_locked() {
     return 1
   }
 
-  if ! cp -R "${metadata_source}/." "${stage_dir}/metadata/"; then
+  if ! cp -R "${bundle_source_dir}/metadata/." "${stage_dir}/metadata/"; then
     rm -rf -- "${stage_dir}"
-    e2e_die "failed to seed metadata bundle cache from ${metadata_source}"
+    e2e_die "failed to seed metadata bundle cache from ${bundle_source_dir}"
     return 1
   fi
 
-  if [[ -f "${openapi_source}" ]]; then
-    if ! cp "${openapi_source}" "${stage_dir}/openapi.yaml"; then
+  if [[ -f "${bundle_source_dir}/openapi.yaml" ]]; then
+    if ! cp "${bundle_source_dir}/openapi.yaml" "${stage_dir}/openapi.yaml"; then
       rm -rf -- "${stage_dir}"
-      e2e_die "failed to copy bundle openapi source ${openapi_source}"
+      e2e_die "failed to copy bundle openapi source ${bundle_source_dir}/openapi.yaml"
       return 1
     fi
   fi
 
-  {
-    printf 'apiVersion: declarest.io/v1alpha1\n'
-    printf 'kind: MetadataBundle\n'
-    printf 'name: %s\n' "${bundle_name}"
-    printf 'version: %s\n' "${bundle_version}"
-    printf 'description: E2E metadata bundle for %s.\n' "${E2E_MANAGED_SERVICE:-managed-service}"
-    printf 'declarest:\n'
-    printf '  metadataRoot: metadata\n'
-    if [[ -f "${openapi_source}" ]]; then
-      printf '  openapi: openapi.yaml\n'
-    fi
-    printf 'distribution:\n'
-    printf '  artifactTemplate: %s-{version}.tar.gz\n' "${bundle_name}"
-  } >"${stage_dir}/bundle.yaml" || {
+  if ! cp "${bundle_source_dir}/bundle.yaml" "${stage_dir}/bundle.yaml"; then
     rm -rf -- "${stage_dir}"
+    e2e_die "failed to copy bundle manifest ${bundle_source_dir}/bundle.yaml"
     return 1
-  }
+  fi
 
   : >"${stage_dir}/.declarest-bundle-ready" || {
     rm -rf -- "${stage_dir}"
@@ -308,7 +318,7 @@ e2e_seed_local_metadata_bundle_cache_locked() {
     return 1
   fi
   rm -rf -- "${retired_dir}"
-  e2e_info "seeded local metadata bundle cache bundle=${bundle_ref} dir=${cache_dir}"
+  e2e_info "seeded local metadata bundle cache bundle=${bundle_ref} source=${bundle_source_dir} dir=${cache_dir}"
 }
 
 e2e_seed_local_metadata_bundle_cache() {
@@ -357,31 +367,54 @@ e2e_prepare_metadata_workspace() {
     return 0
   fi
 
+  local bundle_source_dir=''
+  local bundle_dir_candidate=''
+  if bundle_dir_candidate=$(e2e_component_bundle_source_dir "${E2E_MANAGED_SERVICE}"); then
+    bundle_source_dir="${bundle_dir_candidate}"
+  fi
+
+  local component_metadata_dir="${component_dir}/metadata"
+
   case "${E2E_METADATA:-bundle}" in
     bundle)
       local metadata_bundle
-      local metadata_source="${component_dir}/metadata"
-      local openapi_source="${component_dir}/openapi.yaml"
       metadata_bundle=${E2E_COMPONENT_METADATA_BUNDLE_REF[${resource_component_key}]:-}
       if [[ -z "${metadata_bundle}" ]]; then
-        if [[ -d "${metadata_source}" ]]; then
-          e2e_prepare_metadata_workspace_copy "${metadata_source}" || return 1
-          e2e_info "metadata source bundle has no component-declared bundle ref for managed-service=${E2E_MANAGED_SERVICE}; using metadata workspace copy"
+        local fallback_metadata=''
+        if [[ -n "${bundle_source_dir}" && -d "${bundle_source_dir}/metadata" ]]; then
+          fallback_metadata="${bundle_source_dir}/metadata"
+        elif [[ -d "${component_metadata_dir}" ]]; then
+          fallback_metadata="${component_metadata_dir}"
+        fi
+        if [[ -n "${fallback_metadata}" ]]; then
+          e2e_prepare_metadata_workspace_copy "${fallback_metadata}" || return 1
+          e2e_info "metadata source bundle has no component-declared bundle ref for managed-service=${E2E_MANAGED_SERVICE}; using metadata workspace copy from ${fallback_metadata}"
           return 0
         fi
 
         e2e_info "metadata source bundle has no component-declared bundle ref for managed-service=${E2E_MANAGED_SERVICE}; continuing without metadata.bundle"
         return 0
       fi
-      e2e_seed_local_metadata_bundle_cache "${metadata_bundle}" "${metadata_source}" "${openapi_source}" || return 1
+
+      if [[ -z "${bundle_source_dir}" ]]; then
+        e2e_die "metadata bundle ref ${metadata_bundle} declared for managed-service=${E2E_MANAGED_SERVICE} but no bundle source found under ${E2E_METADATA_BUNDLES_ROOT}/bundles/${E2E_MANAGED_SERVICE}"
+        return 1
+      fi
+
+      e2e_seed_local_metadata_bundle_cache "${metadata_bundle}" "${bundle_source_dir}" || return 1
       E2E_METADATA_BUNDLE="${metadata_bundle}"
       export E2E_METADATA_BUNDLE
-      e2e_info "managed-service metadata bundle selected bundle=${metadata_bundle}"
+      e2e_info "managed-service metadata bundle selected bundle=${metadata_bundle} source=${bundle_source_dir}"
       return 0
       ;;
     dir)
-      local metadata_source="${component_dir}/metadata"
-      if [[ ! -d "${metadata_source}" ]]; then
+      local metadata_source=''
+      if [[ -n "${bundle_source_dir}" && -d "${bundle_source_dir}/metadata" ]]; then
+        metadata_source="${bundle_source_dir}/metadata"
+      elif [[ -d "${component_metadata_dir}" ]]; then
+        metadata_source="${component_metadata_dir}"
+      fi
+      if [[ -z "${metadata_source}" ]]; then
         return 0
       fi
 
@@ -416,6 +449,17 @@ e2e_component_openapi_source_path() {
 
   if [[ -z "${component_dir}" ]]; then
     return 1
+  fi
+
+  local component_name
+  component_name=$(e2e_component_name "${component_key}")
+
+  local bundle_source_dir=''
+  if bundle_source_dir=$(e2e_component_bundle_source_dir "${component_name}"); then
+    if [[ -f "${bundle_source_dir}/openapi.yaml" ]]; then
+      printf '%s\n' "${bundle_source_dir}/openapi.yaml"
+      return 0
+    fi
   fi
 
   local spec_path="${component_dir}/openapi.yaml"

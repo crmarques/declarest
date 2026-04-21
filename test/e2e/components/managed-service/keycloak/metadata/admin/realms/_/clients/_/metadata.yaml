@@ -1,5 +1,0 @@
-resource:
-  id: "{{/id}}"
-  alias: "{{/clientId}}"
-  secretAttributes:
-  - /secret

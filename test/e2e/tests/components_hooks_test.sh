@@ -171,6 +171,10 @@ test_prepare_metadata_workspace_uses_component_metadata_for_dir_mode() {
   trap 'rm -rf "${tmp}"' RETURN
   prepare_runtime_globals "${tmp}"
 
+  local original_bundles_root="${E2E_METADATA_BUNDLES_ROOT:-}"
+  E2E_METADATA_BUNDLES_ROOT="${tmp}/empty-bundles-root"
+  export E2E_METADATA_BUNDLES_ROOT
+
   E2E_MANAGED_SERVICE='keycloak'
   E2E_METADATA='dir'
   E2E_COMPONENT_PATH=()
@@ -180,6 +184,9 @@ test_prepare_metadata_workspace_uses_component_metadata_for_dir_mode() {
   E2E_COMPONENT_PATH['managed-service:keycloak']="${component_dir}"
 
   e2e_prepare_metadata_workspace
+
+  E2E_METADATA_BUNDLES_ROOT="${original_bundles_root}"
+  export E2E_METADATA_BUNDLES_ROOT
 
   assert_eq "${E2E_METADATA_BUNDLE:-}" "" "expected metadata bundle to stay unset for dir mode"
   assert_eq "${E2E_METADATA_DIR}" "${E2E_RUN_DIR}/managed-service-metadata" "expected metadata dir to use run workspace copy"
@@ -194,16 +201,44 @@ test_prepare_metadata_workspace_uses_keycloak_bundle_for_bundle_mode() {
   trap 'rm -rf "${tmp}"' RETURN
   prepare_runtime_globals "${tmp}"
 
+  local bundle_root="${tmp}/bundles-root"
+  mkdir -p "${bundle_root}/bundles/keycloak/metadata/admin/realms/_"
+  cat >"${bundle_root}/bundles/keycloak/bundle.yaml" <<'EOF'
+apiVersion: declarest.io/v1alpha1
+kind: MetadataBundle
+name: keycloak
+version: 0.1.0
+description: Test bundle.
+declarest:
+  metadataRoot: metadata
+distribution:
+  artifactTemplate: keycloak-{version}.tar.gz
+EOF
+  printf '{"resource":{"id":"{{/realm}}","alias":"{{/realm}}"}}\n' \
+    >"${bundle_root}/bundles/keycloak/metadata/admin/realms/_/metadata.yaml"
+  local original_bundles_root="${E2E_METADATA_BUNDLES_ROOT:-}"
+  local original_home="${HOME}"
+  E2E_METADATA_BUNDLES_ROOT="${bundle_root}"
+  export E2E_METADATA_BUNDLES_ROOT
+  HOME="${tmp}/home"
+  mkdir -p "${HOME}"
+  export HOME
+
   E2E_MANAGED_SERVICE='keycloak'
   E2E_METADATA='bundle'
   E2E_COMPONENT_PATH=()
   E2E_COMPONENT_METADATA_BUNDLE_REF=()
   E2E_COMPONENT_PATH['managed-service:keycloak']="${tmp}/components/managed-service/keycloak"
-  E2E_COMPONENT_METADATA_BUNDLE_REF['managed-service:keycloak']='keycloak-bundle:0.0.1'
+  E2E_COMPONENT_METADATA_BUNDLE_REF['managed-service:keycloak']='keycloak:0.1.0'
 
   e2e_prepare_metadata_workspace
 
-  assert_eq "${E2E_METADATA_BUNDLE}" "keycloak-bundle:0.0.1" "expected keycloak shorthand metadata bundle"
+  E2E_METADATA_BUNDLES_ROOT="${original_bundles_root}"
+  export E2E_METADATA_BUNDLES_ROOT
+  HOME="${original_home}"
+  export HOME
+
+  assert_eq "${E2E_METADATA_BUNDLE}" "keycloak:0.1.0" "expected keycloak shorthand metadata bundle"
   assert_eq "${E2E_METADATA_DIR:-}" "" "expected metadata workspace dir to stay unset when bundle is selected"
 }
 
@@ -213,6 +248,10 @@ test_prepare_metadata_workspace_falls_back_to_component_metadata_when_bundle_map
   tmp=$(new_temp_dir)
   trap 'rm -rf "${tmp}"' RETURN
   prepare_runtime_globals "${tmp}"
+
+  local original_bundles_root="${E2E_METADATA_BUNDLES_ROOT:-}"
+  E2E_METADATA_BUNDLES_ROOT="${tmp}/empty-bundles-root"
+  export E2E_METADATA_BUNDLES_ROOT
 
   E2E_MANAGED_SERVICE='rundeck'
   E2E_METADATA='bundle'
@@ -224,6 +263,9 @@ test_prepare_metadata_workspace_falls_back_to_component_metadata_when_bundle_map
   E2E_COMPONENT_PATH['managed-service:rundeck']="${component_dir}"
 
   e2e_prepare_metadata_workspace
+
+  E2E_METADATA_BUNDLES_ROOT="${original_bundles_root}"
+  export E2E_METADATA_BUNDLES_ROOT
 
   assert_eq "${E2E_METADATA_BUNDLE:-}" "" "expected unsupported bundle mode to keep metadata bundle unset"
   assert_eq "${E2E_METADATA_DIR}" "${E2E_RUN_DIR}/managed-service-metadata" "expected unsupported bundle mode to fall back to run workspace copy"
@@ -237,6 +279,10 @@ test_prepare_metadata_workspace_allows_bundle_mode_without_mapping() {
   trap 'rm -rf "${tmp}"' RETURN
   prepare_runtime_globals "${tmp}"
 
+  local original_bundles_root="${E2E_METADATA_BUNDLES_ROOT:-}"
+  E2E_METADATA_BUNDLES_ROOT="${tmp}/empty-bundles-root"
+  export E2E_METADATA_BUNDLES_ROOT
+
   E2E_MANAGED_SERVICE='simple-api-server'
   E2E_METADATA='bundle'
   E2E_COMPONENT_PATH=()
@@ -244,6 +290,10 @@ test_prepare_metadata_workspace_allows_bundle_mode_without_mapping() {
   E2E_COMPONENT_PATH['managed-service:simple-api-server']="${tmp}/components/managed-service/simple-api-server"
 
   e2e_prepare_metadata_workspace
+
+  E2E_METADATA_BUNDLES_ROOT="${original_bundles_root}"
+  export E2E_METADATA_BUNDLES_ROOT
+
   assert_eq "${E2E_METADATA_BUNDLE:-}" "" "expected unsupported bundle mode to keep metadata bundle unset"
   assert_eq "${E2E_METADATA_DIR:-}" "" "expected unsupported bundle mode to keep metadata dir unset"
 }
@@ -293,8 +343,8 @@ EOF
     component_name=$(basename "$(dirname "$(dirname "${script_path}")")")
     local fragment_file="${tmp}/${component_name}.yaml"
 
-    run_repo_context_script "${script_path}" "${state_file}" "${fragment_file}" "keycloak-bundle:0.0.1" ""
-    assert_eq "$(context_metadata_line "${fragment_file}")" "  bundle: keycloak-bundle:0.0.1" "expected ${script_path} to emit metadata.bundle"
+    run_repo_context_script "${script_path}" "${state_file}" "${fragment_file}" "keycloak:0.1.0" ""
+    assert_eq "$(context_metadata_line "${fragment_file}")" "  bundle: keycloak:0.1.0" "expected ${script_path} to emit metadata.bundle"
 
     run_repo_context_script "${script_path}" "${state_file}" "${fragment_file}" "" "${metadata_dir}"
     assert_eq "$(context_metadata_line "${fragment_file}")" "  baseDir: ${metadata_dir}" "expected ${script_path} to emit metadata.baseDir fallback"

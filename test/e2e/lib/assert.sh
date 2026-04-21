@@ -214,6 +214,14 @@ case_component_metadata_root() {
     return 1
   fi
 
+  if [[ -n "${E2E_METADATA_BUNDLES_ROOT:-}" ]]; then
+    local bundle_metadata_root="${E2E_METADATA_BUNDLES_ROOT}/bundles/${component_name}/metadata"
+    if [[ -d "${bundle_metadata_root}" ]]; then
+      printf '%s\n' "${bundle_metadata_root}"
+      return 0
+    fi
+  fi
+
   local metadata_root="${E2E_DIR}/components/managed-service/${component_name}/metadata"
   if [[ -d "${metadata_root}" ]]; then
     printf '%s\n' "${metadata_root}"

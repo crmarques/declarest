@@ -1,3 +1,0 @@
-resource:
-  id: "{{/alias}}"
-  alias: "{{/alias}}"

@@ -281,7 +281,11 @@ EOF
 }
 
 test_checked_in_keycloak_client_metadata_uses_client_id_alias_template() {
-  local metadata_file="${E2E_SCRIPT_DIR}/components/managed-service/keycloak/metadata/admin/realms/_/clients/_/metadata.yaml"
+  local metadata_file="${E2E_METADATA_BUNDLES_ROOT}/bundles/keycloak/metadata/admin/realms/_/clients/_/metadata.yaml"
+  if [[ ! -f "${metadata_file}" ]]; then
+    e2e_info "skipping ${FUNCNAME[0]}: keycloak bundle metadata not found at ${metadata_file}"
+    return 0
+  fi
   local content
   content=$(<"${metadata_file}")
 

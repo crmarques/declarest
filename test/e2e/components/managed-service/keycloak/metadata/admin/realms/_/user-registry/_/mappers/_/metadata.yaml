@@ -1,8 +1,0 @@
-resource:
-  id: "{{/id}}"
-  alias: "{{/name}}"
-  remoteCollectionPath: /admin/realms/{{/realm}}/components
-operations:
-  list:
-    transforms:
-    - jqExpression: '[ .[] | select(.parentId == (resource("/admin/realms/{{/realm}}/user-registry/{{/name}}/") | .id)) ]'

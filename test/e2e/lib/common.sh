@@ -6,6 +6,8 @@ E2E_ROOT_DIR=$(cd -- "${E2E_LIB_DIR}/../../.." && pwd)
 E2E_DIR="${E2E_ROOT_DIR}/test/e2e"
 E2E_RUNS_DIR="${E2E_DIR}/.runs"
 
+: "${E2E_METADATA_BUNDLES_ROOT:=${E2E_ROOT_DIR}/../declarest-metadata-bundles}"
+
 : "${E2E_RUN_ID:=}"
 : "${E2E_RUN_DIR:=}"
 : "${E2E_STATE_DIR:=}"

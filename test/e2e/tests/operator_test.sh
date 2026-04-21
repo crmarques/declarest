@@ -475,24 +475,24 @@ test_operator_write_manifests_prefers_prepared_keycloak_metadata_bundle_mount_pa
   export E2E_MANAGED_SERVICE_CONNECTION='remote'
   export E2E_MANAGED_SERVICE_AUTH_TYPE='oauth2'
   export E2E_MANAGED_SERVICE_MTLS='false'
-  export E2E_METADATA_BUNDLE='keycloak-bundle:0.0.1'
+  export E2E_METADATA_BUNDLE='keycloak:0.1.0'
   export HOME="${tmp}/home"
   export E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER=''
   export E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET=''
   export E2E_OPERATOR_REPOSITORY_NAME='declarest-e2e-repository'
 
   mkdir -p "${E2E_STATE_DIR}"
-  mkdir -p "${HOME}/.declarest/metadata-bundles/keycloak-bundle-0.0.1/metadata/admin/realms/_"
-  cat >"${HOME}/.declarest/metadata-bundles/keycloak-bundle-0.0.1/bundle.yaml" <<'EOF'
+  mkdir -p "${HOME}/.declarest/metadata-bundles/keycloak-0.1.0/metadata/admin/realms/_"
+  cat >"${HOME}/.declarest/metadata-bundles/keycloak-0.1.0/bundle.yaml" <<'EOF'
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
-name: keycloak-bundle
-version: 0.0.1
+name: keycloak
+version: 0.1.0
 description: E2E metadata bundle for keycloak.
 declarest:
   metadataRoot: metadata
 EOF
-  cat >"${HOME}/.declarest/metadata-bundles/keycloak-bundle-0.0.1/metadata/admin/realms/_/metadata.yaml" <<'EOF'
+  cat >"${HOME}/.declarest/metadata-bundles/keycloak-0.1.0/metadata/admin/realms/_/metadata.yaml" <<'EOF'
 {"resource":{"id":"{{/realm}}","alias":"{{/realm}}"}}
 EOF
 
@@ -581,7 +581,7 @@ test_operator_prepare_rundeck_component_metadata_bundle_omits_case_only_fixtures
 
   export E2E_RUN_DIR="${tmp}/run"
   export E2E_MANAGED_SERVICE='rundeck'
-  export E2E_METADATA_DIR="${REPO_ROOT}/test/e2e/components/managed-service/rundeck/metadata"
+  export E2E_METADATA_DIR="${E2E_METADATA_BUNDLES_ROOT}/bundles/rundeck/metadata"
   unset E2E_METADATA_BUNDLE
 
   mkdir -p "${E2E_RUN_DIR}"

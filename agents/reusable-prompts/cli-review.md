@@ -79,7 +79,7 @@ REVIEW METHOD
 - Note missing progress feedback for long-running operations such as git, network calls, auth, or bundle resolution.
 
 7. Bundle follow-up
-- If sibling bundle repositories exist (for example `../declarest-bundle-keycloak` or `../declarest-bundle-rundeck`), review them as secondary scope:
+- If the sibling bundle monorepo exists (`../declarest-metadata-bundles/bundles/<component>/`), review it as secondary scope:
   - README usage examples,
   - metadata validation in CI,
   - example resources,
