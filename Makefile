@@ -26,7 +26,7 @@ E2E_BUILD_DIR := .e2e-build
 
 .DEFAULT_GOAL := help
 
-.PHONY: help fmt vet lint test docs docs-deps e2e e2e-contract e2e-validate-components check build run install clean tidy operator-build operator-run operator-test operator-image operator-image-push manifests generate bundle-install-core bundle-install-admission-certmanager bundle-install-admission-openshift bundle-install-olm release-assets verify-generated bundle bundle-build bundle-push bundle-validate bundle-run catalog-build catalog-push catalog-validate olm-install olm-uninstall operator-sdk opm verify-bundle
+.PHONY: help fmt vet lint test docs docs-deps e2e e2e-contract e2e-validate-components check build run install clean tidy operator-build operator-run operator-test operator-image operator-image-push manifests generate bundle-install-core bundle-install-admission-certmanager bundle-install-admission-openshift bundle-install-olm release-assets stage-release-assets verify-generated bundle release-bundle verify-release-version bundle-build bundle-push bundle-validate bundle-run catalog catalog-build catalog-push catalog-validate olm-install olm-uninstall operator-sdk opm verify-bundle
 
 help: ## List available make targets with descriptions
 	@printf "Available targets:\n"
@@ -163,6 +163,18 @@ bundle-install-olm: ## Generate dist/install-olm.yaml from config/olm overlay (O
 
 release-assets: bundle-install-core bundle-install-admission-certmanager bundle-install-admission-openshift bundle-install-olm ## Generate all release install bundles under dist/
 
+stage-release-assets: ## Stage GoReleaser install, bundle, and catalog assets under .release-assets/
+	$(MAKE) release-assets RELEASE_TAG=$(RELEASE_TAG)
+	$(MAKE) release-bundle VERSION=$(VERSION)
+	@mkdir -p .release-assets
+	cp dist/install.yaml .release-assets/install.yaml
+	cp dist/install-admission-certmanager.yaml .release-assets/install-admission-certmanager.yaml
+	cp dist/install-admission-openshift.yaml .release-assets/install-admission-openshift.yaml
+	cp dist/install-olm.yaml .release-assets/install-olm.yaml
+	tar -czf .release-assets/declarest-operator-bundle.tar.gz bundle bundle.Dockerfile
+	cp bundle/manifests/declarest-operator.clusterserviceversion.yaml .release-assets/declarest-operator-bundle.yaml
+	cp catalog/declarest-operator/catalog.yaml .release-assets/declarest-operator-catalog.yaml
+
 verify-generated: manifests generate ## Verify generated files are up-to-date
 	@if ! git diff --quiet -- config/crd/bases/ api/v1alpha1/zz_generated.deepcopy.go; then \
 		echo "ERROR: Generated files are out of date. Run 'make manifests generate' and commit the result."; \
@@ -176,6 +188,7 @@ VERSION ?= 0.0.1
 CHANNELS ?= alpha
 DEFAULT_CHANNEL ?= alpha
 IMAGE_TAG_BASE ?= ghcr.io/crmarques/declarest-operator
+BUNDLE_CREATED_AT ?= 1970-01-01T00:00:00Z
 BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:$(VERSION)
 CATALOG_IMG ?= $(IMAGE_TAG_BASE)-catalog:$(VERSION)
 OPERATOR_IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
@@ -209,11 +222,29 @@ operator-sdk: ## Install operator-sdk locally into bin/ when missing
 bundle: manifests generate operator-sdk ## Regenerate OLM bundle manifests under bundle/ for the current VERSION
 	sed -i 's|newTag: .*|newTag: $(VERSION)|' config/release/core/kustomization.yaml config/manifests/kustomization.yaml
 	kubectl kustomize config/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
+	sed -i 's|containerImage: .*|containerImage: $(OPERATOR_IMG)|' bundle/manifests/declarest-operator.clusterserviceversion.yaml
+	sed -i 's|createdAt: .*|createdAt: "$(BUNDLE_CREATED_AT)"|' bundle/manifests/declarest-operator.clusterserviceversion.yaml
 	@git checkout config/release/core/kustomization.yaml 2>/dev/null || sed -i 's|newTag: .*|newTag: RELEASE_TAG|' config/release/core/kustomization.yaml
 	$(MAKE) bundle-validate
 
-bundle-validate: operator-sdk ## Run operator-sdk bundle validate against bundle/ (registry+v1 + operatorhub checks)
+bundle-validate: operator-sdk ## Run operator-sdk bundle validate against bundle/ (registry+v1 + operatorframework checks)
 	$(OPERATOR_SDK) bundle validate ./bundle --select-optional suite=operatorframework
+
+release-bundle: ## Regenerate and validate bundle/catalog artifacts for VERSION
+	$(MAKE) bundle VERSION=$(VERSION)
+	$(MAKE) catalog VERSION=$(VERSION)
+	kubectl kustomize config/olm >/dev/null
+	$(MAKE) catalog-validate
+	$(MAKE) verify-release-version VERSION=$(VERSION)
+
+verify-release-version: ## Verify generated OLM artifacts point at VERSION and matching images
+	@grep -Fq "name: declarest-operator.v$(VERSION)" bundle/manifests/declarest-operator.clusterserviceversion.yaml || { echo "ERROR: bundle CSV name does not match VERSION=$(VERSION)"; exit 1; }
+	@grep -Fq "version: $(VERSION)" bundle/manifests/declarest-operator.clusterserviceversion.yaml || { echo "ERROR: bundle CSV version does not match VERSION=$(VERSION)"; exit 1; }
+	@grep -Fq "image: $(OPERATOR_IMG)" bundle/manifests/declarest-operator.clusterserviceversion.yaml || { echo "ERROR: bundle CSV manager image does not match $(OPERATOR_IMG)"; exit 1; }
+	@grep -Fq "containerImage: $(OPERATOR_IMG)" bundle/manifests/declarest-operator.clusterserviceversion.yaml || { echo "ERROR: bundle CSV containerImage annotation does not match $(OPERATOR_IMG)"; exit 1; }
+	@grep -Fq "name: declarest-operator.v$(VERSION)" catalog/declarest-operator/catalog.yaml || { echo "ERROR: catalog bundle name does not match VERSION=$(VERSION)"; exit 1; }
+	@grep -Fq "version: $(VERSION)" catalog/declarest-operator/catalog.yaml || { echo "ERROR: catalog package version does not match VERSION=$(VERSION)"; exit 1; }
+	@grep -Fq "image: $(BUNDLE_IMG)" catalog/declarest-operator/catalog.yaml || { echo "ERROR: catalog bundle image does not match $(BUNDLE_IMG)"; exit 1; }
 
 bundle-build: ## Build the OLM bundle image ($(BUNDLE_IMG))
 	$(BUNDLE_IMAGE_BUILDER) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
@@ -230,6 +261,31 @@ catalog-build: opm ## Build the file-based catalog image ($(CATALOG_IMG))
 catalog-push: ## Push the file-based catalog image ($(CATALOG_IMG))
 	$(BUNDLE_IMAGE_BUILDER) push $(CATALOG_IMG)
 
+catalog: ## Regenerate the file-based OLM catalog for VERSION
+	@mkdir -p catalog/declarest-operator
+	@printf '%s\n' \
+		'---' \
+		'schema: olm.package' \
+		'name: declarest-operator' \
+		'defaultChannel: alpha' \
+		'---' \
+		'schema: olm.channel' \
+		'package: declarest-operator' \
+		'name: alpha' \
+		'entries:' \
+		'  - name: declarest-operator.v$(VERSION)' \
+		'---' \
+		'schema: olm.bundle' \
+		'name: declarest-operator.v$(VERSION)' \
+		'package: declarest-operator' \
+		'image: $(BUNDLE_IMG)' \
+		'properties:' \
+		'  - type: olm.package' \
+		'    value:' \
+		'      packageName: declarest-operator' \
+		'      version: $(VERSION)' \
+		> catalog/declarest-operator/catalog.yaml
+
 catalog-validate: opm ## Validate the file-based catalog under catalog/
 	$(OPM) validate catalog
 
@@ -239,10 +295,15 @@ olm-install: ## Apply the OLM CatalogSource, OperatorGroup, and Subscription sam
 olm-uninstall: ## Remove the OLM CatalogSource, OperatorGroup, and Subscription samples
 	kubectl delete -k config/olm --ignore-not-found
 
-verify-bundle: ## Regenerate the bundle and fail if committed bundle artifacts drift
-	$(MAKE) bundle VERSION=$(VERSION)
-	@if ! git diff --quiet -- bundle/ config/manifests/; then \
-		echo "ERROR: Bundle artifacts are out of date. Run 'make bundle' and commit the result."; \
-		git diff --stat -- bundle/ config/manifests/; \
+verify-bundle: ## Regenerate the bundle and fail if bundle artifacts drift
+	@before="$$(mktemp)"; \
+	after="$$(mktemp)"; \
+	trap 'rm -f "$$before" "$$after"' EXIT; \
+	git diff -- bundle/ catalog/ config/manifests/ > "$$before"; \
+	$(MAKE) release-bundle VERSION=$(VERSION); \
+	git diff -- bundle/ catalog/ config/manifests/ > "$$after"; \
+	if ! cmp -s "$$before" "$$after"; then \
+		echo "ERROR: Bundle artifacts are out of date. Run 'make release-bundle' and commit the result."; \
+		git diff --stat -- bundle/ catalog/ config/manifests/; \
 		exit 1; \
 	fi

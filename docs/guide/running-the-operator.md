@@ -101,7 +101,7 @@ make operator-image
 make operator-image OPERATOR_IMAGE=ghcr.io/crmarques/declarest-operator OPERATOR_IMAGE_TAG=v0.2.2
 ```
 
-Images are published to GHCR by `.github/workflows/operator-image.yml` on semver tag push.
+Images are published to GHCR by `.github/workflows/release.yml` on semver tag push. The manual `.github/workflows/operator-image.yml` workflow only smoke-builds the image.
 
 Manual push:
 

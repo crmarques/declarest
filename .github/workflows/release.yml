@@ -1,4 +1,4 @@
-name: Release CLI
+name: Release CLI and Operator
 
 on:
   push:
@@ -7,88 +7,274 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  OPERATOR_IMAGE: ghcr.io/crmarques/declarest-operator
+  BUNDLE_IMAGE: ghcr.io/crmarques/declarest-operator-bundle
+  CATALOG_IMAGE: ghcr.io/crmarques/declarest-operator-catalog
+  GORELEASER_VERSION: v2.15.3
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  release:
+  prepare:
     runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.version.outputs.publish }}
+      release_tag: ${{ steps.version.outputs.release_tag }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Resolve release version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_REF" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            version="${BASH_REMATCH[1]}"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "release_tag=v${version}" >> "$GITHUB_OUTPUT"
+            echo "version=${version}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            short_sha="${GITHUB_SHA::7}"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "release_tag=manual-${short_sha}" >> "$GITHUB_OUTPUT"
+            echo "version=0.0.0-manual-${short_sha}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "release workflow only accepts vX.Y.Z tags or workflow_dispatch" >&2
+          exit 1
+
+  validate:
+    runs-on: ubuntu-latest
+    needs: prepare
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
       - name: Set up Go
-        uses: actions/setup-go@v6.4.0
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.mod
           cache: true
-      - name: Ensure semver tag
-        env:
-          GITHUB_REF_NAME: ${{ github.ref_name }}
-        run: |
-          python - <<'PY'
-          import os
-          import re
-          import sys
-
-          ref_name = os.getenv("GITHUB_REF_NAME")
-          if not ref_name:
-              print("missing github ref name", file=sys.stderr)
-              sys.exit(1)
-
-          if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", ref_name):
-              print(f"release tag {ref_name!r} must be a semver vX.Y.Z", file=sys.stderr)
-              sys.exit(1)
-          print(f"releasing module version {ref_name}")
-          PY
-      - name: Stage release manifest assets
-        run: |
-          set -euo pipefail
-          make release-assets RELEASE_TAG=${{ github.ref_name }}
-          mkdir -p .release-assets
-          cp dist/install.yaml .release-assets/install.yaml
-          cp dist/install-admission-certmanager.yaml .release-assets/install-admission-certmanager.yaml
-          cp dist/install-admission-openshift.yaml .release-assets/install-admission-openshift.yaml
-          cp dist/install-olm.yaml .release-assets/install-olm.yaml
-      - name: Stage OLM bundle assets
-        env:
-          TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          version="${TAG#v}"
-          make bundle-validate
-          make catalog-validate
-          tar -czf .release-assets/declarest-operator-bundle.tar.gz bundle bundle.Dockerfile
-          cp bundle/manifests/declarest-operator.clusterserviceversion.yaml .release-assets/declarest-operator-bundle.yaml
-          cp catalog/declarest-operator/catalog.yaml .release-assets/declarest-operator-catalog.yaml
-          echo "Staged OLM bundle for version ${version}"
       - name: Validate GoReleaser config
-        uses: goreleaser/goreleaser-action@v7.1.0
+        uses: goreleaser/goreleaser-action@e24998b8b67b290c2fa8b7c14fcfa7de2c5c9b8c # v7.1.0
         with:
-          version: v2.15.3
+          version: ${{ env.GORELEASER_VERSION }}
           args: check
+      - name: Verify generated manifests
+        run: make verify-generated
       - name: Test
         run: go test -race ./...
-      - name: Run GoReleaser (tag release)
-        if: ${{ github.event_name != 'workflow_dispatch' }}
-        uses: goreleaser/goreleaser-action@v7.1.0
+
+  operator-image:
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - validate
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      - name: Log in to GHCR
+        if: ${{ needs.prepare.outputs.publish == 'true' }}
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
-          version: v2.15.3
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Prepare image metadata
+        id: meta
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
+        with:
+          images: ${{ env.OPERATOR_IMAGE }}
+          tags: |
+            type=ref,event=tag
+            type=semver,pattern={{version}},enable=${{ needs.prepare.outputs.publish == 'true' }}
+            type=raw,value=latest,enable=${{ needs.prepare.outputs.publish == 'true' }}
+            type=sha,prefix=manual-,enable=${{ needs.prepare.outputs.publish != 'true' }}
+      - name: Resolve Go version from go.mod
+        id: go-version
+        run: |
+          set -euo pipefail
+          version="$(awk '/^go /{print $2; exit}' go.mod)"
+          if [[ -z "$version" ]]; then
+            echo "unable to resolve Go version from go.mod" >&2
+            exit 1
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+      - name: Build and publish operator image
+        id: build
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          file: Dockerfile.operator
+          platforms: linux/amd64,linux/arm64
+          push: ${{ needs.prepare.outputs.publish == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          sbom: ${{ needs.prepare.outputs.publish == 'true' }}
+          provenance: ${{ needs.prepare.outputs.publish == 'true' && 'mode=max' || 'false' }}
+          build-args: |
+            GO_VERSION=${{ steps.go-version.outputs.value }}
+      - name: Generate operator image attestation
+        if: ${{ needs.prepare.outputs.publish == 'true' }}
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4
+        with:
+          subject-name: ${{ env.OPERATOR_IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  olm-images:
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - validate
+      - operator-image
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      - name: Regenerate and validate OLM artifacts
+        run: make release-bundle VERSION=${{ needs.prepare.outputs.version }}
+      - name: Log in to GHCR
+        if: ${{ needs.prepare.outputs.publish == 'true' }}
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Prepare bundle image metadata
+        id: bundle-meta
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
+        with:
+          images: ${{ env.BUNDLE_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}},enable=${{ needs.prepare.outputs.publish == 'true' }}
+            type=raw,value=latest,enable=${{ needs.prepare.outputs.publish == 'true' }}
+            type=sha,prefix=manual-,enable=${{ needs.prepare.outputs.publish != 'true' }}
+      - name: Prepare catalog image metadata
+        id: catalog-meta
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
+        with:
+          images: ${{ env.CATALOG_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}},enable=${{ needs.prepare.outputs.publish == 'true' }}
+            type=raw,value=latest,enable=${{ needs.prepare.outputs.publish == 'true' }}
+            type=sha,prefix=manual-,enable=${{ needs.prepare.outputs.publish != 'true' }}
+      - name: Build and publish bundle image
+        id: bundle-build
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          file: bundle.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ needs.prepare.outputs.publish == 'true' }}
+          tags: ${{ steps.bundle-meta.outputs.tags }}
+          labels: ${{ steps.bundle-meta.outputs.labels }}
+          sbom: ${{ needs.prepare.outputs.publish == 'true' }}
+          provenance: ${{ needs.prepare.outputs.publish == 'true' && 'mode=max' || 'false' }}
+      - name: Generate bundle image attestation
+        if: ${{ needs.prepare.outputs.publish == 'true' }}
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4
+        with:
+          subject-name: ${{ env.BUNDLE_IMAGE }}
+          subject-digest: ${{ steps.bundle-build.outputs.digest }}
+          push-to-registry: true
+      - name: Build and publish catalog image
+        id: catalog-build
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          file: catalog.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ needs.prepare.outputs.publish == 'true' }}
+          tags: ${{ steps.catalog-meta.outputs.tags }}
+          labels: ${{ steps.catalog-meta.outputs.labels }}
+          sbom: ${{ needs.prepare.outputs.publish == 'true' }}
+          provenance: ${{ needs.prepare.outputs.publish == 'true' && 'mode=max' || 'false' }}
+      - name: Generate catalog image attestation
+        if: ${{ needs.prepare.outputs.publish == 'true' }}
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4
+        with:
+          subject-name: ${{ env.CATALOG_IMAGE }}
+          subject-digest: ${{ steps.catalog-build.outputs.digest }}
+          push-to-registry: true
+
+  release:
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - validate
+      - operator-image
+      - olm-images
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stage release assets
+        run: make stage-release-assets RELEASE_TAG=${{ needs.prepare.outputs.release_tag }} VERSION=${{ needs.prepare.outputs.version }}
+      - name: Run GoReleaser (tag release)
+        if: ${{ needs.prepare.outputs.publish == 'true' }}
+        uses: goreleaser/goreleaser-action@e24998b8b67b290c2fa8b7c14fcfa7de2c5c9b8c # v7.1.0
+        with:
+          version: ${{ env.GORELEASER_VERSION }}
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Run GoReleaser (snapshot smoke test)
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        uses: goreleaser/goreleaser-action@v7.1.0
+        if: ${{ needs.prepare.outputs.publish != 'true' }}
+        uses: goreleaser/goreleaser-action@e24998b8b67b290c2fa8b7c14fcfa7de2c5c9b8c # v7.1.0
         with:
-          version: v2.15.3
+          version: ${{ env.GORELEASER_VERSION }}
           args: release --snapshot --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate CLI artifact attestations
+        if: ${{ needs.prepare.outputs.publish == 'true' }}
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4
+        with:
+          subject-checksums: dist/checksums.txt

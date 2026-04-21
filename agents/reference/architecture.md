@@ -85,8 +85,9 @@ Define component boundaries, dependency direction, and orchestration ownership f
 3. Controller executes apply/prune orchestration through domain/application contracts and persists deterministic status/condition updates.
 
 ### OLM Packaging Flow
-1. `make bundle` renders the CSV template from `config/manifests/` into `bundle/manifests/` via `operator-sdk generate bundle --manifests`, preserving the hand-authored `bundle.Dockerfile`, `bundle/metadata/annotations.yaml`, and scorecard config.
-2. `make bundle-build`/`make bundle-push` publish `ghcr.io/crmarques/declarest-operator-bundle:<VERSION>`; `make catalog-build`/`make catalog-push` publish `ghcr.io/crmarques/declarest-operator-catalog:<VERSION>` from `catalog/declarest-operator/catalog.yaml`.
+1. `make bundle` renders the CSV template from `config/manifests/` into `bundle/manifests/` via `operator-sdk generate bundle --manifests`, preserves the hand-authored `bundle.Dockerfile`, `bundle/metadata/annotations.yaml`, and scorecard config, and stamps CSV image metadata from `VERSION`.
+2. `make release-bundle VERSION=<VERSION>` regenerates the bundle and file-based catalog together, validates `config/olm/`, `operator-sdk bundle validate`, `opm validate`, and version/image consistency, and is the release workflow's canonical OLM staging target.
+3. The tag-triggered release workflow publishes the operator image, bundle image, catalog image, and GitHub release as one ordered DAG; standalone image workflows are manual smoke builds only.
 3. `make olm-install` applies `config/olm/` (Namespace/OperatorGroup/CatalogSource/Subscription) against a target cluster; OLM then reconciles CSVs and injects webhook certificates for the operator `Deployment`.
 
 ## Failure Modes

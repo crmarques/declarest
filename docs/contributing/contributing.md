@@ -69,19 +69,31 @@ GitHub Pages is published via `.github/workflows/docs.yml`.
 
 ## Release workflows
 
-### CLI binaries
+### Release automation
 
-CLI release artifacts are built with GoReleaser via `.github/workflows/release.yml` and `.goreleaser.yaml`.
+Tagged releases are coordinated by `.github/workflows/release.yml`. A `vX.Y.Z` tag drives one ordered workflow that validates the repository, publishes the operator image, regenerates and publishes the OLM bundle/catalog images for `X.Y.Z`, then runs GoReleaser for the CLI release and attached install assets.
+
+Manual `workflow_dispatch` runs of the release workflow are snapshot smoke tests. They build the same asset set with manual prerelease versions but do not publish images or create a tagged release.
 
 ### Operator container image
 
-Operator release images are published to GHCR via `.github/workflows/operator-image.yml`.
-For semver tags (`vX.Y.Z`), the workflow publishes:
+Operator release images are published to GHCR by `.github/workflows/release.yml`.
+For semver tags (`vX.Y.Z`), the release workflow publishes:
 
 - `ghcr.io/crmarques/declarest-operator:vX.Y.Z`
+- `ghcr.io/crmarques/declarest-operator:X.Y.Z`
 - `ghcr.io/crmarques/declarest-operator:latest`
 
-Tagging a semver version (for example `v1.2.3`) triggers both release flows.
+It also publishes:
+
+- `ghcr.io/crmarques/declarest-operator-bundle:X.Y.Z`
+- `ghcr.io/crmarques/declarest-operator-catalog:X.Y.Z`
+- `ghcr.io/crmarques/declarest-operator-bundle:latest`
+- `ghcr.io/crmarques/declarest-operator-catalog:latest`
+
+The operator image, bundle image, catalog image, and CLI release assets are published with provenance attestations. Container images also request BuildKit provenance and SBOM attestations. External GitHub Actions used by release and validation workflows are pinned to full commit SHAs.
+
+`.github/workflows/operator-image.yml` and `.github/workflows/bundle-image.yml` are manual smoke-build workflows only; tag pushes do not use them for publishing.
 
 When docs are built from a release tag, examples use that tag's DeclaREST version automatically. For local builds you can override the rendered version with `DECLAREST_DOCS_VERSION=<version>`.
 
