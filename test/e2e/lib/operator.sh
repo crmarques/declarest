@@ -444,7 +444,8 @@ e2e_operator_rewrite_repo_url_for_cluster() {
 
 e2e_operator_generate_webhook_secret() {
   local random_block
-  random_block=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40 || true)
+  random_block=$(od -An -N32 -tx1 /dev/urandom 2>/dev/null | tr -d '[:space:]' || true)
+  random_block=${random_block:0:40}
   if [[ ${#random_block} -lt 32 ]]; then
     random_block="$(date +%s%N)"
   fi

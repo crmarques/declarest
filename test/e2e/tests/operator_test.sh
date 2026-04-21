@@ -581,10 +581,21 @@ test_operator_prepare_rundeck_component_metadata_bundle_omits_case_only_fixtures
 
   export E2E_RUN_DIR="${tmp}/run"
   export E2E_MANAGED_SERVICE='rundeck'
-  export E2E_METADATA_DIR="${E2E_METADATA_BUNDLES_ROOT}/bundles/rundeck/metadata"
+  export E2E_METADATA_DIR="${tmp}/metadata"
   unset E2E_METADATA_BUNDLE
 
-  mkdir -p "${E2E_RUN_DIR}"
+  mkdir -p \
+    "${E2E_RUN_DIR}" \
+    "${E2E_METADATA_DIR}/projects/_/jobs/_" \
+    "${tmp}/case-only-metadata/projects/platform/jobs/_" \
+    "${tmp}/case-only-metadata/save-input-modes-items/_" \
+    "${tmp}/case-only-metadata/save-secret-guard/metadata" \
+    "${tmp}/case-only-metadata/secret-detect-fix/acme"
+  : >"${E2E_METADATA_DIR}/projects/_/jobs/_/metadata.yaml"
+  : >"${tmp}/case-only-metadata/projects/platform/jobs/_/metadata.yaml"
+  : >"${tmp}/case-only-metadata/save-input-modes-items/_/metadata.yaml"
+  : >"${tmp}/case-only-metadata/save-secret-guard/metadata/metadata.yaml"
+  : >"${tmp}/case-only-metadata/secret-detect-fix/acme/metadata.yaml"
 
   e2e_operator_prepare_managed_service_metadata_bundle
 
