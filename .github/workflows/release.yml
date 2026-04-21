@@ -257,6 +257,10 @@ jobs:
           cache: true
       - name: Stage release assets
         run: make stage-release-assets RELEASE_TAG=${{ needs.prepare.outputs.release_tag }} VERSION=${{ needs.prepare.outputs.version }}
+      - name: Restore staged OLM source artifacts
+        run: |
+          git checkout -- bundle/ catalog/ config/manifests/
+          git diff --exit-code
       - name: Run GoReleaser (tag release)
         if: ${{ needs.prepare.outputs.publish == 'true' }}
         uses: goreleaser/goreleaser-action@e24998b8b67b290c2fa8b7c14fcfa7de2c5c9b8c # v7.1.0
