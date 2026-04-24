@@ -1,6 +1,6 @@
 services:
   rundeck:
-    image: docker.io/rundeck/rundeck:5.20.0
+    image: docker.io/rundeck/rundeck:7.0.1
     environment:
       RUNDECK_GRAILS_URL: ${RUNDECK_BASE_URL}
       RUNDECK_SERVER_ADDRESS: 0.0.0.0
