@@ -60,7 +60,7 @@ jobs:
             type=sha,prefix=manual-
 
       - name: Build bundle image
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: .
           file: bundle.Dockerfile
@@ -70,7 +70,7 @@ jobs:
           labels: ${{ steps.bundle-meta.outputs.labels }}
 
       - name: Build catalog image
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: .
           file: catalog.Dockerfile
