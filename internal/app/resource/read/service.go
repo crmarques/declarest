@@ -167,7 +167,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 		finalValue = map[string]any{}
 	}
 
-	outputValue := any(finalValue)
+	outputValue := finalValue
 	if req.ShowMetadata && metadataSnapshot != nil {
 		outputValue = OutputWithMetadata{
 			Payload:  finalValue,

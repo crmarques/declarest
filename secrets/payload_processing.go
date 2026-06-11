@@ -531,7 +531,7 @@ func resolvePayloadDescriptorPlaceholder(
 	}
 
 	inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trimmed, "{{"), "}}"))
-	name := ""
+	var name string
 	switch {
 	case strings.HasPrefix(inner, "payload_type"):
 		name = "payload_type"

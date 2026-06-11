@@ -439,7 +439,7 @@ func newDeleteCommand(deps cliutil.CommandDependencies, prompter configPrompter)
 				return err
 			}
 
-			name := ""
+			var name string
 			if len(args) > 0 {
 				name = args[0]
 			} else {
@@ -474,8 +474,7 @@ func newRenameCommand(deps cliutil.CommandDependencies, prompter configPrompter)
 				return err
 			}
 
-			fromName := ""
-			toName := ""
+			var fromName, toName string
 			switch len(args) {
 			case 2:
 				fromName = args[0]
@@ -544,7 +543,7 @@ func newUseCommand(deps cliutil.CommandDependencies, prompter configPrompter) *c
 				return err
 			}
 
-			name := ""
+			var name string
 			if len(args) > 0 {
 				name = args[0]
 			} else {

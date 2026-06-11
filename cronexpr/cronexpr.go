@@ -178,8 +178,7 @@ func addFieldPart(raw string, min int, max int, allowSundaySeven bool, allowed [
 		step = parsedStep
 	}
 
-	rangeStart := 0
-	rangeEnd := 0
+	var rangeStart, rangeEnd int
 	switch {
 	case base == "*":
 		rangeStart = min

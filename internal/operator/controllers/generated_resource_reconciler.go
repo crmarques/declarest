@@ -714,7 +714,7 @@ func (r *GeneratedResourceReconciler) markGeneratedResourceApplied(ctx context.C
 	if err := unstructured.SetNestedField(obj.Object, now.UTC().Format(time.RFC3339), "status", "lastAppliedTime"); err != nil {
 		return err
 	}
-	if err := unstructured.SetNestedField(obj.Object, int64(obj.GetGeneration()), "status", "observedGeneration"); err != nil {
+	if err := unstructured.SetNestedField(obj.Object, obj.GetGeneration(), "status", "observedGeneration"); err != nil {
 		return err
 	}
 	if err := unstructured.SetNestedField(obj.Object, strings.TrimSpace(applied.RemoteID), "status", "remoteID"); err != nil {
@@ -729,7 +729,7 @@ func (r *GeneratedResourceReconciler) markGeneratedResourceApplied(ctx context.C
 }
 
 func (r *GeneratedResourceReconciler) markGeneratedResourceFailed(ctx context.Context, obj *unstructured.Unstructured, reason string, message string) error {
-	if err := unstructured.SetNestedField(obj.Object, int64(obj.GetGeneration()), "status", "observedGeneration"); err != nil {
+	if err := unstructured.SetNestedField(obj.Object, obj.GetGeneration(), "status", "observedGeneration"); err != nil {
 		return err
 	}
 	setGeneratedResourceCondition(obj, declarestv1alpha1.ConditionTypeReady, metav1.ConditionFalse, reason, message)

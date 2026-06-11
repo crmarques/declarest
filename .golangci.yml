@@ -1,0 +1,29 @@
+# golangci-lint configuration (schema v2).
+#
+# Pins the linter set so local and CI runs are reproducible and independent of
+# the tool's shifting built-in defaults. The "standard" set (errcheck, govet,
+# ineffassign, staticcheck, unused) is the baseline the codebase already passes;
+# the additions below are low-noise checks that reinforce the project's
+# conventions (idiomatic error strings, no dead assignments, no redundant
+# conversions). CI invokes golangci-lint v2.11.x; keep this file aligned with
+# that major version.
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - misspell      # catch common spelling mistakes in comments and strings
+    - unconvert     # flag redundant type conversions
+    - wastedassign  # flag assignments whose value is never used
+    - bodyclose     # ensure HTTP response bodies are closed
+  exclusions:
+    # Generated code is not hand-maintained; do not gate it on style linters.
+    generated: lax
+    rules:
+      - path: zz_generated\.deepcopy\.go
+        linters:
+          - staticcheck
+
+formatters:
+  enable:
+    - gofmt

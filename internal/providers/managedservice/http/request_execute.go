@@ -194,7 +194,7 @@ func summarizeBodyForLevel(body []byte, level int) string {
 		return "<empty>"
 	}
 
-	limit := 0
+	var limit int
 	switch {
 	case level >= 3:
 		return trimmed
