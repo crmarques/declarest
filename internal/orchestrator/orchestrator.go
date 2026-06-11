@@ -32,31 +32,18 @@ type Orchestrator struct {
 	secrets    secrets.SecretProvider
 }
 
-// Option configures optional orchestrator settings.
-type Option func(*Orchestrator)
-
-func WithDefaultFormat(format string) Option {
-	_ = format
-	return func(*Orchestrator) {}
-}
-
 func New(
 	repo repository.ResourceStore,
 	meta metadata.MetadataService,
 	srv managedservice.ManagedServiceClient,
 	sec secrets.SecretProvider,
-	opts ...Option,
 ) *Orchestrator {
-	o := &Orchestrator{
+	return &Orchestrator{
 		repository: repo,
 		metadata:   meta,
 		server:     srv,
 		secrets:    sec,
 	}
-	for _, opt := range opts {
-		opt(o)
-	}
-	return o
 }
 
 func (r *Orchestrator) RepositoryStore() repository.ResourceStore {
