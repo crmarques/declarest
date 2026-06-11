@@ -83,6 +83,7 @@ Both cleanup modes also drop any `<run-id>/bin` entries that were prepended to `
 ## Runtime Environment Variables
 
 - `DECLAREST_E2E_CONTAINER_ENGINE`: container CLI used for local compose startup (`podman` or `docker`, default: `podman`)
+- `DECLAREST_E2E_PODMAN_URL`: optional `unix://` socket URL passed as `podman --url` for `podman compose` calls (use when the user `podman.socket` systemd unit is not active at the default `/run/user/<uid>/podman/podman.sock`)
 - `DECLAREST_E2E_EXECUTION_LOG`: optional path for the live execution log file (default: `test/e2e/.runs/<run-id>/execution.log`)
 - `DECLAREST_E2E_PROXY_HTTP_URL`: optional shared proxy `http` URL used when `--proxy-mode external`
 - `DECLAREST_E2E_PROXY_HTTPS_URL`: optional shared proxy `https` URL used when `--proxy-mode external`

@@ -502,6 +502,8 @@ case_repo_template_apply_all_metadata() {
       case_expect_success
     done < <(case_repo_template_metadata_target_paths "${logical_path}" "${component_name}")
   done < <(case_repo_template_metadata_files "${component_name}")
+
+  case_repo_commit_setup_changes_if_git || return 1
 }
 
 case_repo_template_metadata_input_format() {

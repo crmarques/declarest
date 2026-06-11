@@ -3,10 +3,18 @@
 # Operator profile helpers for installing the manager as an in-cluster Deployment
 # and applying generated CR instances based on selected component state.
 
-declare -Ag E2E_COMPONENT_SERVICE_PORT=()
-declare -Ag E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH=()
-declare -Ag E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD=()
-declare -Ag E2E_COMPONENT_REPOSITORY_WEBHOOK_PROVIDER=()
+if ! declare -p E2E_COMPONENT_SERVICE_PORT >/dev/null 2>&1; then
+  declare -Ag E2E_COMPONENT_SERVICE_PORT=()
+fi
+if ! declare -p E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH >/dev/null 2>&1; then
+  declare -Ag E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH=()
+fi
+if ! declare -p E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD >/dev/null 2>&1; then
+  declare -Ag E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD=()
+fi
+if ! declare -p E2E_COMPONENT_REPOSITORY_WEBHOOK_PROVIDER >/dev/null 2>&1; then
+  declare -Ag E2E_COMPONENT_REPOSITORY_WEBHOOK_PROVIDER=()
+fi
 
 e2e_operator_profile_enabled() {
   e2e_profile_is_operator
@@ -453,7 +461,7 @@ e2e_operator_generate_webhook_secret() {
 }
 
 e2e_operator_repository_webhook_service_name() {
-  e2e_operator_scoped_name 'declarest-operator-repo-webhook'
+  printf 'declarest-operator-repository-webhook\n'
 }
 
 e2e_operator_prepare_repository_webhook() {
@@ -461,6 +469,7 @@ e2e_operator_prepare_repository_webhook() {
   E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET=''
   E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER=''
   E2E_OPERATOR_REPOSITORY_WEBHOOK_SERVICE_NAME=''
+  E2E_OPERATOR_REPOSITORY_WEBHOOK_NAME=''
   E2E_OPERATOR_REPOSITORY_NAME=''
 
   e2e_operator_profile_enabled || return 0
@@ -475,10 +484,12 @@ e2e_operator_prepare_repository_webhook() {
   local namespace
   namespace=$(e2e_operator_effective_namespace)
   local repository_name
+  local repository_webhook_name
   local service_name
   local webhook_secret
 
   repository_name=$(e2e_operator_scoped_name 'declarest-e2e-repository')
+  repository_webhook_name=$(e2e_operator_scoped_name 'declarest-e2e-repository-webhook')
   service_name=$(e2e_operator_repository_webhook_service_name)
   webhook_secret=${DECLAREST_E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET:-}
   if [[ -z "${webhook_secret}" ]]; then
@@ -488,18 +499,21 @@ e2e_operator_prepare_repository_webhook() {
   E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER="${webhook_provider}"
   E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET="${webhook_secret}"
   E2E_OPERATOR_REPOSITORY_WEBHOOK_SERVICE_NAME="${service_name}"
+  E2E_OPERATOR_REPOSITORY_WEBHOOK_NAME="${repository_webhook_name}"
   E2E_OPERATOR_REPOSITORY_NAME="${repository_name}"
-  E2E_OPERATOR_REPOSITORY_WEBHOOK_URL="http://${service_name}.${namespace}.svc.cluster.local:18082/webhooks/repository/${namespace}/${repository_name}"
+  E2E_OPERATOR_REPOSITORY_WEBHOOK_URL="http://${service_name}.${namespace}.svc.cluster.local:8082/hooks/v1/repositorywebhooks/${namespace}/${repository_webhook_name}"
 
   export E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER
   export E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET
   export E2E_OPERATOR_REPOSITORY_WEBHOOK_SERVICE_NAME
+  export E2E_OPERATOR_REPOSITORY_WEBHOOK_NAME
   export E2E_OPERATOR_REPOSITORY_WEBHOOK_URL
   export E2E_OPERATOR_REPOSITORY_NAME
 
   if [[ -n "${E2E_STATE_DIR:-}" ]] && command -v e2e_runtime_state_set >/dev/null 2>&1; then
     e2e_runtime_state_set 'OPERATOR_REPOSITORY_NAME' "${repository_name}" || return 1
     e2e_runtime_state_set 'OPERATOR_REPOSITORY_WEBHOOK_PROVIDER' "${E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER}" || return 1
+    e2e_runtime_state_set 'OPERATOR_REPOSITORY_WEBHOOK_NAME' "${E2E_OPERATOR_REPOSITORY_WEBHOOK_NAME}" || return 1
     e2e_runtime_state_set 'OPERATOR_REPOSITORY_WEBHOOK_URL' "${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}" || return 1
     e2e_runtime_state_set 'OPERATOR_REPOSITORY_WEBHOOK_SERVICE_NAME' "${E2E_OPERATOR_REPOSITORY_WEBHOOK_SERVICE_NAME}" || return 1
   fi
@@ -1844,11 +1858,16 @@ e2e_operator_write_manifests() {
   }
   local repo_webhook_provider
   local repo_webhook_secret
+  local repo_webhook_name
   repo_webhook_provider=${E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER:-}
   repo_webhook_secret=${E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET:-}
+  repo_webhook_name=${E2E_OPERATOR_REPOSITORY_WEBHOOK_NAME:-}
   if [[ -n "${repo_webhook_provider}" && -z "${repo_webhook_secret}" ]]; then
     e2e_die 'operator profile repository webhook provider is set but webhook secret is empty'
     return 1
+  fi
+  if [[ -n "${repo_webhook_provider}" && -z "${repo_webhook_name}" ]]; then
+    repo_webhook_name=$(e2e_operator_scoped_name 'declarest-e2e-repository-webhook')
   fi
 
   cat >"${manifest_dir}/secret-repository-auth.yaml" <<EOF_REPO_SECRET
@@ -1886,16 +1905,6 @@ spec:
         key: token
 EOF_REPO_CR
 
-  if [[ -n "${repo_webhook_provider}" ]]; then
-    cat >>"${manifest_dir}/resource-repository.yaml" <<EOF_REPO_WEBHOOK
-    webhook:
-      provider: ${repo_webhook_provider}
-      secretRef:
-        name: ${repo_secret_name}
-        key: webhook-secret
-EOF_REPO_WEBHOOK
-  fi
-
   cat >>"${manifest_dir}/resource-repository.yaml" <<EOF_REPO_CR_FOOTER
   storage:
     pvc:
@@ -1904,6 +1913,30 @@ EOF_REPO_WEBHOOK
       requests:
         storage: 1Gi
 EOF_REPO_CR_FOOTER
+
+  if [[ -n "${repo_webhook_provider}" ]]; then
+    cat >"${manifest_dir}/repository-webhook.yaml" <<EOF_REPO_WEBHOOK
+apiVersion: declarest.io/v1alpha1
+kind: RepositoryWebhook
+metadata:
+  name: ${repo_webhook_name}
+  namespace: ${namespace}
+spec:
+  repositoryRef:
+    name: ${repository_name}
+  provider: ${repo_webhook_provider}
+  secretRef:
+    name: ${repo_secret_name}
+    key: webhook-secret
+  events:
+    - push
+  branchFilter:
+    include:
+      - $(e2e_operator_yaml_quote "${repo_branch}")
+EOF_REPO_WEBHOOK
+  else
+    rm -f -- "${manifest_dir}/repository-webhook.yaml"
+  fi
 
   e2e_operator_collect_managed_service_config "${managed_service_state_file}" || return 1
 
@@ -2049,7 +2082,7 @@ metadata:
   namespace: ${namespace}
 spec:
   source:
-    shorthand: $(e2e_operator_yaml_quote "${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SHORTHAND:-${metadata_bundle_ref}}")
+    url: $(e2e_operator_yaml_quote "${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SHORTHAND:-${metadata_bundle_ref}}")
 EOF_METADATA_BUNDLE_CR
   else
     rm -f -- "${manifest_dir}/metadata-bundle.yaml"
@@ -2229,12 +2262,14 @@ EOF_SYNC_POLICY
   E2E_OPERATOR_SECRET_STORE_NAME="${secret_store_name}"
   E2E_OPERATOR_SYNC_POLICY_NAME="${sync_policy_name}"
   E2E_OPERATOR_METADATA_BUNDLE_CR_NAME="${metadata_bundle_cr_name}"
+  E2E_OPERATOR_REPOSITORY_WEBHOOK_NAME="${repo_webhook_name}"
   export E2E_OPERATOR_NAMESPACE
   export E2E_OPERATOR_RESOURCE_REPOSITORY_NAME
   export E2E_OPERATOR_MANAGED_SERVICE_NAME
   export E2E_OPERATOR_SECRET_STORE_NAME
   export E2E_OPERATOR_SYNC_POLICY_NAME
   export E2E_OPERATOR_METADATA_BUNDLE_CR_NAME
+  export E2E_OPERATOR_REPOSITORY_WEBHOOK_NAME
 
   e2e_runtime_state_set 'OPERATOR_NAMESPACE' "${namespace}" || return 1
   e2e_runtime_state_set 'OPERATOR_RESOURCE_REPOSITORY_NAME' "${repository_name}" || return 1
@@ -2243,6 +2278,9 @@ EOF_SYNC_POLICY
   e2e_runtime_state_set 'OPERATOR_SYNC_POLICY_NAME' "${sync_policy_name}" || return 1
   if [[ -n "${metadata_bundle_cr_name}" ]]; then
     e2e_runtime_state_set 'OPERATOR_METADATA_BUNDLE_CR_NAME' "${metadata_bundle_cr_name}" || return 1
+  fi
+  if [[ -n "${repo_webhook_name}" ]]; then
+    e2e_runtime_state_set 'OPERATOR_REPOSITORY_WEBHOOK_NAME' "${repo_webhook_name}" || return 1
   fi
   return 0
 }
@@ -2309,6 +2347,9 @@ e2e_operator_apply_manifests() {
   e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/secret-secret-store-auth.yaml" || return 1
 
   e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/resource-repository.yaml" || return 1
+  if [[ -f "${manifest_dir}/repository-webhook.yaml" ]]; then
+    e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/repository-webhook.yaml" || return 1
+  fi
   if [[ -f "${manifest_dir}/metadata-bundle.yaml" ]]; then
     e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/metadata-bundle.yaml" || return 1
   fi
@@ -2322,6 +2363,9 @@ e2e_operator_apply_manifests() {
   )
   if [[ -n "${E2E_OPERATOR_METADATA_BUNDLE_CR_NAME:-}" ]]; then
     wait_targets+=("metadatabundle.declarest.io:${E2E_OPERATOR_METADATA_BUNDLE_CR_NAME}")
+  fi
+  if [[ -n "${E2E_OPERATOR_REPOSITORY_WEBHOOK_NAME:-}" ]]; then
+    wait_targets+=("repositorywebhook.declarest.io:${E2E_OPERATOR_REPOSITORY_WEBHOOK_NAME}")
   fi
   e2e_operator_wait_resources_ready_parallel "${wait_targets[@]}" || return 1
 
@@ -2358,6 +2402,66 @@ e2e_operator_example_resource_payload() {
   fi
 
   printf '{"name":"operator-demo"}\n'
+}
+
+e2e_operator_example_resource_path_for_name() {
+  local base_path=$1
+  local name=$2
+
+  if [[ "${base_path}" != */* || "${base_path}" == '/' ]]; then
+    printf '/%s\n' "${name}"
+    return 0
+  fi
+
+  printf '%s/%s\n' "${base_path%/*}" "${name}"
+}
+
+e2e_operator_example_resource_payload_for_name() {
+  local payload=$1
+  local name=$2
+
+  jq -c --arg name "${name}" '
+    if type != "object" then
+      error("operator example payload must be a JSON object")
+    else
+      (if has("id") then .id = $name else . end)
+      | (if has("name") then .name = $name else . end)
+      | (if has("realm") then .realm = $name else . end)
+    end
+  ' <<<"${payload}"
+}
+
+e2e_operator_example_resource_payload_with_update_marker() {
+  local payload=$1
+  local marker=$2
+
+  jq -c --arg marker "${marker}" '
+    if type != "object" then
+      error("operator example payload must be a JSON object")
+    elif has("displayName") then
+      .displayName = $marker
+    elif has("description") then
+      .description = $marker
+    elif has("owner") then
+      .owner = $marker
+    elif (.service? | type) == "object" then
+      .service.http_connection_mode = "http-keep-alive"
+    else
+      error("operator example payload has no supported mutable marker field")
+    end
+  ' <<<"${payload}"
+}
+
+e2e_operator_example_resource_output_has_update_marker() {
+  local output=$1
+  local marker=$2
+
+  jq -e --arg marker "${marker}" '
+    (.displayName? == $marker)
+    or (.description? == $marker)
+    or (.owner? == $marker)
+    or (.service.http_connection_mode? == "http-keep-alive")
+  ' <<<"${output}" >/dev/null
 }
 
 e2e_profile_operator_handoff() {

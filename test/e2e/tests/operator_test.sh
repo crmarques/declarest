@@ -28,7 +28,7 @@ prepare_operator_handoff_env() {
   export E2E_OPERATOR_IMAGE='localhost/declarest/e2e-operator-manager:operator-handoff-test'
   export E2E_OPERATOR_SYNC_POLICY_NAME='declarest-e2e-sync-policy'
   export E2E_OPERATOR_RESOURCE_REPOSITORY_NAME='declarest-e2e-repository'
-  export E2E_OPERATOR_REPOSITORY_WEBHOOK_URL='http://declarest-operator-repo-webhook.declarest-operator.svc.cluster.local:18082/webhooks/repository/declarest-operator/declarest-e2e-repository'
+  export E2E_OPERATOR_REPOSITORY_WEBHOOK_URL='http://declarest-operator-repository-webhook.declarest-operator.svc.cluster.local:8082/hooks/v1/repositorywebhooks/declarest-operator/declarest-e2e-repository-webhook'
   export E2E_REPO_TYPE='git'
   export E2E_GIT_PROVIDER='gitea'
   export E2E_GIT_PROVIDER_CONNECTION='local'
@@ -76,6 +76,19 @@ test_operator_example_resource_mapping() {
   E2E_MANAGED_SERVICE='keycloak'
   assert_eq "$(e2e_operator_example_resource_path)" "/admin/realms/operator-demo"
   assert_contains "$(e2e_operator_example_resource_payload)" "\"realm\":\"operator-demo\""
+}
+
+test_operator_lib_preserves_component_catalog_values() {
+  source_e2e_libs common components profile
+
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH['managed-service:keycloak']='/admin/realms/operator-demo'
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD['managed-service:keycloak']='{"realm":"operator-demo","enabled":true,"displayName":"Operator Demo Realm"}'
+
+  source_e2e_lib operator
+
+  E2E_MANAGED_SERVICE='keycloak'
+  assert_eq "$(e2e_operator_example_resource_path)" "/admin/realms/operator-demo"
+  assert_contains "$(e2e_operator_example_resource_payload)" "\"displayName\":\"Operator Demo Realm\""
 }
 
 test_operator_scoped_names_are_run_specific() {
@@ -167,8 +180,9 @@ test_operator_prepare_repository_webhook_builds_scoped_url() {
   e2e_operator_prepare_repository_webhook
 
   assert_eq "${E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER}" "gitea"
-  assert_contains "${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}" "/webhooks/repository/declarest-operator/"
-  assert_contains "${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}" "declarest-e2e-repository-operator-webhook-test"
+  assert_contains "${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}" ".declarest-operator.svc.cluster.local:8082/"
+  assert_contains "${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}" "/hooks/v1/repositorywebhooks/declarest-operator/"
+  assert_contains "${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}" "declarest-e2e-repository-webhook-operator-webhook-test"
   assert_contains "${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}" "$(e2e_operator_repository_webhook_service_name)"
   if [[ -z "${E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET:-}" ]]; then
     fail "expected operator repository webhook secret to be generated"
@@ -196,8 +210,8 @@ test_operator_prepare_repository_webhook_derives_namespace_when_unset() {
   e2e_operator_prepare_repository_webhook
 
   local expected_namespace='declarest-operator-webhook-autons'
-  assert_contains "${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}" ".${expected_namespace}.svc.cluster.local:18082/"
-  assert_contains "${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}" "/webhooks/repository/${expected_namespace}/"
+  assert_contains "${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}" ".${expected_namespace}.svc.cluster.local:8082/"
+  assert_contains "${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}" "/hooks/v1/repositorywebhooks/${expected_namespace}/"
 }
 
 test_operator_repository_webhook_registration_deferred_only_for_operator_profiles() {
@@ -535,7 +549,7 @@ EOF
   assert_file_contains "${metadata_bundle_manifest}" "name: ${E2E_OPERATOR_METADATA_BUNDLE_CR_NAME}"
   assert_file_contains \
     "${metadata_bundle_manifest}" \
-    "shorthand: '${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SHORTHAND}'"
+    "url: '${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SHORTHAND}'"
 }
 
 test_operator_prepare_managed_service_metadata_bundle_from_metadata_dir() {
@@ -678,7 +692,7 @@ EOF
   assert_file_contains "${metadata_bundle_manifest}" "name: ${E2E_OPERATOR_METADATA_BUNDLE_CR_NAME}"
   assert_file_contains \
     "${metadata_bundle_manifest}" \
-    "shorthand: '${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SHORTHAND}'"
+    "url: '${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_SHORTHAND}'"
 }
 
 test_secretstore_crd_does_not_require_legacy_provider_field() {

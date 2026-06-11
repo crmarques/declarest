@@ -140,7 +140,11 @@ e2e_resolve_go_arch() {
 }
 
 e2e_compose_cmd() {
-  e2e_run_cmd "${E2E_CONTAINER_ENGINE}" compose "$@"
+  local -a engine_args=("${E2E_CONTAINER_ENGINE}")
+  if [[ "${E2E_CONTAINER_ENGINE}" == 'podman' && -n "${DECLAREST_E2E_PODMAN_URL:-}" ]]; then
+    engine_args+=(--url "${DECLAREST_E2E_PODMAN_URL}")
+  fi
+  e2e_run_cmd "${engine_args[@]}" compose "$@"
 }
 
 e2e_kind_run_raw() {

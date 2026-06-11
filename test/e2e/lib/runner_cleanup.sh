@@ -385,6 +385,11 @@ e2e_cleanup_run_compose_runtime() {
     return 0
   fi
 
+  local -a engine_args=("${engine}")
+  if [[ "${engine}" == 'podman' && -n "${DECLAREST_E2E_PODMAN_URL:-}" ]]; then
+    engine_args+=(--url "${DECLAREST_E2E_PODMAN_URL}")
+  fi
+
   if [[ -f "${started_file}" ]]; then
     local project_name
     local compose_file
@@ -404,7 +409,7 @@ e2e_cleanup_run_compose_runtime() {
 
       e2e_info "cleanup container project=${project_name}"
       set +e
-      "${engine}" compose -f "${compose_file}" -p "${project_name}" down -v --remove-orphans >/dev/null 2>&1
+      "${engine_args[@]}" compose -f "${compose_file}" -p "${project_name}" down -v --remove-orphans >/dev/null 2>&1
       local rc=$?
       set -e
 
@@ -429,7 +434,7 @@ e2e_cleanup_run_compose_runtime() {
       e2e_info "cleanup container project=${project_name}"
 
       set +e
-      "${engine}" compose -f "${compose_file}" -p "${project_name}" down -v --remove-orphans >/dev/null 2>&1
+      "${engine_args[@]}" compose -f "${compose_file}" -p "${project_name}" down -v --remove-orphans >/dev/null 2>&1
       local rc=$?
       set -e
 
@@ -455,7 +460,7 @@ e2e_cleanup_run_compose_runtime() {
     e2e_info "cleanup container project=${project_name}"
 
     set +e
-    "${engine}" compose -f "${compose_file}" -p "${project_name}" down -v --remove-orphans >/dev/null 2>&1
+    "${engine_args[@]}" compose -f "${compose_file}" -p "${project_name}" down -v --remove-orphans >/dev/null 2>&1
     local rc=$?
     set -e
 
