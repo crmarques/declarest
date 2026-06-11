@@ -72,6 +72,10 @@ func (s *RepositoryWebhookServer) Start(ctx context.Context) error {
 	}
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
 	mux.HandleFunc(repositoryWebhookPathPrefix, s.handleRepositoryWebhook)
 
 	// Register the CRD-based RepositoryWebhook handler.
@@ -129,6 +133,7 @@ func (s *RepositoryWebhookServer) NeedLeaderElection() bool {
 	return false
 }
 
+//nolint:staticcheck // Legacy embedded ResourceRepository webhooks remain supported for v1alpha1 compatibility.
 func (s *RepositoryWebhookServer) handleRepositoryWebhook(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

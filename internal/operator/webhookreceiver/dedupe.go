@@ -19,19 +19,23 @@ import (
 	"time"
 )
 
+const defaultDedupeMaxEntries = 4096
+
 // DedupeCache prevents duplicate webhook deliveries from triggering
 // repeated reconciliation within a TTL window.
 type DedupeCache struct {
-	mu      sync.Mutex
-	entries map[string]time.Time
-	ttl     time.Duration
+	mu         sync.Mutex
+	entries    map[string]time.Time
+	ttl        time.Duration
+	maxEntries int
 }
 
 // NewDedupeCache creates a cache with the given TTL for delivery deduplication.
 func NewDedupeCache(ttl time.Duration) *DedupeCache {
 	return &DedupeCache{
-		entries: make(map[string]time.Time),
-		ttl:     ttl,
+		entries:    make(map[string]time.Time),
+		ttl:        ttl,
+		maxEntries: defaultDedupeMaxEntries,
 	}
 }
 
@@ -55,9 +59,31 @@ func (c *DedupeCache) IsDuplicate(deliveryID string) bool {
 	}
 
 	if _, exists := c.entries[deliveryID]; exists {
+		c.entries[deliveryID] = now
 		return true
+	}
+
+	if c.maxEntries < 1 {
+		c.maxEntries = defaultDedupeMaxEntries
+	}
+	if len(c.entries) >= c.maxEntries {
+		c.evictOldest()
 	}
 
 	c.entries[deliveryID] = now
 	return false
+}
+
+func (c *DedupeCache) evictOldest() {
+	oldestKey := ""
+	var oldestTime time.Time
+	for key, value := range c.entries {
+		if oldestKey == "" || value.Before(oldestTime) {
+			oldestKey = key
+			oldestTime = value
+		}
+	}
+	if oldestKey != "" {
+		delete(c.entries, oldestKey)
+	}
 }

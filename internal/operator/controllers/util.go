@@ -297,6 +297,8 @@ func expandRuntimeSyncPolicy(syncPolicy *declarestv1alpha1.SyncPolicy) *declares
 
 // collectSecretNames returns the deduplicated, sorted set of Kubernetes Secret
 // names referenced by the three dependency CRDs of a SyncPolicy.
+//
+//nolint:staticcheck // Legacy embedded ResourceRepository webhook secrets still trigger v1alpha1 resyncs.
 func collectSecretNames(
 	repo *declarestv1alpha1.ResourceRepository,
 	managedService *declarestv1alpha1.ManagedService,

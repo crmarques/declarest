@@ -119,6 +119,51 @@ func resolveManagedServiceBundleRef(
 	return managedServiceBundleResolution{}, fmt.Errorf("metadata bundle %s/%s has no resolvable source", namespace, refName)
 }
 
+func resolveCRDGeneratorVersionBundleRef(
+	ctx context.Context,
+	reader client.Reader,
+	namespace string,
+	version *declarestv1alpha1.CRDGeneratorVersion,
+) (managedServiceBundleResolution, error) {
+	if version == nil {
+		return managedServiceBundleResolution{}, fmt.Errorf("crd generator version is required")
+	}
+	refName := strings.TrimSpace(version.MetadataBundleRef.Name)
+	if refName == "" {
+		return managedServiceBundleResolution{}, fmt.Errorf("metadata bundle reference is required")
+	}
+
+	bundle := &declarestv1alpha1.MetadataBundle{}
+	key := types.NamespacedName{Namespace: namespace, Name: refName}
+	if err := reader.Get(ctx, key, bundle); err != nil {
+		return managedServiceBundleResolution{}, fmt.Errorf("resolve metadata bundle %s/%s: %w", namespace, refName, err)
+	}
+	if !metadataBundleReady(bundle) {
+		return managedServiceBundleResolution{}, fmt.Errorf("metadata bundle %s/%s is not ready", namespace, refName)
+	}
+
+	resolution := managedServiceBundleResolution{
+		OpenAPI: strings.TrimSpace(bundle.Status.OpenAPIPath),
+	}
+	if resolution.OpenAPI == "" && bundle.Status.Manifest != nil {
+		declared := strings.TrimSpace(bundle.Status.Manifest.OpenAPI)
+		if strings.HasPrefix(declared, "/") ||
+			strings.HasPrefix(strings.ToLower(declared), "http://") ||
+			strings.HasPrefix(strings.ToLower(declared), "https://") {
+			resolution.OpenAPI = declared
+		}
+	}
+	if cachePath := strings.TrimSpace(bundle.Status.CachePath); cachePath != "" {
+		resolution.Source = cachePath
+		return resolution, nil
+	}
+	if url := strings.TrimSpace(bundle.Spec.Source.URL); url != "" {
+		resolution.Source = url
+		return resolution, nil
+	}
+	return managedServiceBundleResolution{}, fmt.Errorf("metadata bundle %s/%s has no resolvable source", namespace, refName)
+}
+
 func metadataBundleReady(bundle *declarestv1alpha1.MetadataBundle) bool {
 	if bundle == nil {
 		return false

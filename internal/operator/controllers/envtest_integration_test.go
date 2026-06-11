@@ -135,7 +135,7 @@ func TestEnvtestRepositoryWebhookReportsNotReadyWhenRepoMissing(t *testing.T) {
 		Spec: declarestv1alpha1.RepositoryWebhookSpec{
 			RepositoryRef: declarestv1alpha1.NamespacedObjectReference{Name: "missing-repo"},
 			Provider:      declarestv1alpha1.RepositoryWebhookProviderGitHub,
-			SecretRef:     declarestv1alpha1.NamespacedObjectReference{Name: "rwh-secret"},
+			SecretRef:     declarestv1alpha1.RepositoryWebhookSecretRef{Name: "rwh-secret", Key: "token"},
 		},
 	}
 
@@ -175,7 +175,7 @@ func TestEnvtestRepositoryWebhookSuspendSetsNotReady(t *testing.T) {
 		Spec: declarestv1alpha1.RepositoryWebhookSpec{
 			RepositoryRef: declarestv1alpha1.NamespacedObjectReference{Name: "some-repo"},
 			Provider:      declarestv1alpha1.RepositoryWebhookProviderGitea,
-			SecretRef:     declarestv1alpha1.NamespacedObjectReference{Name: "some-secret"},
+			SecretRef:     declarestv1alpha1.RepositoryWebhookSecretRef{Name: "some-secret", Key: "token"},
 			Suspend:       true,
 		},
 	}

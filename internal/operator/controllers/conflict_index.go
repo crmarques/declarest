@@ -47,12 +47,10 @@ type conflictKey struct {
 	Identifier              string // logicalPath for tier 1, remoteID for tier 2
 }
 
-// ConflictIndex arbitrates between CRDGenerator-owned and SyncPolicy-owned
-// resources. CRDGenerator registers the resources it manages; SyncPolicy
-// consults the index before apply/prune and skips any entry that is owned by
-// a CRDGenerator. The index is process-local — it exists to shortcut the
-// race between the two reconcilers in the same operator pod and intentionally
-// does NOT replace the authoritative Kubernetes state.
+// ConflictIndex caches CRDGenerator ownership for SyncPolicy arbitration.
+// Generated CR annotations/status are the durable source of truth; the
+// generated-resource reconciler rebuilds this process-local index from live
+// generated CRs on startup and updates it on every generated CR reconcile.
 type ConflictIndex struct {
 	mu    sync.RWMutex
 	tier1 map[conflictKey]ConflictSource // keyed on logical path

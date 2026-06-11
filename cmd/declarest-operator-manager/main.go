@@ -40,15 +40,16 @@ import (
 
 func main() {
 	var (
-		metricsAddr             string
-		probeAddr               string
-		repositoryWebhookAddr   string
-		enableLeaderElection    bool
-		enableAdmissionWebhooks bool
-		admissionWebhookPort    int
-		admissionWebhookCertDir string
-		watchNamespace          string
-		maxConcurrentReconciles int
+		metricsAddr              string
+		probeAddr                string
+		repositoryWebhookAddr    string
+		enableLeaderElection     bool
+		enableAdmissionWebhooks  bool
+		admissionWebhookPort     int
+		admissionWebhookCertDir  string
+		watchNamespace           string
+		maxConcurrentReconciles  int
+		generatedResourceWorkers int
 	)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -59,6 +60,7 @@ func main() {
 	flag.StringVar(&admissionWebhookCertDir, "admission-webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs", "The directory containing TLS certs for the admission webhook server.")
 	flag.StringVar(&watchNamespace, "watch-namespace", "", "Namespace to watch (empty means all namespaces).")
 	flag.IntVar(&maxConcurrentReconciles, "max-concurrent-reconciles", 2, "Maximum number of concurrent reconciles per controller.")
+	flag.IntVar(&generatedResourceWorkers, "generated-resource-workers", 2, "Maximum number of concurrent generated resource reconciles.")
 	zapOptions := zap.Options{Development: false}
 	zapOptions.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -180,6 +182,7 @@ func main() {
 		dynamicClient,
 		manager.GetEventRecorder("generated-resource-controller"),
 		conflictIndex,
+		generatedResourceWorkers,
 	)
 	if err := manager.Add(generatedResourceReconciler); err != nil {
 		ctrl.Log.WithName("setup").Error(err, "unable to register generated-resource reconciler")
@@ -221,6 +224,10 @@ func main() {
 		}
 		if err := (&declarestv1alpha1.SyncPolicy{}).SetupWebhookWithManager(manager); err != nil {
 			ctrl.Log.WithName("setup").Error(err, "unable to create SyncPolicy webhook")
+			os.Exit(1)
+		}
+		if err := (&declarestv1alpha1.RepositoryWebhook{}).SetupWebhookWithManager(manager); err != nil {
+			ctrl.Log.WithName("setup").Error(err, "unable to create RepositoryWebhook webhook")
 			os.Exit(1)
 		}
 		if err := (&declarestv1alpha1.MetadataBundle{}).SetupWebhookWithManager(manager); err != nil {

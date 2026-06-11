@@ -36,8 +36,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
@@ -46,7 +48,8 @@ const (
 	crdGeneratorReasonCRDPresent      = "GeneratedCRDPresent"
 	crdGeneratorReasonCRDEstablishing = "CRDEstablishing"
 
-	crdGeneratorGroupKindIndex = "spec.group|spec.names.kind"
+	crdGeneratorGroupKindIndex      = "spec.group|spec.names.kind"
+	crdGeneratorMetadataBundleIndex = "spec.versions.metadataBundleRef.name"
 )
 
 // dynamicWatchRegistry is the plumbing contract the CRDGenerator reconciler
@@ -65,6 +68,7 @@ type GeneratedGVR struct {
 	Version  string
 	Resource string
 	Kind     string
+	Scope    declarestv1alpha1.CRDGeneratorScope
 }
 
 // CRDGeneratorReconciler reconciles CRDGenerator resources by owning the
@@ -158,6 +162,7 @@ func (r *CRDGeneratorReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				Version:  version.Name,
 				Resource: runtimeGenerator.Spec.Names.Plural,
 				Kind:     runtimeGenerator.Spec.Names.Kind,
+				Scope:    runtimeGenerator.Spec.Scope,
 			}
 			if watchErr := r.Watches.EnsureWatch(gvr, types.NamespacedName{Namespace: generator.Namespace, Name: generator.Name}); watchErr != nil {
 				logger.Error(watchErr, "ensure dynamic watch", "gvr", gvr)
@@ -210,6 +215,7 @@ func (r *CRDGeneratorReconciler) handleDeletion(ctx context.Context, generator *
 					Group:    generator.Spec.Group,
 					Version:  version.Name,
 					Resource: generator.Spec.Names.Plural,
+					Scope:    generator.Spec.Scope,
 				})
 			}
 		}
@@ -405,13 +411,62 @@ func (r *CRDGeneratorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	); err != nil {
 		return fmt.Errorf("index CRDGenerator group/kind: %w", err)
 	}
+	if err := mgr.GetFieldIndexer().IndexField(
+		context.Background(),
+		&declarestv1alpha1.CRDGenerator{},
+		crdGeneratorMetadataBundleIndex,
+		func(obj client.Object) []string {
+			gen, ok := obj.(*declarestv1alpha1.CRDGenerator)
+			if !ok {
+				return nil
+			}
+			var names []string
+			for _, version := range gen.Spec.Versions {
+				if name := strings.TrimSpace(version.MetadataBundleRef.Name); name != "" {
+					names = append(names, name)
+				}
+			}
+			return names
+		},
+	); err != nil {
+		return fmt.Errorf("index CRDGenerator metadata bundle refs: %w", err)
+	}
 
 	bld := ctrl.NewControllerManagedBy(mgr).
-		For(&declarestv1alpha1.CRDGenerator{}, builder.WithPredicates(predicate.GenerationChangedPredicate{}))
+		For(&declarestv1alpha1.CRDGenerator{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Watches(
+			&declarestv1alpha1.MetadataBundle{},
+			handler.EnqueueRequestsFromMapFunc(r.crdGeneratorsForMetadataBundle),
+		)
 	if r.MaxConcurrentReconciles > 0 {
 		bld = bld.WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles})
 	}
 	return bld.Complete(r)
+}
+
+func (r *CRDGeneratorReconciler) crdGeneratorsForMetadataBundle(ctx context.Context, obj client.Object) []reconcile.Request {
+	bundle, ok := obj.(*declarestv1alpha1.MetadataBundle)
+	if !ok {
+		return nil
+	}
+	generators := &declarestv1alpha1.CRDGeneratorList{}
+	if err := r.List(
+		ctx,
+		generators,
+		client.InNamespace(bundle.Namespace),
+		client.MatchingFields{crdGeneratorMetadataBundleIndex: bundle.Name},
+	); err != nil {
+		log.FromContext(ctx).Error(err, "failed to list CRDGenerators for watch mapper", "trigger_kind", "MetadataBundle", "trigger_name", bundle.Name)
+		return nil
+	}
+	requests := make([]reconcile.Request, 0, len(generators.Items))
+	for idx := range generators.Items {
+		requests = append(requests, reconcile.Request{NamespacedName: types.NamespacedName{
+			Namespace: generators.Items[idx].Namespace,
+			Name:      generators.Items[idx].Name,
+		}})
+	}
+	return requests
 }
 
 func buildGeneratedCRD(generator *declarestv1alpha1.CRDGenerator) *apiextensionsv1.CustomResourceDefinition {
@@ -507,6 +562,12 @@ func generatedCRDSchema(collectionPath string) *apiextensionsv1.JSONSchemaProps 
 						Type:        "string",
 						Description: "Optional override; defaults to " + collectionPath + " from the CRDGenerator version.",
 					},
+					"deletionPolicy": {
+						Type:        "string",
+						Enum:        []apiextensionsv1.JSON{rawJSONString(generatedResourceDeletionPolicyOrphan), rawJSONString(generatedResourceDeletionPolicyDelete)},
+						Default:     &apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf("%q", generatedResourceDeletionPolicyOrphan))},
+						Description: "Remote cleanup behavior when the generated resource is deleted. Defaults to Orphan.",
+					},
 				},
 			},
 			"status": {
@@ -538,6 +599,10 @@ func ptrTrue() *bool {
 
 func ptrInt64(v int64) *int64 {
 	return &v
+}
+
+func rawJSONString(value string) apiextensionsv1.JSON {
+	return apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf("%q", value))}
 }
 
 func crdEstablished(crd *apiextensionsv1.CustomResourceDefinition) bool {

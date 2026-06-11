@@ -49,9 +49,6 @@ const (
 	bundleReferencedByManagedService = "ReferencedByManagedService"
 	bundleReferencedByCRDGenerator   = "ReferencedByCRDGenerator"
 	bundleResolveFailed              = "ResolveFailed"
-
-	metadataBundleIndexManagedService = "spec.metadata.bundleRef.name"
-	metadataBundleIndexCRDGenerator   = "spec.versions.metadataBundleRef.name"
 )
 
 // MetadataBundleReconciler reconciles MetadataBundle resources by routing the
@@ -651,45 +648,6 @@ func (r *MetadataBundleReconciler) setNotReady(
 }
 
 func (r *MetadataBundleReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	if err := mgr.GetFieldIndexer().IndexField(
-		context.Background(),
-		&declarestv1alpha1.ManagedService{},
-		metadataBundleIndexManagedService,
-		func(obj client.Object) []string {
-			svc, ok := obj.(*declarestv1alpha1.ManagedService)
-			if !ok || svc.Spec.Metadata.BundleRef == nil {
-				return nil
-			}
-			name := strings.TrimSpace(svc.Spec.Metadata.BundleRef.Name)
-			if name == "" {
-				return nil
-			}
-			return []string{name}
-		},
-	); err != nil {
-		return fmt.Errorf("index ManagedService bundleRef: %w", err)
-	}
-	if err := mgr.GetFieldIndexer().IndexField(
-		context.Background(),
-		&declarestv1alpha1.CRDGenerator{},
-		metadataBundleIndexCRDGenerator,
-		func(obj client.Object) []string {
-			gen, ok := obj.(*declarestv1alpha1.CRDGenerator)
-			if !ok {
-				return nil
-			}
-			var names []string
-			for _, version := range gen.Spec.Versions {
-				if name := strings.TrimSpace(version.MetadataBundleRef.Name); name != "" {
-					names = append(names, name)
-				}
-			}
-			return names
-		},
-	); err != nil {
-		return fmt.Errorf("index CRDGenerator bundleRef: %w", err)
-	}
-
 	bld := ctrl.NewControllerManagedBy(mgr).
 		For(&declarestv1alpha1.MetadataBundle{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.metadataBundlesForSecret)).

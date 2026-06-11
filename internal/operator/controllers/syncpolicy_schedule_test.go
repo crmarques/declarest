@@ -82,3 +82,23 @@ func TestSyncPolicyRequeueAfterFallsBackToSyncInterval(t *testing.T) {
 		t.Fatalf("expected sync interval fallback, got %s", requeueAfter)
 	}
 }
+
+func TestSyncPolicyRequeueAfterReturnsDefaultWhenSyncIntervalIsNil(t *testing.T) {
+	t.Parallel()
+
+	syncPolicy := &declarestv1alpha1.SyncPolicy{}
+
+	requeueAfter := syncPolicyRequeueAfter(syncPolicy, time.Now().UTC())
+	if requeueAfter != defaultSyncPolicyRequeueInterval {
+		t.Fatalf("expected default interval when SyncInterval is nil, got %s", requeueAfter)
+	}
+}
+
+func TestSyncPolicyRequeueAfterReturnsDefaultWhenSyncPolicyIsNil(t *testing.T) {
+	t.Parallel()
+
+	requeueAfter := syncPolicyRequeueAfter(nil, time.Now().UTC())
+	if requeueAfter != defaultSyncPolicyRequeueInterval {
+		t.Fatalf("expected default interval when SyncPolicy is nil, got %s", requeueAfter)
+	}
+}

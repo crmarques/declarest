@@ -28,6 +28,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -46,11 +47,6 @@ type Handler struct {
 
 // ServeHTTP handles incoming webhook requests.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -76,6 +72,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	rwh.Default()
 
 	if rwh.Spec.Suspend {
 		w.WriteHeader(http.StatusAccepted)
@@ -111,10 +108,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to resolve webhook secret", http.StatusInternalServerError)
 		return
 	}
-	secretValue := string(secret.Data["token"])
-	if secretValue == "" {
-		secretValue = string(secret.Data["webhook-secret"])
-	}
+	secretValue := string(secret.Data[rwh.Spec.SecretRef.Key])
 	if secretValue == "" {
 		http.Error(w, "webhook secret is empty", http.StatusInternalServerError)
 		return
@@ -151,6 +145,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Handle ping events: update status but don't reconcile.
 	if evt.IsPing {
+		if !repositoryWebhookEventAllowed(rwh.Spec.Events, declarestv1alpha1.RepositoryWebhookEventPing) {
+			logger.Info("ping event not enabled")
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte("ignored"))
+			return
+		}
 		logger.Info("ping event received")
 		h.updateWebhookStatus(ctx, rwh, evt)
 		w.WriteHeader(http.StatusAccepted)
@@ -161,6 +161,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Only process push events.
 	if !evt.IsPush {
 		logger.Info("ignoring non-push event")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte("ignored"))
+		return
+	}
+	if !repositoryWebhookEventAllowed(rwh.Spec.Events, declarestv1alpha1.RepositoryWebhookEventPush) {
+		logger.Info("push event not enabled")
 		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write([]byte("ignored"))
 		return
@@ -185,6 +191,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if apierrors.IsNotFound(err) {
 			logger.Info("referenced ResourceRepository not found")
 			http.Error(w, "repository not found", http.StatusNotFound)
+			return
+		}
+		if !repositoryWebhookEventAllowed(rwh.Spec.Events, declarestv1alpha1.RepositoryWebhookEventPush) {
+			logger.Info("push event not enabled")
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte("ignored"))
 			return
 		}
 		logger.Error(err, "failed to get ResourceRepository")
@@ -244,5 +256,23 @@ func parsePath(rawPath string) (string, string, error) {
 	if namespace == "" || name == "" {
 		return "", "", fmt.Errorf("namespace and name are required")
 	}
+	if errs := k8svalidation.IsDNS1123Label(namespace); len(errs) > 0 {
+		return "", "", fmt.Errorf("namespace is invalid: %s", strings.Join(errs, "; "))
+	}
+	if errs := k8svalidation.IsDNS1123Subdomain(name); len(errs) > 0 {
+		return "", "", fmt.Errorf("name is invalid: %s", strings.Join(errs, "; "))
+	}
 	return namespace, name, nil
+}
+
+func repositoryWebhookEventAllowed(events []declarestv1alpha1.RepositoryWebhookEvent, target declarestv1alpha1.RepositoryWebhookEvent) bool {
+	if len(events) == 0 {
+		return target == declarestv1alpha1.RepositoryWebhookEventPush
+	}
+	for _, event := range events {
+		if event == target {
+			return true
+		}
+	}
+	return false
 }

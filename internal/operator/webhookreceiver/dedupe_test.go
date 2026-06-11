@@ -48,3 +48,24 @@ func TestDedupeCache(t *testing.T) {
 		t.Error("expired delivery should not be duplicate")
 	}
 }
+
+func TestDedupeCacheEvictsLeastRecentlyUsedWhenBounded(t *testing.T) {
+	cache := NewDedupeCache(time.Hour)
+	cache.maxEntries = 2
+
+	if cache.IsDuplicate("delivery-1") || cache.IsDuplicate("delivery-2") {
+		t.Fatal("new delivery IDs should not be duplicates")
+	}
+	if !cache.IsDuplicate("delivery-1") {
+		t.Fatal("delivery-1 should be present before eviction")
+	}
+	if cache.IsDuplicate("delivery-3") {
+		t.Fatal("new delivery ID should not be duplicate")
+	}
+	if cache.IsDuplicate("delivery-2") {
+		t.Fatal("least recently used entry should have been evicted")
+	}
+	if len(cache.entries) > cache.maxEntries {
+		t.Fatalf("cache exceeded max entries: len=%d max=%d", len(cache.entries), cache.maxEntries)
+	}
+}

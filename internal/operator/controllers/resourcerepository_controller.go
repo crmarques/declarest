@@ -38,7 +38,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	k8sevents "k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -106,20 +105,6 @@ func (r *ResourceRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.R
 		)
 	}
 
-	if err := r.ensurePVC(ctx, runtimeRepository); err != nil {
-		emitEventf(r.Recorder, resourceRepository, corev1.EventTypeWarning, "DependencyInvalid", "dependency validation failed: %v", err)
-		resourceRepositoryPollTotal.WithLabelValues(req.Namespace, req.Name, "error").Inc()
-		return returnAfterSetNotReady(
-			ctx,
-			func(innerCtx context.Context, reason string, message string) error {
-				return r.setNotReady(innerCtx, resourceRepository, reason, message)
-			},
-			conditionReasonDependencyInvalid,
-			err.Error(),
-			runtimeRepository.Spec.PollInterval.Duration,
-		)
-	}
-
 	localPath := resolveRepoRootPath(resourceRepository.Namespace, resourceRepository.Name)
 	revision, syncErr := r.syncRepository(ctx, runtimeRepository, localPath)
 	if syncErr != nil {
@@ -175,47 +160,10 @@ func (r *ResourceRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.R
 	return ctrl.Result{RequeueAfter: runtimeRepository.Spec.PollInterval.Duration}, nil
 }
 
-func (r *ResourceRepositoryReconciler) ensurePVC(ctx context.Context, resourceRepository *declarestv1alpha1.ResourceRepository) error {
-	if resourceRepository.Spec.Storage.ExistingPVC != nil {
-		name := strings.TrimSpace(resourceRepository.Spec.Storage.ExistingPVC.Name)
-		existing := &corev1.PersistentVolumeClaim{}
-		if err := r.Get(ctx, types.NamespacedName{Namespace: resourceRepository.Namespace, Name: name}, existing); err != nil {
-			return fmt.Errorf("resolve existing PVC %q: %w", name, err)
-		}
-		return nil
-	}
-
-	if resourceRepository.Spec.Storage.PVC == nil {
-		return fmt.Errorf("storage pvc template is required")
-	}
-	pvcName := fmt.Sprintf("%s-repo", resourceRepository.Name)
-	pvc := &corev1.PersistentVolumeClaim{}
-	err := r.Get(ctx, types.NamespacedName{Namespace: resourceRepository.Namespace, Name: pvcName}, pvc)
-	if apierrors.IsNotFound(err) {
-		pvc.Namespace = resourceRepository.Namespace
-		pvc.Name = pvcName
-		pvc.Labels = mergeStringMap(nil, map[string]string{
-			"app.kubernetes.io/name":     "declarest-operator",
-			"declarest.io/resource-repo": resourceRepository.Name,
-		})
-		if refErr := controllerutil.SetControllerReference(resourceRepository, pvc, r.Scheme); refErr != nil {
-			return refErr
-		}
-		pvc.Spec.AccessModes = append([]corev1.PersistentVolumeAccessMode(nil), resourceRepository.Spec.Storage.PVC.AccessModes...)
-		pvc.Spec.Resources.Requests = resourceRepository.Spec.Storage.PVC.Requests.DeepCopy()
-		pvc.Spec.StorageClassName = resourceRepository.Spec.Storage.PVC.StorageClassName
-		if createErr := r.Create(ctx, pvc); createErr != nil {
-			return fmt.Errorf("create managed PVC %q: %w", pvcName, createErr)
-		}
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("get managed PVC %q: %w", pvcName, err)
-	}
-	return nil
-}
-
-const gitOperationTimeout = 5 * time.Minute
+const (
+	gitOperationTimeout = 5 * time.Minute
+	gitFetchDepth       = 50
+)
 
 func (r *ResourceRepositoryReconciler) syncRepository(ctx context.Context, resourceRepository *declarestv1alpha1.ResourceRepository, localPath string) (string, error) {
 	if err := ensureDir(filepath.Dir(localPath)); err != nil {
@@ -250,7 +198,7 @@ func (r *ResourceRepositoryReconciler) syncRepository(ctx context.Context, resou
 		URL:           strings.TrimSpace(resourceRepository.Spec.Git.URL),
 		Auth:          authMethod,
 		SingleBranch:  true,
-		Depth:         1,
+		Depth:         gitFetchDepth,
 		ReferenceName: plumbing.NewBranchReferenceName(branch),
 		Progress:      nil,
 	}
@@ -294,7 +242,7 @@ func (r *ResourceRepositoryReconciler) tryFetch(
 
 	fetchOpts := &gogit.FetchOptions{
 		Auth:       authMethod,
-		Depth:      1,
+		Depth:      gitFetchDepth,
 		Force:      true,
 		RemoteName: "origin",
 		RefSpecs:   []gogitconfig.RefSpec{gogitconfig.RefSpec(fmt.Sprintf("+refs/heads/%s:refs/remotes/origin/%s", branch, branch))},
@@ -420,8 +368,7 @@ func (r *ResourceRepositoryReconciler) setNotReady(
 
 func (r *ResourceRepositoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	bld := ctrl.NewControllerManagedBy(mgr).
-		For(&declarestv1alpha1.ResourceRepository{}, builder.WithPredicates(resourceRepositoryReconcilePredicate())).
-		Owns(&corev1.PersistentVolumeClaim{})
+		For(&declarestv1alpha1.ResourceRepository{}, builder.WithPredicates(resourceRepositoryReconcilePredicate()))
 	if r.MaxConcurrentReconciles > 0 {
 		bld = bld.WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles})
 	}
@@ -452,15 +399,4 @@ func resourceRepositoryReconcilePredicate() predicate.Predicate {
 				strings.TrimSpace(oldAnnotations[repositoryWebhookAnnotationLastEventID]) != strings.TrimSpace(newAnnotations[repositoryWebhookAnnotationLastEventID])
 		},
 	}
-}
-
-func mergeStringMap(left map[string]string, right map[string]string) map[string]string {
-	out := make(map[string]string, len(left)+len(right))
-	for key, value := range left {
-		out[key] = value
-	}
-	for key, value := range right {
-		out[key] = value
-	}
-	return out
 }

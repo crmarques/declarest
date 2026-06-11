@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"sort"
 	"strings"
 	"sync"
@@ -100,9 +101,10 @@ type SyncPolicyReconciler struct {
 }
 
 const (
-	syncPolicyIndexResourceRepositoryRef = "spec.resourceRepositoryRef.name"
-	syncPolicyIndexManagedServiceRef     = "spec.managedServiceRef.name"
-	syncPolicyIndexSecretStoreRef        = "spec.secretStoreRef.name"
+	syncPolicyIndexResourceRepositoryRef           = "spec.resourceRepositoryRef.name"
+	syncPolicyIndexManagedServiceRef               = "spec.managedServiceRef.name"
+	syncPolicyIndexSecretStoreRef                  = "spec.secretStoreRef.name"
+	syncPolicyIndexManagedServiceMetadataBundleRef = "spec.metadata.bundleRef.name"
 )
 
 // syncPolicyReconciliation holds the state and dependencies for a single reconciliation of a SyncPolicy.
@@ -477,61 +479,101 @@ func (r *syncPolicyReconciliation) applyChanges(session bootstrap.Session, plan 
 	var targetedCount, appliedCount int32
 	conflicting := false
 	for _, target := range plan.ApplyTargets {
-		if r.skipApplyOnConflict(target.Path) {
-			conflicting = true
-			continue
+		targets, listErr := mutateapp.ListLocalTargets(r.ctx, session.Orchestrator, target.Path, target.Recursive)
+		if listErr != nil {
+			return 0, 0, listErr
 		}
-		mutationResult, mutateErr := mutateapp.Execute(r.ctx, mutateapp.Dependencies{
-			Orchestrator: session.Orchestrator,
-			Repository:   session.Services.RepositoryStore(),
-			Metadata:     session.Services.MetadataService(),
-			Secrets:      session.Services.SecretProvider(),
-		}, mutateapp.Request{
-			Operation:        mutateapp.OperationApply,
-			LogicalPath:      target.Path,
-			Recursive:        target.Recursive,
-			Force:            r.policy.Spec.Sync.Force,
-			HasExplicitInput: false,
-			RefreshLocal:     false,
-		})
-		if mutateErr != nil {
-			return 0, 0, mutateErr
+		targetedCount += int32(len(targets))
+		for _, item := range targets {
+			if r.skipApplyOnConflict(item.CollectionPath, item.LogicalPath, "") {
+				conflicting = true
+				continue
+			}
+			skippedByConflict := false
+			_, mutateErr := session.Orchestrator.Apply(r.ctx, item.LogicalPath, orchestratordomain.ApplyPolicy{
+				Force: r.policy.Spec.Sync.Force,
+				Conflict: func(ctx context.Context, check orchestratordomain.ConflictCheck) (bool, string) {
+					if r.skipApplyOnConflict(check.CollectionPath, check.LogicalPath, check.RemoteID) {
+						skippedByConflict = true
+						return true, "owned by CRDGenerator"
+					}
+					return false, ""
+				},
+			})
+			if mutateErr != nil {
+				return 0, 0, mutateErr
+			}
+			if skippedByConflict {
+				conflicting = true
+				continue
+			}
+			appliedCount++
 		}
-		targetedCount += int32(mutationResult.TargetedCount)
-		appliedCount += int32(len(mutationResult.Items))
 	}
 	r.updateConflictingCondition(conflicting)
 	return targetedCount, appliedCount, nil
 }
 
-// skipApplyOnConflict returns true if the logical path is already claimed by
-// a CRDGenerator-owned resource. Emits an event and increments the conflict
-// metric for observability.
-func (r *syncPolicyReconciliation) skipApplyOnConflict(logicalPath string) bool {
-	if r.Conflicts == nil {
-		return false
-	}
-	source, found := r.Conflicts.Lookup(
-		r.policy.Namespace,
-		r.policy.Spec.ManagedServiceRef.Name,
-		"",
-		logicalPath,
-		ConflictTierName,
-	)
+func (r *syncPolicyReconciliation) skipApplyOnConflict(collectionPath string, logicalPath string, remoteID string) bool {
+	source, tier, found := r.lookupConflict(collectionPath, logicalPath, remoteID)
 	if !found {
 		return false
 	}
+	r.recordConflict(source, tier, logicalPath, "skipping apply")
+	return true
+}
+
+func (r *syncPolicyReconciliation) skipPruneOnConflict(collectionPath string, logicalPath string, remoteID string) bool {
+	source, tier, found := r.lookupConflict(collectionPath, logicalPath, remoteID)
+	if !found {
+		return false
+	}
+	r.recordConflict(source, tier, logicalPath, "skipping prune")
+	return true
+}
+
+func (r *syncPolicyReconciliation) lookupConflict(collectionPath string, logicalPath string, remoteID string) (ConflictSource, ConflictTier, bool) {
+	if r.Conflicts == nil {
+		return ConflictSource{}, "", false
+	}
+	if strings.TrimSpace(logicalPath) != "" {
+		source, found := r.Conflicts.Lookup(
+			r.policy.Namespace,
+			r.policy.Spec.ManagedServiceRef.Name,
+			collectionPath,
+			logicalPath,
+			ConflictTierName,
+		)
+		if found {
+			return source, ConflictTierName, true
+		}
+	}
+	if strings.TrimSpace(remoteID) != "" {
+		source, found := r.Conflicts.Lookup(
+			r.policy.Namespace,
+			r.policy.Spec.ManagedServiceRef.Name,
+			collectionPath,
+			remoteID,
+			ConflictTierRemoteID,
+		)
+		if found {
+			return source, ConflictTierRemoteID, true
+		}
+	}
+	return ConflictSource{}, "", false
+}
+
+func (r *syncPolicyReconciliation) recordConflict(source ConflictSource, tier ConflictTier, logicalPath string, action string) {
 	crdGeneratorSourceConflictsTotal.WithLabelValues(
 		r.policy.Namespace,
 		r.policy.Name,
 		source.CRDGeneratorName,
 		source.GeneratedKind,
-		string(ConflictTierName),
+		string(tier),
 	).Inc()
 	emitEventf(r.Recorder, r.policy, corev1.EventTypeWarning, "ResourceOverriddenByCRDGenerator",
-		"skipping apply for %s: owned by CRDGenerator %s/%s (kind=%s)",
-		logicalPath, source.CRDGeneratorNamespace, source.CRDGeneratorName, source.GeneratedKind)
-	return true
+		"%s for %s: owned by CRDGenerator %s/%s (kind=%s)",
+		action, logicalPath, source.CRDGeneratorNamespace, source.CRDGeneratorName, source.GeneratedKind)
 }
 
 func (r *syncPolicyReconciliation) updateConflictingCondition(active bool) {
@@ -569,7 +611,7 @@ func (r *syncPolicyReconciliation) pruneChanges(session bootstrap.Session, plan 
 	return int32(deleted), nil
 }
 
-func (r *SyncPolicyReconciler) pruneRemote(
+func (r *syncPolicyReconciliation) pruneRemote(
 	ctx context.Context,
 	orchestratorService orchestratordomain.Orchestrator,
 	logicalPath string,
@@ -589,52 +631,64 @@ func (r *SyncPolicyReconciler) pruneRemote(
 		localPaths[item.LogicalPath] = struct{}{}
 	}
 
-	candidates := make([]string, 0)
+	candidates := make([]resourcePruneCandidate, 0)
 	for _, remote := range remoteResources {
 		if _, exists := localPaths[remote.LogicalPath]; exists {
 			continue
 		}
-		candidates = append(candidates, remote.LogicalPath)
+		candidates = append(candidates, resourcePruneCandidate{
+			LogicalPath:    remote.LogicalPath,
+			CollectionPath: remote.CollectionPath,
+			RemoteID:       remote.RemoteID,
+		})
 	}
-	sort.Strings(candidates)
-
-	deleted := 0
-	var errs []error
-	for _, candidate := range candidates {
-		if err := orchestratorService.Delete(ctx, candidate, orchestratordomain.DeletePolicy{}); err != nil {
-			errs = append(errs, fmt.Errorf("prune %q: %w", candidate, err))
-			continue
-		}
-		deleted++
-	}
-	if len(errs) > 0 {
-		msgs := make([]string, len(errs))
-		for i, e := range errs {
-			msgs[i] = e.Error()
-		}
-		return deleted, fmt.Errorf("prune completed with %d errors (deleted=%d): %s", len(errs), deleted, strings.Join(msgs, "; "))
-	}
-	return deleted, nil
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].LogicalPath < candidates[j].LogicalPath
+	})
+	return r.deletePruneCandidates(ctx, orchestratorService, candidates)
 }
 
-func (r *SyncPolicyReconciler) pruneRemovedPaths(
+func (r *syncPolicyReconciliation) pruneRemovedPaths(
 	ctx context.Context,
 	orchestratorService orchestratordomain.Orchestrator,
 	logicalPaths []string,
 ) (int, error) {
-	candidates := stringSet(logicalPaths)
-	if len(candidates) == 0 {
+	paths := stringSet(logicalPaths)
+	if len(paths) == 0 {
 		return 0, nil
 	}
+	candidates := make([]resourcePruneCandidate, 0, len(paths))
+	for _, candidate := range paths {
+		candidates = append(candidates, resourcePruneCandidate{
+			LogicalPath:    candidate,
+			CollectionPath: collectionPathForSyncPath(candidate),
+		})
+	}
+	return r.deletePruneCandidates(ctx, orchestratorService, candidates)
+}
 
+type resourcePruneCandidate struct {
+	LogicalPath    string
+	CollectionPath string
+	RemoteID       string
+}
+
+func (r *syncPolicyReconciliation) deletePruneCandidates(
+	ctx context.Context,
+	orchestratorService orchestratordomain.Orchestrator,
+	candidates []resourcePruneCandidate,
+) (int, error) {
 	deleted := 0
 	var errs []error
 	for _, candidate := range candidates {
-		if err := orchestratorService.Delete(ctx, candidate, orchestratordomain.DeletePolicy{}); err != nil {
+		if r.skipPruneOnConflict(candidate.CollectionPath, candidate.LogicalPath, candidate.RemoteID) {
+			continue
+		}
+		if err := orchestratorService.Delete(ctx, candidate.LogicalPath, orchestratordomain.DeletePolicy{}); err != nil {
 			if faults.IsCategory(err, faults.NotFoundError) {
 				continue
 			}
-			errs = append(errs, fmt.Errorf("prune %q: %w", candidate, err))
+			errs = append(errs, fmt.Errorf("prune %q: %w", candidate.LogicalPath, err))
 			continue
 		}
 		deleted++
@@ -648,6 +702,21 @@ func (r *SyncPolicyReconciler) pruneRemovedPaths(
 		return deleted, fmt.Errorf("prune completed with %d errors (deleted=%d): %s", len(errs), deleted, strings.Join(msgs, "; "))
 	}
 	return deleted, nil
+}
+
+func collectionPathForSyncPath(logicalPath string) string {
+	value := strings.TrimSpace(logicalPath)
+	if value == "" || value == "/" {
+		return "/"
+	}
+	if !strings.HasPrefix(value, "/") {
+		value = "/" + value
+	}
+	parent := path.Dir(value)
+	if parent == "." || parent == "" {
+		return "/"
+	}
+	return parent
 }
 
 func (r *SyncPolicyReconciler) validateNoOverlap(ctx context.Context, syncPolicy *declarestv1alpha1.SyncPolicy) error {
@@ -766,6 +835,24 @@ func (r *SyncPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	); err != nil {
 		return err
 	}
+	if err := mgr.GetFieldIndexer().IndexField(
+		context.Background(),
+		&declarestv1alpha1.ManagedService{},
+		syncPolicyIndexManagedServiceMetadataBundleRef,
+		func(obj client.Object) []string {
+			managedService, ok := obj.(*declarestv1alpha1.ManagedService)
+			if !ok || managedService.Spec.Metadata.BundleRef == nil {
+				return nil
+			}
+			name := strings.TrimSpace(managedService.Spec.Metadata.BundleRef.Name)
+			if name == "" {
+				return nil
+			}
+			return []string{name}
+		},
+	); err != nil {
+		return err
+	}
 
 	bld := ctrl.NewControllerManagedBy(mgr).
 		For(&declarestv1alpha1.SyncPolicy{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
@@ -780,6 +867,10 @@ func (r *SyncPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(
 			&declarestv1alpha1.SecretStore{},
 			handler.EnqueueRequestsFromMapFunc(r.syncPoliciesForSecretStore),
+		).
+		Watches(
+			&declarestv1alpha1.MetadataBundle{},
+			handler.EnqueueRequestsFromMapFunc(r.syncPoliciesForMetadataBundle),
 		).
 		Watches(
 			&corev1.Secret{},
@@ -843,6 +934,45 @@ func (r *SyncPolicyReconciler) syncPoliciesForSecretStore(ctx context.Context, o
 		return nil
 	}
 	return reconcileRequestsForSyncPolicies(policies.Items)
+}
+
+func (r *SyncPolicyReconciler) syncPoliciesForMetadataBundle(ctx context.Context, obj client.Object) []reconcile.Request {
+	bundle, ok := obj.(*declarestv1alpha1.MetadataBundle)
+	if !ok {
+		return nil
+	}
+	services := &declarestv1alpha1.ManagedServiceList{}
+	if err := r.List(
+		ctx,
+		services,
+		client.InNamespace(bundle.Namespace),
+		client.MatchingFields{syncPolicyIndexManagedServiceMetadataBundleRef: bundle.Name},
+	); err != nil {
+		log.FromContext(ctx).Error(err, "failed to list ManagedServices for watch mapper", "trigger_kind", "MetadataBundle", "trigger_name", bundle.Name)
+		return nil
+	}
+	seen := map[types.NamespacedName]struct{}{}
+	var requests []reconcile.Request
+	for idx := range services.Items {
+		policies := &declarestv1alpha1.SyncPolicyList{}
+		if err := r.List(
+			ctx,
+			policies,
+			client.InNamespace(services.Items[idx].Namespace),
+			client.MatchingFields{syncPolicyIndexManagedServiceRef: services.Items[idx].Name},
+		); err != nil {
+			log.FromContext(ctx).Error(err, "failed to list SyncPolicies for MetadataBundle watch mapper", "managedService", services.Items[idx].Name)
+			continue
+		}
+		for _, req := range reconcileRequestsForSyncPolicies(policies.Items) {
+			if _, exists := seen[req.NamespacedName]; exists {
+				continue
+			}
+			seen[req.NamespacedName] = struct{}{}
+			requests = append(requests, req)
+		}
+	}
+	return requests
 }
 
 func (r *SyncPolicyReconciler) syncPoliciesForSecret(_ context.Context, obj client.Object) []reconcile.Request {

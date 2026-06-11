@@ -16,6 +16,8 @@ package webhookreceiver
 
 import (
 	"testing"
+
+	declarestv1alpha1 "github.com/crmarques/declarest/api/v1alpha1"
 )
 
 func TestParsePath(t *testing.T) {
@@ -30,6 +32,8 @@ func TestParsePath(t *testing.T) {
 		{"/hooks/v1/repositorywebhooks/", "", "", true},
 		{"/hooks/v1/repositorywebhooks/only-name", "", "", true},
 		{"/hooks/v1/repositorywebhooks/a/b/c", "", "", true},
+		{"/hooks/v1/repositorywebhooks/Invalid/my-webhook", "", "", true},
+		{"/hooks/v1/repositorywebhooks/default/MyWebhook", "", "", true},
 		{"/wrong/path", "", "", true},
 	}
 	for _, tt := range tests {
@@ -47,5 +51,19 @@ func TestParsePath(t *testing.T) {
 		if ns != tt.namespace || name != tt.name {
 			t.Errorf("parsePath(%q) = (%q, %q), want (%q, %q)", tt.path, ns, name, tt.namespace, tt.name)
 		}
+	}
+}
+
+func TestRepositoryWebhookEventAllowedDefaultsToPushOnly(t *testing.T) {
+	t.Parallel()
+
+	if !repositoryWebhookEventAllowed(nil, "push") {
+		t.Fatal("empty event set should allow push")
+	}
+	if repositoryWebhookEventAllowed(nil, "ping") {
+		t.Fatal("empty event set should not allow ping")
+	}
+	if !repositoryWebhookEventAllowed([]declarestv1alpha1.RepositoryWebhookEvent{"ping"}, "ping") {
+		t.Fatal("configured event set should allow listed event")
 	}
 }

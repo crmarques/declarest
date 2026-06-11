@@ -47,9 +47,12 @@ func shouldRunFullResync(cronRaw string, lastFullResyncTime *metav1.Time, curren
 }
 
 func syncPolicyRequeueAfter(syncPolicy *declarestv1alpha1.SyncPolicy, currentTime time.Time) time.Duration {
-	interval := syncPolicy.Spec.SyncInterval.Duration
-	if interval <= 0 {
-		interval = defaultSyncPolicyRequeueInterval
+	interval := defaultSyncPolicyRequeueInterval
+	if syncPolicy == nil {
+		return interval
+	}
+	if syncPolicy.Spec.SyncInterval != nil && syncPolicy.Spec.SyncInterval.Duration > 0 {
+		interval = syncPolicy.Spec.SyncInterval.Duration
 	}
 
 	cronRaw := strings.TrimSpace(syncPolicy.Spec.FullResyncCron)

@@ -123,6 +123,75 @@ func buildRuntimeContext(
 	}, nil
 }
 
+func buildGeneratedResourceRuntimeContext(
+	ctx context.Context,
+	reader client.Reader,
+	generator *declarestv1alpha1.CRDGenerator,
+	version *declarestv1alpha1.CRDGeneratorVersion,
+	resourceNamespace string,
+	resourceName string,
+	managedService *declarestv1alpha1.ManagedService,
+	secretStore *declarestv1alpha1.SecretStore,
+) (runtimeContextBuildResult, error) {
+	if generator == nil || version == nil || managedService == nil {
+		return runtimeContextBuildResult{}, fmt.Errorf("build generated resource runtime context requires generator, version, and managed service")
+	}
+	cleanup := &cleanupRegistry{}
+	cacheDir := resolveCacheRootPath(generator.Namespace, generator.Name)
+
+	proxyConfig, err := resolveManagedServiceProxyConfig(ctx, reader, resourceNamespace, managedService.Spec.HTTP.Proxy)
+	if err != nil {
+		return runtimeContextBuildResult{}, err
+	}
+	openAPIPath := strings.TrimSpace(managedService.Status.OpenAPICachePath)
+	if openAPIPath == "" && strings.TrimSpace(managedService.Spec.OpenAPI.URL) != "" {
+		downloaded, err := downloadArtifact(ctx, managedService.Spec.OpenAPI.URL, filepath.Join(cacheDir, "openapi"), proxyConfig)
+		if err != nil {
+			return runtimeContextBuildResult{}, err
+		}
+		openAPIPath = downloaded
+	}
+
+	bundleResolution, err := resolveCRDGeneratorVersionBundleRef(ctx, reader, generator.Namespace, version)
+	if err != nil {
+		return runtimeContextBuildResult{}, err
+	}
+	if openAPIPath == "" && bundleResolution.OpenAPI != "" {
+		openAPIPath = bundleResolution.OpenAPI
+	}
+
+	contextName := strings.TrimSpace(resourceName)
+	if contextName == "" {
+		contextName = generator.Name
+	}
+	resolvedContext := config.Context{
+		Name:           contextName,
+		ManagedService: &config.ManagedService{HTTP: &config.HTTPServer{}},
+	}
+
+	if err := populateManagedServiceConfig(ctx, reader, resourceNamespace, managedService, resolvedContext.ManagedService.HTTP, openAPIPath, cacheDir, cleanup); err != nil {
+		cleanup.run()
+		return runtimeContextBuildResult{}, err
+	}
+	if secretStore != nil {
+		if err := populateSecretStoreConfig(ctx, reader, resourceNamespace, secretStore, &resolvedContext, cacheDir, cleanup); err != nil {
+			cleanup.run()
+			return runtimeContextBuildResult{}, err
+		}
+	}
+	if err := populateMetadataConfigWithBundle("", bundleResolution.Source, &resolvedContext); err != nil {
+		cleanup.run()
+		return runtimeContextBuildResult{}, err
+	}
+
+	return runtimeContextBuildResult{
+		ResolvedContext:        resolvedContext,
+		ManagedServiceOpenAPI:  openAPIPath,
+		ManagedServiceMetadata: bundleResolution.Source,
+		Cleanup:                cleanup.run,
+	}, nil
+}
+
 func readSecretValue(
 	ctx context.Context,
 	reader client.Reader,
