@@ -13,6 +13,7 @@ spec:
       app.kubernetes.io/name: declarest-operator
   policyTypes:
     - Ingress
+    - Egress
   ingress:
     # Allow metrics scraping from any namespace with the monitoring label.
     - from:
@@ -30,3 +31,22 @@ spec:
     - ports:
         - protocol: TCP
           port: 8082
+  egress:
+    # Allow DNS for Git, OCI registry, and managed-service endpoints.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow TLS egress to configured Git remotes, metadata bundle registries,
+    # Vault, and managed services. Narrow this ipBlock in production.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443

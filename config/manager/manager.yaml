@@ -27,7 +27,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: manager
-          image: ghcr.io/crmarques/declarest-operator:latest
+          image: ghcr.io/crmarques/declarest-operator:0.0.1
           imagePullPolicy: IfNotPresent
           command:
             - /manager

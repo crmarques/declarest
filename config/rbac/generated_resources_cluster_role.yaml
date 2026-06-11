@@ -1,0 +1,9 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: declarest-operator-generated-resources
+aggregationRule:
+  clusterRoleSelectors:
+    - matchLabels:
+        declarest.io/aggregate-to-operator: "true"
+rules: []

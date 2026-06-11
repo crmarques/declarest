@@ -59,6 +59,27 @@ type kustomization struct {
 	Resources []string `yaml:"resources"`
 }
 
+type validatingWebhookConfiguration struct {
+	Webhooks []webhookDefinition `yaml:"webhooks"`
+}
+
+type clusterServiceVersion struct {
+	Spec struct {
+		WebhookDefinitions []webhookDefinition `yaml:"webhookdefinitions"`
+	} `yaml:"spec"`
+}
+
+type webhookDefinition struct {
+	Name         string        `yaml:"name"`
+	GenerateName string        `yaml:"generateName"`
+	Rules        []webhookRule `yaml:"rules"`
+}
+
+type webhookRule struct {
+	Resources  []string `yaml:"resources"`
+	Operations []string `yaml:"operations"`
+}
+
 func TestOperatorRBACSourcesStayAlignedWithManagerRuntime(t *testing.T) {
 	t.Parallel()
 
@@ -69,6 +90,8 @@ func TestOperatorRBACSourcesStayAlignedWithManagerRuntime(t *testing.T) {
 		"service_account.yaml",
 		"cluster_role.yaml",
 		"cluster_role_binding.yaml",
+		"generated_resources_cluster_role.yaml",
+		"generated_resources_cluster_role_binding.yaml",
 		"role.yaml",
 		"role_binding.yaml",
 	} {
@@ -103,8 +126,17 @@ func TestOperatorRBACSourcesStayAlignedWithManagerRuntime(t *testing.T) {
 	if !hasPolicyRule(clusterRole.Rules, []string{""}, []string{"secrets"}, []string{"get", "list", "watch"}) {
 		t.Fatalf("expected cluster role to grant secret reads, got %#v", clusterRole.Rules)
 	}
-	if !hasPolicyRule(clusterRole.Rules, []string{""}, []string{"persistentvolumeclaims"}, []string{"get", "list", "watch", "create", "update", "patch", "delete"}) {
-		t.Fatalf("expected cluster role to grant pvc management, got %#v", clusterRole.Rules)
+	if hasPolicyRule(clusterRole.Rules, []string{""}, []string{"persistentvolumeclaims"}, []string{"create", "update", "patch", "delete"}) {
+		t.Fatalf("cluster role must not grant per-resource pvc management, got %#v", clusterRole.Rules)
+	}
+	if hasPolicyRule(clusterRole.Rules, []string{"apiextensions.k8s.io"}, []string{"customresourcedefinitions"}, []string{"create", "update", "patch", "delete"}) {
+		t.Fatalf("cluster role must not include CRD generation admin permissions, got %#v", clusterRole.Rules)
+	}
+
+	generatedRole := rbacManifest{}
+	loadYAMLDocument(t, repoPath("config", "rbac", "generated_resources_cluster_role.yaml"), &generatedRole)
+	if generatedRole.Kind != "ClusterRole" || generatedRole.Metadata.Name != "declarest-operator-generated-resources" {
+		t.Fatalf("expected generated resources aggregate ClusterRole, got %#v", generatedRole)
 	}
 
 	leaderElectionRole := rbacManifest{}
@@ -144,6 +176,18 @@ func TestOperatorRBACSourcesStayAlignedWithManagerRuntime(t *testing.T) {
 	}
 }
 
+func TestAdmissionWebhookManifestsCoverRegisteredAPIs(t *testing.T) {
+	t.Parallel()
+
+	webhookConfig := validatingWebhookConfiguration{}
+	loadYAMLDocument(t, repoPath("config", "manifests", "webhooks.yaml"), &webhookConfig)
+	assertWebhookCoverage(t, webhookConfig.Webhooks)
+
+	csv := clusterServiceVersion{}
+	loadYAMLDocument(t, repoPath("bundle", "manifests", "declarest-operator.clusterserviceversion.yaml"), &csv)
+	assertWebhookCoverage(t, csv.Spec.WebhookDefinitions)
+}
+
 func TestResourceRepositoryCRDRequiresExplicitPVCAccessModes(t *testing.T) {
 	t.Parallel()
 
@@ -178,17 +222,15 @@ func TestResourceRepositoryCRDRequiresExplicitPVCAccessModes(t *testing.T) {
 	}
 }
 
-func TestOperatorSamplesKeepPVCStorageContractsExplicit(t *testing.T) {
+//nolint:staticcheck // Samples still carry deprecated v1alpha1 storage for compatibility validation.
+func TestOperatorSamplesUseDeprecatedStorageCompatibilityShape(t *testing.T) {
 	t.Parallel()
 
 	repoSample := declarestv1alpha1.ResourceRepository{}
 	loadYAMLDocument(t, repoPath("config", "samples", "declarest_v1alpha1_resourcerepository.yaml"), &repoSample)
 	repoSample.Default()
-	if repoSample.Spec.Storage.PVC == nil {
-		t.Fatal("expected ResourceRepository sample to demonstrate pvc storage")
-	}
-	if len(repoSample.Spec.Storage.PVC.AccessModes) == 0 {
-		t.Fatal("expected ResourceRepository sample pvc.accessModes to be explicit")
+	if repoSample.Spec.Storage.ExistingPVC == nil || repoSample.Spec.Storage.ExistingPVC.Name == "" {
+		t.Fatal("expected ResourceRepository sample to use existingPVC compatibility storage")
 	}
 	if err := repoSample.ValidateSpec(); err != nil {
 		t.Fatalf("expected ResourceRepository sample to validate, got %v", err)
@@ -196,11 +238,8 @@ func TestOperatorSamplesKeepPVCStorageContractsExplicit(t *testing.T) {
 
 	secretStoreSample := declarestv1alpha1.SecretStore{}
 	loadYAMLDocument(t, repoPath("config", "samples", "declarest_v1alpha1_secretstore.yaml"), &secretStoreSample)
-	if secretStoreSample.Spec.File == nil || secretStoreSample.Spec.File.Storage.PVC == nil {
-		t.Fatal("expected SecretStore sample to demonstrate pvc storage")
-	}
-	if len(secretStoreSample.Spec.File.Storage.PVC.AccessModes) == 0 {
-		t.Fatal("expected SecretStore sample pvc.accessModes to be explicit")
+	if secretStoreSample.Spec.File == nil || secretStoreSample.Spec.File.Storage.ExistingPVC == nil || secretStoreSample.Spec.File.Storage.ExistingPVC.Name == "" {
+		t.Fatal("expected SecretStore sample to use existingPVC compatibility storage")
 	}
 	if err := secretStoreSample.ValidateSpec(); err != nil {
 		t.Fatalf("expected SecretStore sample to validate, got %v", err)
@@ -276,4 +315,34 @@ func numericValue(value any) int64 {
 	default:
 		return -1
 	}
+}
+
+func assertWebhookCoverage(t *testing.T, webhooks []webhookDefinition) {
+	t.Helper()
+
+	expected := map[string][]string{
+		"resourcerepositories": {"CREATE", "UPDATE", "DELETE"},
+		"managedservices":      {"CREATE", "UPDATE", "DELETE"},
+		"secretstores":         {"CREATE", "UPDATE", "DELETE"},
+		"syncpolicies":         {"CREATE", "UPDATE"},
+		"repositorywebhooks":   {"CREATE", "UPDATE", "DELETE"},
+		"metadatabundles":      {"CREATE", "UPDATE", "DELETE"},
+		"crdgenerators":        {"CREATE", "UPDATE", "DELETE"},
+	}
+	for resource, operations := range expected {
+		if !webhookDefinitionsContainRule(webhooks, resource, operations) {
+			t.Fatalf("expected webhook coverage for %s operations %v, got %#v", resource, operations, webhooks)
+		}
+	}
+}
+
+func webhookDefinitionsContainRule(webhooks []webhookDefinition, resource string, operations []string) bool {
+	for _, webhook := range webhooks {
+		for _, rule := range webhook.Rules {
+			if stringSliceContainsValue(rule.Resources, resource) && stringSliceContainsAll(rule.Operations, operations) {
+				return true
+			}
+		}
+	}
+	return false
 }

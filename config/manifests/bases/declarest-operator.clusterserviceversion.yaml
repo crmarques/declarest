@@ -5,7 +5,7 @@ metadata:
     alm-examples: "[]"
     capabilities: Seamless Upgrades
     categories: "Integration & Delivery"
-    containerImage: ghcr.io/crmarques/declarest-operator:latest
+    containerImage: ghcr.io/crmarques/declarest-operator:0.0.1
     description: Declarative resource sync between Git and REST APIs.
     repository: https://github.com/crmarques/declarest
     support: Community
@@ -40,11 +40,22 @@ spec:
         kind: RepositoryWebhook
         displayName: Repository Webhook
         description: Repository webhook receiver state used by the operator to drive event-driven repository refresh.
+      - name: metadatabundles.declarest.io
+        version: v1alpha1
+        kind: MetadataBundle
+        displayName: Metadata Bundle
+        description: Resolved metadata bundle source used by ManagedService and CRDGenerator resources.
+      - name: crdgenerators.declarest.io
+        version: v1alpha1
+        kind: CRDGenerator
+        displayName: CRD Generator
+        description: Generates typed custom resources that reconcile directly to managed-service resources.
   description: |
     DeclaREST keeps REST APIs in sync with declarative state stored in Git. The
-    operator watches `ResourceRepository`, `ManagedService`, `SecretStore`, and
-    `SyncPolicy` resources to plan and execute incremental or full sync cycles
-    against targeted services.
+    operator watches `ResourceRepository`, `ManagedService`, `SecretStore`,
+    `MetadataBundle`, `CRDGenerator`, `RepositoryWebhook`, and `SyncPolicy`
+    resources to plan and execute incremental or full sync cycles against
+    targeted services.
 
     ### Highlights
     - Git-backed source of truth with webhook-driven and interval-based refresh.
@@ -103,7 +114,7 @@ spec:
       rules:
         - apiGroups: ["declarest.io"]
           apiVersions: ["v1alpha1"]
-          operations: ["CREATE", "UPDATE"]
+          operations: ["CREATE", "UPDATE", "DELETE"]
           resources: ["resourcerepositories"]
       sideEffects: None
       targetPort: 9443
@@ -118,7 +129,7 @@ spec:
       rules:
         - apiGroups: ["declarest.io"]
           apiVersions: ["v1alpha1"]
-          operations: ["CREATE", "UPDATE"]
+          operations: ["CREATE", "UPDATE", "DELETE"]
           resources: ["managedservices"]
       sideEffects: None
       targetPort: 9443
@@ -133,7 +144,7 @@ spec:
       rules:
         - apiGroups: ["declarest.io"]
           apiVersions: ["v1alpha1"]
-          operations: ["CREATE", "UPDATE"]
+          operations: ["CREATE", "UPDATE", "DELETE"]
           resources: ["secretstores"]
       sideEffects: None
       targetPort: 9443
@@ -155,3 +166,48 @@ spec:
       timeoutSeconds: 10
       type: ValidatingAdmissionWebhook
       webhookPath: /validate-declarest-io-v1alpha1-syncpolicy
+    - admissionReviewVersions: ["v1"]
+      containerPort: 9443
+      deploymentName: declarest-operator
+      failurePolicy: Fail
+      generateName: vrepositorywebhook-v1alpha1.declarest.io
+      rules:
+        - apiGroups: ["declarest.io"]
+          apiVersions: ["v1alpha1"]
+          operations: ["CREATE", "UPDATE", "DELETE"]
+          resources: ["repositorywebhooks"]
+      sideEffects: None
+      targetPort: 9443
+      timeoutSeconds: 10
+      type: ValidatingAdmissionWebhook
+      webhookPath: /validate-declarest-io-v1alpha1-repositorywebhook
+    - admissionReviewVersions: ["v1"]
+      containerPort: 9443
+      deploymentName: declarest-operator
+      failurePolicy: Fail
+      generateName: vmetadatabundle-v1alpha1.declarest.io
+      rules:
+        - apiGroups: ["declarest.io"]
+          apiVersions: ["v1alpha1"]
+          operations: ["CREATE", "UPDATE", "DELETE"]
+          resources: ["metadatabundles"]
+      sideEffects: None
+      targetPort: 9443
+      timeoutSeconds: 10
+      type: ValidatingAdmissionWebhook
+      webhookPath: /validate-declarest-io-v1alpha1-metadatabundle
+    - admissionReviewVersions: ["v1"]
+      containerPort: 9443
+      deploymentName: declarest-operator
+      failurePolicy: Fail
+      generateName: vcrdgenerator-v1alpha1.declarest.io
+      rules:
+        - apiGroups: ["declarest.io"]
+          apiVersions: ["v1alpha1"]
+          operations: ["CREATE", "UPDATE", "DELETE"]
+          resources: ["crdgenerators"]
+      sideEffects: None
+      targetPort: 9443
+      timeoutSeconds: 10
+      type: ValidatingAdmissionWebhook
+      webhookPath: /validate-declarest-io-v1alpha1-crdgenerator

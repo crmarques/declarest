@@ -17,7 +17,7 @@ webhooks:
     rules:
       - apiGroups: ["declarest.io"]
         apiVersions: ["v1alpha1"]
-        operations: ["CREATE", "UPDATE"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["resourcerepositories"]
   - name: vmanagedservice-v1alpha1.declarest.io
     admissionReviewVersions:
@@ -33,7 +33,7 @@ webhooks:
     rules:
       - apiGroups: ["declarest.io"]
         apiVersions: ["v1alpha1"]
-        operations: ["CREATE", "UPDATE"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["managedservices"]
   - name: vsecretstore-v1alpha1.declarest.io
     admissionReviewVersions:
@@ -49,7 +49,7 @@ webhooks:
     rules:
       - apiGroups: ["declarest.io"]
         apiVersions: ["v1alpha1"]
-        operations: ["CREATE", "UPDATE"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["secretstores"]
   - name: vsyncpolicy-v1alpha1.declarest.io
     admissionReviewVersions:
@@ -67,3 +67,51 @@ webhooks:
         apiVersions: ["v1alpha1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["syncpolicies"]
+  - name: vrepositorywebhook-v1alpha1.declarest.io
+    admissionReviewVersions:
+      - v1
+    sideEffects: None
+    failurePolicy: Fail
+    timeoutSeconds: 10
+    clientConfig:
+      service:
+        name: declarest-operator-webhook-service
+        namespace: declarest-system
+        path: /validate-declarest-io-v1alpha1-repositorywebhook
+    rules:
+      - apiGroups: ["declarest.io"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["repositorywebhooks"]
+  - name: vmetadatabundle-v1alpha1.declarest.io
+    admissionReviewVersions:
+      - v1
+    sideEffects: None
+    failurePolicy: Fail
+    timeoutSeconds: 10
+    clientConfig:
+      service:
+        name: declarest-operator-webhook-service
+        namespace: declarest-system
+        path: /validate-declarest-io-v1alpha1-metadatabundle
+    rules:
+      - apiGroups: ["declarest.io"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["metadatabundles"]
+  - name: vcrdgenerator-v1alpha1.declarest.io
+    admissionReviewVersions:
+      - v1
+    sideEffects: None
+    failurePolicy: Fail
+    timeoutSeconds: 10
+    clientConfig:
+      service:
+        name: declarest-operator-webhook-service
+        namespace: declarest-system
+        path: /validate-declarest-io-v1alpha1-crdgenerator
+    rules:
+      - apiGroups: ["declarest.io"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["crdgenerators"]

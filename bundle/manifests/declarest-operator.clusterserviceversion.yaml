@@ -137,24 +137,12 @@ metadata:
                 }
               },
               "branch": "main",
-              "url": "https://github.com/example/declarest-resources.git",
-              "webhook": {
-                "provider": "gitea",
-                "secretRef": {
-                  "key": "webhook-secret",
-                  "name": "repository-credentials"
-                }
-              }
+              "url": "https://github.com/example/declarest-resources.git"
             },
             "pollInterval": "1m",
             "storage": {
-              "pvc": {
-                "accessModes": [
-                  "ReadWriteOnce"
-                ],
-                "requests": {
-                  "storage": "1Gi"
-                }
+              "existingPVC": {
+                "name": "ignored-v1alpha1"
               }
             },
             "type": "git"
@@ -176,13 +164,8 @@ metadata:
               },
               "path": "/var/lib/declarest/secrets/secrets.json",
               "storage": {
-                "pvc": {
-                  "accessModes": [
-                    "ReadWriteOnce"
-                  ],
-                  "requests": {
-                    "storage": "1Gi"
-                  }
+                "existingPVC": {
+                  "name": "ignored-v1alpha1"
                 }
               }
             }
@@ -231,7 +214,10 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - kind: CRDGenerator
+    - description: Generates typed custom resources that reconcile directly to managed-service
+        resources.
+      displayName: CRD Generator
+      kind: CRDGenerator
       name: crdgenerators.declarest.io
       version: v1alpha1
     - description: Remote REST service targeted by DeclaREST, including OpenAPI sourcing,
@@ -240,7 +226,10 @@ spec:
       kind: ManagedService
       name: managedservices.declarest.io
       version: v1alpha1
-    - kind: MetadataBundle
+    - description: Resolved metadata bundle source used by ManagedService and CRDGenerator
+        resources.
+      displayName: Metadata Bundle
+      kind: MetadataBundle
       name: metadatabundles.declarest.io
       version: v1alpha1
     - description: Repository webhook receiver state used by the operator to drive
@@ -269,9 +258,10 @@ spec:
       version: v1alpha1
   description: |
     DeclaREST keeps REST APIs in sync with declarative state stored in Git. The
-    operator watches `ResourceRepository`, `ManagedService`, `SecretStore`, and
-    `SyncPolicy` resources to plan and execute incremental or full sync cycles
-    against targeted services.
+    operator watches `ResourceRepository`, `ManagedService`, `SecretStore`,
+    `MetadataBundle`, `CRDGenerator`, `RepositoryWebhook`, and `SyncPolicy`
+    resources to plan and execute incremental or full sync cycles against
+    targeted services.
 
     ### Highlights
     - Git-backed source of truth with webhook-driven and interval-based refresh.
@@ -359,42 +349,6 @@ spec:
           - get
           - list
           - watch
-        - apiGroups:
-          - ""
-          resources:
-          - persistentvolumeclaims
-          verbs:
-          - get
-          - list
-          - watch
-          - create
-          - update
-          - patch
-          - delete
-        - apiGroups:
-          - apiextensions.k8s.io
-          resources:
-          - customresourcedefinitions
-          verbs:
-          - get
-          - list
-          - watch
-          - create
-          - update
-          - patch
-          - delete
-        - apiGroups:
-          - rbac.authorization.k8s.io
-          resources:
-          - clusterroles
-          verbs:
-          - get
-          - list
-          - watch
-          - create
-          - update
-          - patch
-          - delete
         serviceAccountName: declarest-operator
       deployments:
       - label:
@@ -534,6 +488,26 @@ spec:
     - v1
     deploymentName: declarest-operator-webhook
     failurePolicy: Fail
+    generateName: vcrdgenerator-v1alpha1.declarest.io
+    rules:
+    - apiGroups:
+      - declarest.io
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      - DELETE
+      resources:
+      - crdgenerators
+    sideEffects: None
+    timeoutSeconds: 10
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-declarest-io-v1alpha1-crdgenerator
+  - admissionReviewVersions:
+    - v1
+    deploymentName: declarest-operator-webhook
+    failurePolicy: Fail
     generateName: vmanagedservice-v1alpha1.declarest.io
     rules:
     - apiGroups:
@@ -543,12 +517,53 @@ spec:
       operations:
       - CREATE
       - UPDATE
+      - DELETE
       resources:
       - managedservices
     sideEffects: None
     timeoutSeconds: 10
     type: ValidatingAdmissionWebhook
     webhookPath: /validate-declarest-io-v1alpha1-managedservice
+  - admissionReviewVersions:
+    - v1
+    deploymentName: declarest-operator-webhook
+    failurePolicy: Fail
+    generateName: vmetadatabundle-v1alpha1.declarest.io
+    rules:
+    - apiGroups:
+      - declarest.io
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      - DELETE
+      resources:
+      - metadatabundles
+    sideEffects: None
+    timeoutSeconds: 10
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-declarest-io-v1alpha1-metadatabundle
+  - admissionReviewVersions:
+    - v1
+    deploymentName: declarest-operator-webhook
+    failurePolicy: Fail
+    generateName: vrepositorywebhook-v1alpha1.declarest.io
+    rules:
+    - apiGroups:
+      - declarest.io
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      - DELETE
+      resources:
+      - repositorywebhooks
+    sideEffects: None
+    timeoutSeconds: 10
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-declarest-io-v1alpha1-repositorywebhook
   - admissionReviewVersions:
     - v1
     deploymentName: declarest-operator-webhook
@@ -562,6 +577,7 @@ spec:
       operations:
       - CREATE
       - UPDATE
+      - DELETE
       resources:
       - resourcerepositories
     sideEffects: None
@@ -581,6 +597,7 @@ spec:
       operations:
       - CREATE
       - UPDATE
+      - DELETE
       resources:
       - secretstores
     sideEffects: None

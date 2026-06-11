@@ -176,6 +176,9 @@ spec:
                     minLength: 1
                     type: string
                   webhook:
+                    description: |-
+                      Deprecated: use RepositoryWebhook resources. The embedded webhook
+                      configuration is retained for v1alpha1 compatibility only.
                     properties:
                       provider:
                         enum:
@@ -216,6 +219,9 @@ spec:
               pollInterval:
                 type: string
               storage:
+                description: |-
+                  Deprecated: ignored by the v1alpha1 operator. Repository state is stored
+                  on the manager state volume at /var/lib/declarest.
                 properties:
                   existingPVC:
                     description: |-

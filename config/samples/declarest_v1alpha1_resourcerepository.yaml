@@ -14,14 +14,7 @@ spec:
       tokenRef:
         name: repository-credentials
         key: token
-    webhook:
-      provider: gitea
-      secretRef:
-        name: repository-credentials
-        key: webhook-secret
   storage:
-    pvc:
-      accessModes:
-        - ReadWriteOnce
-      requests:
-        storage: 1Gi
+    # Deprecated in v1alpha1; repository state uses the operator manager state volume.
+    existingPVC:
+      name: ignored-v1alpha1

@@ -5,7 +5,7 @@ metadata:
   namespace: olm
 spec:
   sourceType: grpc
-  image: ghcr.io/crmarques/declarest-operator-catalog:latest
+  image: ghcr.io/crmarques/declarest-operator-catalog:0.0.1
   displayName: DeclaREST Operator
   publisher: Carlos Marques
   updateStrategy:

@@ -70,7 +70,11 @@ spec:
                 type: object
               events:
                 items:
+                  enum:
+                  - push
+                  - ping
                   type: string
+                minItems: 1
                 type: array
               provider:
                 enum:
@@ -89,10 +93,14 @@ spec:
                 type: object
               secretRef:
                 properties:
+                  key:
+                    minLength: 1
+                    type: string
                   name:
                     minLength: 1
                     type: string
                 required:
+                - key
                 - name
                 type: object
               suspend:
