@@ -11,7 +11,7 @@ BIN_DIR_ABS := $(abspath $(BIN_DIR))
 BINARY := $(BIN_DIR)/declarest
 OPERATOR_BINARY := $(BIN_DIR)/declarest-operator-manager
 OPERATOR_IMAGE ?= declarest-operator
-OPERATOR_IMAGE_TAG ?= latest
+OPERATOR_IMAGE_TAG ?= 0.0.1
 OPERATOR_IMAGE_REF := $(OPERATOR_IMAGE):$(OPERATOR_IMAGE_TAG)
 TEST_FLAGS ?= -race
 E2E_FLAGS ?=
@@ -115,7 +115,7 @@ tidy: ## Reconcile go.mod and go.sum with the current imports
 CONTROLLER_GEN_VERSION ?= v0.20.1
 CONTROLLER_GEN_BIN := $(BIN_DIR_ABS)/controller-gen
 CONTROLLER_GEN ?= $(CONTROLLER_GEN_BIN)
-RELEASE_TAG ?= latest
+RELEASE_TAG ?= 0.0.1
 
 .PHONY: controller-gen
 
@@ -159,7 +159,7 @@ bundle-install-olm: ## Generate dist/install-olm.yaml from config/olm overlay (O
 	$(eval CATALOG_TAG := $(patsubst v%,%,$(RELEASE_TAG)))
 	sed -i 's|image: ghcr.io/crmarques/declarest-operator-catalog:.*|image: ghcr.io/crmarques/declarest-operator-catalog:$(CATALOG_TAG)|' config/olm/catalogsource.yaml
 	kubectl kustomize config/olm > dist/install-olm.yaml
-	@git checkout config/olm/catalogsource.yaml 2>/dev/null || sed -i 's|image: ghcr.io/crmarques/declarest-operator-catalog:.*|image: ghcr.io/crmarques/declarest-operator-catalog:latest|' config/olm/catalogsource.yaml
+	@git checkout config/olm/catalogsource.yaml 2>/dev/null || sed -i 's|image: ghcr.io/crmarques/declarest-operator-catalog:.*|image: ghcr.io/crmarques/declarest-operator-catalog:0.0.1|' config/olm/catalogsource.yaml
 
 release-assets: bundle-install-core bundle-install-admission-certmanager bundle-install-admission-openshift bundle-install-olm ## Generate all release install bundles under dist/
 

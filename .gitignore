@@ -85,4 +85,5 @@ __pycache__/
 # E2E runtime artifacts
 test/e2e/.runs/
 .e2e-build/
+.e2e-runtime/
 .release-assets/
