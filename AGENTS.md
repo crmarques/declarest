@@ -1,132 +1,115 @@
 # AGENTS
 
 ## Purpose
-Define how coding agents operate in this repository rebuild. Canonical references are in `agents/reference/`; reusable workflows are in `agents/skills/`.
+How coding agents operate in this repository. Canonical specs live in `agents/reference/`; skills in `agents/skills/`; re-runnable review prompts in `agents/reusable-prompts/`.
 
 ## Startup Protocol
-1. Read `AGENTS.md`.
-2. Identify request intent and affected bounded contexts.
-3. Load `agents/reference/interfaces.md` first.
-4. Run `agents/skills/spec-router/SKILL.md` and load the minimal additional files from the matrix below.
-5. If authoring/revising specs or instruction files, run `agents/skills/spec-writer/SKILL.md`.
-6. If behavior or verification expectations changed, run `agents/skills/quality-gate/SKILL.md`.
-7. If reviewing/auditing specs, or after substantial spec/instruction edits, run `agents/skills/spec-auditor/SKILL.md`.
-8. Before final response, run the completion checklist and resolve or surface any blocking unmet items.
+1. Read this file.
+2. Identify the request type and affected bounded contexts.
+3. Load `agents/reference/interfaces.md`, then the files from the request-to-file matrix below (union for mixed requests).
+4. When authoring or revising any file under `agents/`, run `agents/skills/spec-authoring/SKILL.md`.
+5. When the task requires changing code, run `agents/skills/worktree-session/SKILL.md` before editing.
+6. When behavior, contracts, or security change, run `agents/skills/quality-gate/SKILL.md` for verification scope.
+7. Before the final response, satisfy the Completion Checklist; surface any blocking unmet item instead of the standard handoff.
 
-## Domain File Catalog
-| File | Domain | Load When |
+## Skills
+1. `spec-authoring` — route to minimal context, write/revise specs and instruction files, self-audit. Use for any change under `agents/`.
+2. `worktree-session` — isolate a coding session in its own branch + git worktree, then rebase onto `main`, fast-forward `main`, and clean up. Use the moment a task requires code changes.
+3. `quality-gate` — select and run the smallest verification set that protects the changed contracts.
+4. `commit-workflow` — pre-commit handoff for user-approved commits; use ONLY when the user explicitly asks for commit help after the work is complete.
+
+## Reference Files
+| File | Owns | Load when |
 |---|---|---|
-| `agents/reference/interfaces.md` | Canonical contracts | Always |
-| `agents/reference/architecture.md` | Boundaries and dependency rules | Designing components, refactors |
-| `agents/reference/code.md` | Code patterns and implementation standards | Implementing or reviewing code |
-| `agents/reference/domain.md` | Vocabulary and invariants | Modeling behavior and data |
-| `agents/reference/context-config.md` | Context and config semantics | Context loading, overrides, validation |
-| `agents/reference/resource-repo.md` | Resource repository and Git/FS semantics | Storage, sync, path handling |
-| `agents/reference/managed-service.md` | HTTP/OpenAPI integration | Remote operations and API contracts |
-| `agents/reference/secrets.md` | Secret handling lifecycle | Secret masking, resolution, storage |
-| `agents/reference/metadata.md` | Metadata layering and templates | Metadata merge/render/infer behavior |
-| `agents/reference/metadata-bundle.md` | Metadata bundle manifest contract | `bundle.yaml` shape, strict decode, compatibility gates |
-| `agents/reference/orchestrator.md` | Orchestration flows | Apply/refresh/diff/list workflows |
-| `agents/reference/k8s-operator.md` | Kubernetes operator contracts | CRD validation, reconcile loops, webhook refresh flows |
-| `agents/reference/cli.md` | CLI behavior and output contracts | Command design and UX behavior |
-| `agents/reference/e2e.md` | E2E harness and component contracts | E2E profile logic, component onboarding, runtime step orchestration |
-| `agents/reference/commit-instructions.md` | Final handoff subject-line format | Final response and explicit commit-message formatting |
-| `agents/reference/quality.md` | Quality, testing, and security gates | Validation, test planning, release checks |
-| `agents/reference/use-cases.md` | End-to-end examples and edge cases | Scenario design and acceptance tests |
+| `interfaces.md` | Types, interfaces, error taxonomy, determinism, IO contracts | Always |
+| `architecture.md` | Layer boundaries, dependency rules, orchestrator/app split, OLM packaging boundary | Designing components, refactors |
+| `code.md` | Go code patterns and implementation standards | Implementing or reviewing code |
+| `domain.md` | Vocabulary and business invariants | Modeling behavior and data |
+| `context-config.md` | Context catalog schema, credentials, proxy, env expansion | Context loading, overrides, validation |
+| `resource-repo.md` | Repo layout, path safety, Git lifecycle/sync | Storage, sync, path handling |
+| `managed-service.md` | HTTP/OpenAPI request construction, auth, throttling | Remote operations and API contracts |
+| `secrets.md` | Secret detection, masking, `{{secret .}}` resolution, storage | Secret handling |
+| `metadata.md` | Metadata layering, templates, defaults, identity, formats, descendants, inference | Metadata behavior |
+| `metadata-bundle.md` | `bundle.yaml` shape, strict decode, compatibility gates, ref forms | Bundle manifest behavior |
+| `orchestrator.md` | Apply/refresh/diff/explain/list/request flows, fallbacks | Orchestration workflows |
+| `k8s-operator.md` | CRD validation, reconcile loops, webhook refresh, OLM packaging/release | Operator behavior |
+| `cli.md` | Command tree, flags, input grammar, output, completion, exit codes | CLI design and UX |
+| `e2e.md` | E2E harness, profiles, component contracts, runtime | E2E behavior |
+| `commit-instructions.md` | Commit subject-line format | Commit messages |
+| `quality.md` | Test strategy and cross-cutting verification gates | Validation, test planning, release checks |
+| `use-cases.md` | Cross-domain end-to-end scenarios | Scenario design spanning multiple domains |
 
-## Request-to-File Load Matrix
-| Request Type | Required Files |
+## Request-to-File Matrix
+| Request type | Required files (plus `interfaces.md` and `quality.md`) |
 |---|---|
-| New feature touching orchestration | `agents/reference/interfaces.md`, `agents/reference/domain.md`, `agents/reference/orchestrator.md`, `agents/reference/resource-repo.md`, `agents/reference/managed-service.md`, `agents/reference/metadata.md`, `agents/reference/quality.md` |
-| CLI command or output change | `agents/reference/interfaces.md`, `agents/reference/cli.md`, `agents/reference/orchestrator.md`, `agents/reference/domain.md`, `agents/reference/quality.md` |
-| Metadata behavior change | `agents/reference/interfaces.md`, `agents/reference/metadata.md`, `agents/reference/domain.md`, `agents/reference/managed-service.md`, `agents/reference/quality.md` |
-| Metadata bundle manifest change | `agents/reference/interfaces.md`, `agents/reference/metadata-bundle.md`, `agents/reference/metadata.md`, `agents/reference/context-config.md`, `agents/reference/quality.md` |
-| Secret behavior change | `agents/reference/interfaces.md`, `agents/reference/secrets.md`, `agents/reference/orchestrator.md`, `agents/reference/quality.md` |
-| Context/config change | `agents/reference/interfaces.md`, `agents/reference/context-config.md`, `agents/reference/domain.md`, `agents/reference/quality.md` |
-| Kubernetes operator controller/CRD/webhook change | `agents/reference/interfaces.md`, `agents/reference/k8s-operator.md`, `agents/reference/architecture.md`, `agents/reference/quality.md` |
-| OLM bundle/catalog packaging change | `agents/reference/interfaces.md`, `agents/reference/k8s-operator.md`, `agents/reference/architecture.md`, `agents/reference/quality.md` |
-| E2E harness/profile/component change | `agents/reference/interfaces.md`, `agents/reference/e2e.md`, `agents/reference/quality.md`, `agents/reference/use-cases.md` |
-| Architecture/refactor proposal | `agents/reference/interfaces.md`, `agents/reference/architecture.md`, `agents/reference/code.md`, `agents/reference/quality.md` |
-| Spec authoring only | `agents/reference/interfaces.md`, targeted domain file, `agents/reference/code.md`, `agents/reference/quality.md` |
-| CI/release workflow change | `agents/reference/interfaces.md`, `agents/reference/code.md`, `agents/reference/quality.md` |
-| Instruction/skill workflow change | `agents/reference/interfaces.md`, `agents/reference/code.md`, `agents/reference/quality.md` plus affected `AGENTS.md`/`agents/skills/*` files, and `agents/reference/commit-instructions.md` when final handoff or commit guidance changes |
-| Quality strategy/test-policy change | `agents/reference/interfaces.md`, `agents/reference/quality.md`, `agents/reference/use-cases.md` |
+| Feature touching orchestration | `domain.md`, `orchestrator.md`, `resource-repo.md`, `managed-service.md`, `metadata.md` |
+| CLI command or output change | `cli.md`, `orchestrator.md`, `domain.md` |
+| Metadata behavior change | `metadata.md`, `domain.md`, `managed-service.md` |
+| Metadata bundle manifest change | `metadata-bundle.md`, `metadata.md`, `context-config.md` |
+| Secret behavior change | `secrets.md`, `orchestrator.md` |
+| Context/config change | `context-config.md`, `domain.md` |
+| Operator controller/CRD/webhook change | `k8s-operator.md`, `architecture.md` |
+| OLM bundle/catalog packaging change | `k8s-operator.md`, `architecture.md` |
+| E2E harness/profile/component change | `e2e.md`, `use-cases.md` |
+| Architecture/refactor proposal | `architecture.md`, `code.md` |
+| Spec authoring only | targeted domain file, `code.md` |
+| CI/release workflow change | `code.md` |
+| Instruction/skill workflow change | `code.md`, affected `AGENTS.md`/`agents/skills/*`, and `commit-instructions.md` when handoff/commit guidance changes |
+| Quality strategy/test-policy change | `use-cases.md` |
 
-## Skill Selection Rules
-1. Use `agents/skills/spec-router/SKILL.md` to choose minimal context.
-2. Use `agents/skills/spec-writer/SKILL.md` when editing specs or instruction files.
-3. Use `agents/skills/quality-gate/SKILL.md` when selecting verification scope for behavior, contract, or security changes.
-4. Use `agents/skills/spec-auditor/SKILL.md` when validating consistency and coverage.
-5. If multiple skills apply, run in order: `spec-router`, `spec-writer`, `quality-gate`, `spec-auditor`.
-6. Use `agents/skills/commit-workflow/SKILL.md` only when the user explicitly asks for commit guidance or commit creation after the request work is complete.
-
-## Final handoff and commit guidance
-- Agents MUST NOT create, amend, stage, or push commits during standard request handoff.
-- Agents MUST NOT automatically invoke `agents/skills/commit-workflow/SKILL.md` just because tracked or untracked changes remain after request processing.
-- Before standard handoff, agents MUST:
-  - apply the `Go-file handoff verification` rules below,
-  - scan diffs for secrets or unexpected large/binary files,
-  - review the prepared diff (for example via `git diff`) for correctness.
-- When the request completes successfully with no remaining blocker, the final response MUST contain only one short subject line that obeys `agents/reference/commit-instructions.md`.
-- That standard successful final response MUST NOT append work summaries, changed-file lists, command inventories, verification logs, residual-risk notes, or commit questions.
-- When the user explicitly asks for commit guidance or commit creation after the request work is complete, agents MUST use `agents/skills/commit-workflow/SKILL.md`.
-- When required verification, required repository/bundle synchronization, or another blocking handoff condition cannot complete, the agent MUST report the blocker directly instead of the standard one-line final response.
-
-## Go-file handoff verification
-- When the agent changes at least one `.go` file during a request, the agent MUST run `gofmt -w` on every changed Go file before handoff.
-- When the agent changes at least one `.go` file during a request, the agent MUST then run `golangci-lint run`.
-- When the agent changes at least one `.go` file during a request, the agent MUST fix every finding reported by `golangci-lint run` before handoff.
-- When the agent changes at least one `.go` file during a request, the agent MUST then run `go test -race ./...` (or the deepest feasible subset when full race tests are blocked).
-- When the agent changes no `.go` files during a request, the agent MAY skip `gofmt -w`, `golangci-lint run`, and `go test -race ./...`.
-- If this verification gate cannot complete when required, or if required `golangci-lint run` findings remain unresolved, the agent MUST treat that as a blocker and report it instead of the standard one-line final response.
+## Canonical Ownership Map
+One concept has exactly one owner file; every other file references it instead of restating the rule.
+- `interfaces.md`: types, interfaces, method families, error taxonomy, determinism, IO expectations.
+- `architecture.md`: layer boundaries, allowed/forbidden dependencies, orchestrator-vs-app split, OLM packaging boundary, interaction flows.
+- `code.md`: Go code patterns, side-effect isolation, comment policy, controller purity.
+- `domain.md`: vocabulary and business invariants (source-of-truth, identity/alias semantics, `_` namespace, defaults-merge, `format: any`, required-attributes).
+- `context-config.md`: context catalog YAML, credentials/`credentialsRef`, proxy model, `${ENV_VAR}` expansion, metadata-source one-of.
+- `resource-repo.md`: on-disk layout, path safety, payload discovery, defaults-artifact layout, Git lifecycle/sync/history/tree.
+- `managed-service.md`: remote request construction, auth, OpenAPI/Swagger, throttling, media defaults, request-time validation, list-`jq`.
+- `secrets.md`: secret lifecycle, `{{secret .}}` key mapping, whole-resource vs attribute secrets, store contracts, redaction.
+- `metadata.md`: metadata structure, layering, templates, inference, `resource.defaults`, identity templates, `resource.format`, secret/externalized attributes (declaration), descendant selectors, schema maintenance.
+- `metadata-bundle.md`: `bundle.yaml` shape, strict decode, compatibility gates, ref forms, resolver options.
+- `orchestrator.md`: orchestration flows, local/remote transitions, bounded fallbacks, runtime defaults merge, binary compare.
+- `k8s-operator.md`: CRD spec/validation/status, reconcile, sync planning, webhook receiver, runtime context assembly, OLM packaging/release.
+- `cli.md`: command tree, flags, grammar, output contract, completion, exit codes.
+- `e2e.md`: harness profiles, component contracts, cases, runtime, handoff.
+- `quality.md`: test strategy and cross-cutting verification gates only.
 
 ## Engineering Rules
-1. Keep architecture and implementation aligned with senior engineering practices.
-2. Keep repository structure legible through bounded contexts and explicit names.
-3. Keep one dominant reason to change per file.
-4. Avoid unnecessary file proliferation; split only for mixed concerns, unrelated churn, review load, or complexity/size growth.
-5. Keep shared/public contracts stable and documented in `agents/reference/interfaces.md`.
-6. Preserve business intent and invariants, but do not copy legacy structural anti-patterns.
-7. Follow language community conventions for changed files.
-8. For Go: use idiomatic package layout (`cmd/*` entrypoints, `internal/*` non-public implementation).
-9. For Bash: keep scripts ShellCheck-friendly with robust error handling defaults.
-10. Keep context configuration aligned with `agents/reference/context-config.md`.
-11. Add or update dependencies only when they are trusted, widely adopted, and actively maintained.
-12. When dependencies/imports change, align `go.mod`/`go.sum` and run `go mod tidy`.
-13. Use risk-based verification: run the fastest checks that cover changed contracts, then escalate only when required by risk.
-14. Required verification MUST complete before standard handoff; successful standard final responses SHOULD stay minimal and MUST omit verification detail unless the user explicitly asks for it.
-15. Inline or explanatory comments that only restate what the code already expresses MUST NOT be added; updates SHOULD remove such non-functional comments and rely on clear naming, structure, and tests instead, while only keeping compile-time directives or exported-API documentation that cannot be conveyed otherwise.
+1. Keep architecture and implementation aligned with senior engineering practices and bounded contexts with explicit names.
+2. Keep one dominant reason to change per file; split only for mixed concerns, conflict-causing churn, or size growth that impairs safe editing.
+3. Keep shared/public contracts stable and documented in `interfaces.md`; refactors affecting public contracts MUST update `interfaces.md` before implementation.
+4. Preserve business intent and invariants; do not copy legacy structural anti-patterns.
+5. Follow language conventions. For Go: `cmd/*` entrypoints, `internal/*` non-public implementation, `gofmt`-formatted, idiomatic exports. For Bash: ShellCheck-friendly with robust error handling.
+6. Add or change dependencies only when trusted, widely adopted, and actively maintained; when imports change, align `go.mod`/`go.sum` and run `go mod tidy`.
+7. Do not add comments that restate what code already expresses; rely on naming, structure, and tests. Keep only exported-API docs and compile-time directives. Prune non-functional comments in code you touch.
+8. Keep context configuration aligned with `context-config.md`.
+9. Use risk-based verification (`quality-gate`): run the fastest checks covering changed contracts, escalate only as risk requires.
+10. Spec quality: keep rules minimal and reference canonical sources (efficiency); use `MUST`/`SHOULD`/`MAY` with explicit conditions/outcomes (assertivity); define observable, testable expectations (objectivity); keep one canonical source per rule and replace duplicates with references (redundancy control).
+
+## Changing Code, Verification, and Handoff
+1. When a task requires code changes, work through `agents/skills/worktree-session/SKILL.md` (branch + worktree, rebase onto `main`, fast-forward, clean up). That skill is the ONLY sanctioned place where the agent commits and merges autonomously.
+2. Outside a worktree session, agents MUST NOT create, amend, stage, or push commits during standard handoff, and MUST NOT auto-invoke `commit-workflow` just because the tree changed. Committing on request goes through `commit-workflow`.
+3. Before any handoff, scan diffs for secrets and unexpected large/binary files, review the prepared diff, and complete required verification.
+4. On a successful, unblocked request, the final response is a single subject line per `commit-instructions.md` — no summaries, file lists, command inventories, verification logs, or commit questions.
+5. When required verification, required bundle synchronization, or another blocking condition cannot complete, report the blocker instead of the standard one-line response.
+6. Never `git push` unless the user explicitly asks.
+
+## Go-File Handoff Verification
+When at least one `.go` file changed during a request, before handoff the agent MUST: run `gofmt -w` on every changed Go file; run `golangci-lint run` and fix every finding; run `go test -race ./...` (or the deepest feasible subset when full race tests are blocked). When no `.go` files changed, these MAY be skipped. A blocked gate or unresolved finding is a blocker.
 
 ## Bundle Repository Synchronization
-1. Canonical metadata bundle content (metadata trees, openapi specs, `bundle.yaml` manifests) lives in the peer monorepo `../declarest-metadata-bundles/bundles/<component>/` — not in `test/e2e/components/managed-service/<component>/`, which now holds only e2e fixtures (compose, cases, scripts, repo-template).
-2. When editing metadata or openapi for a managed-service component that maps to a bundle (for example `keycloak`, `rundeck`, `haproxy`), the agent MUST apply the change under `../declarest-metadata-bundles/bundles/<component>/` (the bundles repo), not under `test/e2e/components/managed-service/<component>/`.
-3. When the bundles repo hosts a manifest (`bundles/<component>/bundle.yaml`) that references metadata content, update the manifest simultaneously to keep it consistent with the mirrored metadata tree (for example adjust metadataRoot, openapi hints, compatibleManagedService ranges).
-4. If the bundles repo is absent or cannot be edited (for example because it is outside writable roots) and a metadata change is required, treat the missing sync as a blocking handoff condition and report it instead of the standard one-line final response.
-5. `--metadata-source bundle` (default) resolves `METADATA_BUNDLE_REF` values directly — each managed-service component declares an `oci://ghcr.io/<owner>/declarest-metadata-bundles/<component>:<tag>` OCI reference that is pulled at runtime through `bundlemetadata.ResolveBundle` without any external `oras` CLI. `--metadata-source dir` and the peer bundles repo at `E2E_METADATA_BUNDLES_ROOT` (default `../declarest-metadata-bundles`) remain the canonical local-filesystem fallback so at least one e2e path still exercises bundles sourced from disk.
-
-## Delivery Protocol
-1. After fulfilling a request, run the required verification commands (including the `Go-file handoff verification` commands only when at least one `.go` file changed) and complete any required repository or bundle synchronization work, then stop as soon as those tasks finish.
-2. If the request is successful and unblocked, emit only the one-line subject required by `agents/reference/commit-instructions.md`.
-3. If the user later asks for commit help, ensure each resulting Conventional Commit message obeys `agents/reference/commit-instructions.md` and follows the `agents/skills/commit-workflow/SKILL.md` checklist before suggesting or proposing commit-related commands.
-4. When multiple logical concerns exist and the user asks for multiple commits, propose multiple Conventional Commit messages by numbering each message and describing its individual scope.
-
-## Commit workflow
-- Committing is opt-in and MUST go through `agents/skills/commit-workflow/SKILL.md` only after the user explicitly asks for commit help or commit creation.
-- Agents MUST NOT invoke the commit-workflow skill automatically during standard request handoff.
-
-## Spec Quality Criteria
-1. Efficiency: keep workflows and rules minimal; reference canonical sources instead of repeating full rule sets.
-2. Assertivity: use `MUST`, `SHOULD`, and `MAY` consistently, with explicit conditions and outcomes.
-3. Objectivity: define observable, testable expectations and avoid subjective wording without measurable checks.
-4. Redundancy control: when duplicate guidance is discovered, keep one canonical source and replace duplicates with references.
+1. Canonical metadata bundle content (metadata trees, OpenAPI specs, `bundle.yaml`) lives in the peer monorepo `../declarest-metadata-bundles/bundles/<component>/`, not in `test/e2e/components/managed-service/<component>/` (which holds only e2e fixtures).
+2. When editing metadata or OpenAPI for a managed-service component mapped to a bundle (e.g. `keycloak`, `rundeck`, `haproxy`), apply the change under the bundles repo, and update that component's `bundle.yaml` simultaneously (metadataRoot, openapi hints, compatibleManagedService ranges) to stay consistent.
+3. If the bundles repo is absent or outside writable roots and a metadata change is required, treat the missing sync as a blocking handoff condition and report it.
+4. `--metadata-source bundle` (default) resolves `METADATA_BUNDLE_REF` OCI references at runtime via `bundlemetadata.ResolveBundle` (no external `oras` CLI); `--metadata-source dir` resolves from the peer bundles repo at `E2E_METADATA_BUNDLES_ROOT` (default `../declarest-metadata-bundles`) so at least one e2e path exercises disk-sourced bundles.
 
 ## Completion Checklist
-1. Changed behavior is captured in the correct domain files.
-2. Interface references match `agents/reference/interfaces.md` exactly.
-3. Machine-readable schemas under `schemas/*.json` are updated when metadata or context contracts change.
+1. Changed behavior is captured in the correct owner file (per the ownership map).
+2. Interface references match `interfaces.md` exactly.
+3. `schemas/*.json` are updated when metadata or context contracts change.
 4. Updated examples include at least one corner case.
-5. Quality/security impacts are reflected in `agents/reference/quality.md` when applicable.
-6. `AGENTS.md` routing rules and `agents/skills/*` workflows are consistent with each other.
-7. Verification scope is completed before standard handoff, and any blocking gap is surfaced instead of the standard one-line final response.
-8. No unnecessary file fragmentation was introduced.
-9. Spec updates satisfy the efficiency/assertivity/objectivity/redundancy criteria above.
+5. Quality/security impacts are reflected per `quality.md` when applicable.
+6. The `AGENTS.md` matrix and `agents/skills/*` workflows are mutually consistent.
+7. Required verification completed before handoff; any blocking gap is surfaced instead of the standard one-line response.
+8. No unnecessary file fragmentation or duplicated rules were introduced.
