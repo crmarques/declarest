@@ -112,7 +112,7 @@ tidy: ## Reconcile go.mod and go.sum with the current imports
 
 # --- Operator manifest generation ---
 
-CONTROLLER_GEN_VERSION ?= v0.20.1
+CONTROLLER_GEN_VERSION ?= v0.21.0
 CONTROLLER_GEN_BIN := $(BIN_DIR_ABS)/controller-gen
 CONTROLLER_GEN ?= $(CONTROLLER_GEN_BIN)
 RELEASE_TAG ?= 0.0.1
@@ -194,7 +194,7 @@ CATALOG_IMG ?= $(IMAGE_TAG_BASE)-catalog:$(VERSION)
 OPERATOR_IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
 BUNDLE_GEN_FLAGS ?= -q --manifests --version $(VERSION) --channels $(CHANNELS) --default-channel $(DEFAULT_CHANNEL)
 BUNDLE_IMAGE_BUILDER ?= podman
-OPM_VERSION ?= v1.65.0
+OPM_VERSION ?= v1.71.0
 OPERATOR_SDK_VERSION ?= v1.42.2
 OPM := $(BIN_DIR_ABS)/opm
 OPERATOR_SDK := $(BIN_DIR_ABS)/operator-sdk
