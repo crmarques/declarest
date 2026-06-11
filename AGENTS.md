@@ -95,6 +95,11 @@ One concept has exactly one owner file; every other file references it instead o
 5. When required verification, required bundle synchronization, or another blocking condition cannot complete, report the blocker instead of the standard one-line response.
 6. Never `git push` unless the user explicitly asks.
 
+## Autonomy
+1. Act without asking on routine, non-destructive project work: reads, edits, builds, tests, lint, local commits/amends, rebases, and worktree operations run directly — they are pre-authorized in the workspace `.claude/settings.json` allowlist.
+2. Pause to confirm ONLY when an action is destructive (`git push`/force-push, `git reset --hard`, `git clean -f`, history rewrites, `rm -rf`) or reaches outside the project tree or the requested task (remotes, external services, unrelated files).
+3. Do not narrate or ask permission to run a pre-authorized command; run it and report the result.
+
 ## Go-File Handoff Verification
 When at least one `.go` file changed during a request, before handoff the agent MUST: run `gofmt -w` on every changed Go file; run `golangci-lint run` and fix every finding; run `go test -race ./...` (or the deepest feasible subset when full race tests are blocked). When no `.go` files changed, these MAY be skipped. A blocked gate or unresolved finding is a blocker.
 
