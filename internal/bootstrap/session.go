@@ -16,6 +16,7 @@ package bootstrap
 
 import (
 	"context"
+	"os"
 
 	"github.com/crmarques/declarest/config"
 	configfile "github.com/crmarques/declarest/internal/providers/config/file"
@@ -27,10 +28,11 @@ func NewContextService(opts BootstrapConfig) config.ContextService {
 
 func NewSession(opts BootstrapConfig, selection config.ContextSelection) (Session, error) {
 	contextService := NewContextService(opts)
-	orch, err := buildOrchestrator(context.Background(), contextService, selection)
+	orch, warnings, err := buildOrchestrator(context.Background(), contextService, selection)
 	if err != nil {
 		return Session{}, err
 	}
+	emitBuildWarnings(os.Stderr, os.Args[1:], warnings)
 
 	return Session{
 		Contexts:     contextService,
@@ -40,10 +42,11 @@ func NewSession(opts BootstrapConfig, selection config.ContextSelection) (Sessio
 }
 
 func NewSessionFromResolvedContext(resolvedContext config.Context) (Session, error) {
-	orch, err := buildOrchestratorFromResolvedContext(context.Background(), resolvedContext)
+	orch, warnings, err := buildOrchestratorFromResolvedContext(context.Background(), resolvedContext)
 	if err != nil {
 		return Session{}, err
 	}
+	emitBuildWarnings(os.Stderr, os.Args[1:], warnings)
 	return Session{
 		Contexts:     nil,
 		Orchestrator: orch,

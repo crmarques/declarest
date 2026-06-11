@@ -17,7 +17,6 @@ package bootstrap
 import (
 	"context"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -43,34 +42,37 @@ func buildOrchestrator(
 	ctx context.Context,
 	contextService config.ContextService,
 	selection config.ContextSelection,
-) (*internalorchestrator.Orchestrator, error) {
+) (*internalorchestrator.Orchestrator, []string, error) {
 	if contextService == nil {
-		return nil, faults.Invalid("context service must not be nil", nil)
+		return nil, nil, faults.Invalid("context service must not be nil", nil)
 	}
 
 	resolvedContext, err := contextService.ResolveContext(ctx, selection)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	return buildOrchestratorFromResolvedContext(ctx, resolvedContext)
 }
 
+// buildOrchestratorFromResolvedContext wires concrete providers into the default
+// orchestrator. It performs no IO of its own beyond provider construction and
+// returns any non-fatal startup warnings as data so the session boundary owns
+// where and whether they are emitted.
 func buildOrchestratorFromResolvedContext(
 	ctx context.Context,
 	resolvedContext config.Context,
-) (*internalorchestrator.Orchestrator, error) {
-	args := os.Args[1:]
-	emitSecurityWarningsWithArgs(os.Stderr, args, resolvedContext)
+) (*internalorchestrator.Orchestrator, []string, error) {
+	warnings := collectSecurityWarnings(resolvedContext)
 
 	authRuntime, err := promptauth.New()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	metadataSource, err := resolveMetadataSource(ctx, resolvedContext, authRuntime)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	repoBaseDir := resolvedRepositoryBaseDir(resolvedContext)
@@ -87,7 +89,7 @@ func buildOrchestratorFromResolvedContext(
 			metadataService = fsmetadata.NewFSMetadataService(metadataSource.BaseDir)
 		}
 		if strings.TrimSpace(metadataSource.DeprecatedWarning) != "" {
-			writeBootstrapWarning(os.Stderr, args, metadataSource.DeprecatedWarning)
+			warnings = append(warnings, metadataSource.DeprecatedWarning)
 		}
 	}
 
@@ -101,11 +103,16 @@ func buildOrchestratorFromResolvedContext(
 			gitrepository.WithPromptRuntime(authRuntime),
 		)
 	}
+	if repo != nil {
+		if _, ok := repo.(repository.RepositorySync); !ok {
+			return nil, nil, faults.Internal("repository provider must support synchronization", nil)
+		}
+	}
 
 	var srv managedservice.ManagedServiceClient
 	if resolvedContext.ManagedService != nil {
 		if resolvedContext.ManagedService.HTTP == nil {
-			return nil, faults.Internal("managed service provider is invalid", nil)
+			return nil, nil, faults.Internal("managed service provider is invalid", nil)
 		}
 
 		serverConfig := *resolvedContext.ManagedService.HTTP
@@ -121,7 +128,7 @@ func buildOrchestratorFromResolvedContext(
 			serverOptions...,
 		)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		srv = serverManager
 	}
@@ -132,7 +139,7 @@ func buildOrchestratorFromResolvedContext(
 		case resolvedContext.SecretStore.File != nil:
 			secretService, err := filesecrets.New(*resolvedContext.SecretStore.File)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			sec = secretService
 		case resolvedContext.SecretStore.Vault != nil:
@@ -141,11 +148,11 @@ func buildOrchestratorFromResolvedContext(
 				vaultsecrets.WithPromptRuntime(authRuntime),
 			)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			sec = secretService
 		default:
-			return nil, faults.Internal("secret store provider is invalid", nil)
+			return nil, nil, faults.Internal("secret store provider is invalid", nil)
 		}
 	}
 
@@ -154,7 +161,7 @@ func buildOrchestratorFromResolvedContext(
 		metadataService,
 		srv,
 		sec,
-	), nil
+	), warnings, nil
 }
 
 func effectiveOpenAPISource(configOpenAPI string, metadataOpenAPI string) string {
@@ -182,56 +189,56 @@ func resolvedRepositoryBaseDir(ctx config.Context) string {
 	}
 }
 
-func emitSecurityWarnings(w io.Writer, resolvedContext config.Context) {
-	emitSecurityWarningsWithArgs(w, os.Args[1:], resolvedContext)
-}
-
-func emitSecurityWarningsWithArgs(w io.Writer, args []string, resolvedContext config.Context) {
-	if cliutil.ShouldIgnoreWarnings(args) {
-		return
-	}
+// collectSecurityWarnings inspects a resolved context for insecure settings and
+// returns deterministic warning messages without performing IO, so callers can
+// decide where and whether to emit them.
+func collectSecurityWarnings(resolvedContext config.Context) []string {
+	var warnings []string
 
 	if resolvedContext.ManagedService != nil && resolvedContext.ManagedService.HTTP != nil {
 		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(resolvedContext.ManagedService.HTTP.BaseURL)), "http://") {
-			cliutil.WriteWarningLine(w, "managed-service.http.base-url uses plain HTTP, credentials will be transmitted in cleartext")
+			warnings = append(warnings, "managed-service.http.base-url uses plain HTTP, credentials will be transmitted in cleartext")
 		}
 		if resolvedContext.ManagedService.HTTP.Auth != nil &&
 			resolvedContext.ManagedService.HTTP.Auth.OAuth2 != nil &&
 			strings.HasPrefix(strings.ToLower(strings.TrimSpace(resolvedContext.ManagedService.HTTP.Auth.OAuth2.TokenURL)), "http://") {
-			cliutil.WriteWarningLine(w, "managed-service.http.auth.oauth2.token-url uses plain HTTP, client credentials will be transmitted in cleartext")
+			warnings = append(warnings, "managed-service.http.auth.oauth2.token-url uses plain HTTP, client credentials will be transmitted in cleartext")
 		}
 		if resolvedContext.ManagedService.HTTP.TLS != nil && resolvedContext.ManagedService.HTTP.TLS.InsecureSkipVerify {
-			cliutil.WriteWarningLine(w, "managed-service.http.tls.insecure-skip-verify is enabled, TLS certificate verification is disabled")
+			warnings = append(warnings, "managed-service.http.tls.insecure-skip-verify is enabled, TLS certificate verification is disabled")
 		}
 	}
 
 	if resolvedContext.SecretStore != nil && resolvedContext.SecretStore.Vault != nil {
 		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(resolvedContext.SecretStore.Vault.Address)), "http://") {
-			cliutil.WriteWarningLine(w, "secret-store.vault.address uses plain HTTP, credentials will be transmitted in cleartext")
+			warnings = append(warnings, "secret-store.vault.address uses plain HTTP, credentials will be transmitted in cleartext")
 		}
 		if resolvedContext.SecretStore.Vault.TLS != nil && resolvedContext.SecretStore.Vault.TLS.InsecureSkipVerify {
-			cliutil.WriteWarningLine(w, "secret-store.vault.tls.insecure-skip-verify is enabled, TLS certificate verification is disabled")
+			warnings = append(warnings, "secret-store.vault.tls.insecure-skip-verify is enabled, TLS certificate verification is disabled")
 		}
 	}
 
 	if resolvedContext.Repository.Git != nil && resolvedContext.Repository.Git.Remote != nil {
 		if resolvedContext.Repository.Git.Remote.TLS != nil && resolvedContext.Repository.Git.Remote.TLS.InsecureSkipVerify {
-			cliutil.WriteWarningLine(w, "repository.git.remote.tls.insecure-skip-verify is enabled, TLS certificate verification is disabled")
+			warnings = append(warnings, "repository.git.remote.tls.insecure-skip-verify is enabled, TLS certificate verification is disabled")
 		}
 		if resolvedContext.Repository.Git.Remote.Auth != nil &&
 			resolvedContext.Repository.Git.Remote.Auth.SSH != nil &&
 			resolvedContext.Repository.Git.Remote.Auth.SSH.InsecureIgnoreHostKey {
-			cliutil.WriteWarningLine(w, "repository.git.remote.auth.ssh.insecure-ignore-host-key is enabled, SSH host key verification is disabled")
+			warnings = append(warnings, "repository.git.remote.auth.ssh.insecure-ignore-host-key is enabled, SSH host key verification is disabled")
 		}
 	}
+
+	return warnings
 }
 
-func writeBootstrapWarning(w io.Writer, args []string, message string) {
-	if cliutil.ShouldIgnoreWarnings(args) {
+func emitBuildWarnings(w io.Writer, args []string, warnings []string) {
+	if len(warnings) == 0 || cliutil.ShouldIgnoreWarnings(args) {
 		return
 	}
-
-	cliutil.WriteWarningLine(w, message)
+	for _, warning := range warnings {
+		cliutil.WriteWarningLine(w, warning)
+	}
 }
 
 func resolveMetadataSource(

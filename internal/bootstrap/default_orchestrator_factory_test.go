@@ -55,7 +55,7 @@ func TestBuildOrchestratorWiring(t *testing.T) {
 			},
 		}
 
-		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{
+		orch, _, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{
 			Name:      "fs",
 			Overrides: map[string]string{"repository.filesystem.base-dir": "/tmp/override"},
 		})
@@ -121,7 +121,7 @@ paths: {}
 			},
 		}
 
-		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle"})
+		orch, _, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle"})
 		if err != nil {
 			t.Fatalf("buildOrchestrator returned error: %v", err)
 		}
@@ -163,7 +163,7 @@ paths: {}
 			},
 		}
 
-		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "shared-metadata"})
+		orch, _, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "shared-metadata"})
 		if err != nil {
 			t.Fatalf("buildOrchestrator returned error: %v", err)
 		}
@@ -248,7 +248,7 @@ paths: {}
 			},
 		}
 
-		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle-file"})
+		orch, _, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle-file"})
 		if err != nil {
 			t.Fatalf("buildOrchestrator returned error: %v", err)
 		}
@@ -304,7 +304,7 @@ distribution:
 			},
 		}
 
-		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle-write-target"})
+		orch, _, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle-write-target"})
 		if err != nil {
 			t.Fatalf("buildOrchestrator returned error: %v", err)
 		}
@@ -382,7 +382,7 @@ distribution:
 			},
 		}
 
-		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle"})
+		orch, _, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle"})
 		if err != nil {
 			t.Fatalf("buildOrchestrator returned error: %v", err)
 		}
@@ -450,7 +450,7 @@ distribution:
 			},
 		}
 
-		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle"})
+		orch, _, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle"})
 		if err != nil {
 			t.Fatalf("buildOrchestrator returned error: %v", err)
 		}
@@ -499,7 +499,7 @@ distribution:
 			},
 		}
 
-		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "git-http-file-secret"})
+		orch, _, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "git-http-file-secret"})
 		if err != nil {
 			t.Fatalf("buildOrchestrator returned error: %v", err)
 		}
@@ -535,7 +535,7 @@ distribution:
 			},
 		}
 
-		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "fs-vault-secret"})
+		orch, _, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "fs-vault-secret"})
 		if err != nil {
 			t.Fatalf("buildOrchestrator returned error: %v", err)
 		}
@@ -590,6 +590,10 @@ func TestEffectiveOpenAPISource(t *testing.T) {
 	}
 }
 
+func emitSecurityWarningsForTest(buf *bytes.Buffer, args []string, resolvedContext config.Context) {
+	emitBuildWarnings(buf, args, collectSecurityWarnings(resolvedContext))
+}
+
 func TestEmitSecurityWarnings(t *testing.T) {
 	t.Parallel()
 
@@ -597,7 +601,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		emitSecurityWarnings(&buf, config.Context{
+		emitSecurityWarningsForTest(&buf, nil, config.Context{
 			ManagedService: &config.ManagedService{
 				HTTP: &config.HTTPServer{
 					BaseURL: "https://example.com",
@@ -618,7 +622,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
+		emitSecurityWarningsForTest(&buf, nil, config.Context{
 			ManagedService: &config.ManagedService{
 				HTTP: &config.HTTPServer{
 					BaseURL: "http://example.com/api",
@@ -634,7 +638,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
+		emitSecurityWarningsForTest(&buf, nil, config.Context{
 			ManagedService: &config.ManagedService{
 				HTTP: &config.HTTPServer{
 					BaseURL: "https://example.com",
@@ -651,7 +655,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
+		emitSecurityWarningsForTest(&buf, nil, config.Context{
 			ManagedService: &config.ManagedService{
 				HTTP: &config.HTTPServer{
 					BaseURL: "https://example.com",
@@ -672,7 +676,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
+		emitSecurityWarningsForTest(&buf, nil, config.Context{
 			SecretStore: &config.SecretStore{
 				Vault: &config.VaultSecretStore{
 					Address: "http://vault.local:8200",
@@ -688,7 +692,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
+		emitSecurityWarningsForTest(&buf, nil, config.Context{
 			SecretStore: &config.SecretStore{
 				Vault: &config.VaultSecretStore{
 					Address: "https://vault.example.com",
@@ -705,7 +709,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
+		emitSecurityWarningsForTest(&buf, nil, config.Context{
 			Repository: config.Repository{
 				Git: &config.GitRepository{
 					Remote: &config.GitRemote{
@@ -723,7 +727,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
+		emitSecurityWarningsForTest(&buf, nil, config.Context{
 			Repository: config.Repository{
 				Git: &config.GitRepository{
 					Remote: &config.GitRemote{
@@ -743,7 +747,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
+		emitSecurityWarningsForTest(&buf, nil, config.Context{
 			ManagedService: &config.ManagedService{
 				HTTP: &config.HTTPServer{
 					BaseURL: "http://example.com",
@@ -797,7 +801,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		emitSecurityWarningsWithArgs(&buf, []string{"--ignore-warnings"}, config.Context{
+		emitSecurityWarningsForTest(&buf, []string{"--ignore-warnings"}, config.Context{
 			ManagedService: &config.ManagedService{
 				HTTP: &config.HTTPServer{BaseURL: "http://example.com"},
 			},
@@ -811,7 +815,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		emitSecurityWarnings(&buf, config.Context{})
+		emitSecurityWarningsForTest(&buf, nil, config.Context{})
 		if buf.Len() != 0 {
 			t.Fatalf("expected no warnings for empty context, got %q", buf.String())
 		}
@@ -824,7 +828,7 @@ func TestBuildOrchestratorValidationAndErrors(t *testing.T) {
 	t.Run("nil_context_service", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := buildOrchestrator(context.Background(), nil, config.ContextSelection{})
+		_, _, err := buildOrchestrator(context.Background(), nil, config.ContextSelection{})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -838,7 +842,7 @@ func TestBuildOrchestratorValidationAndErrors(t *testing.T) {
 		expected := faults.NotFound("context not found", nil)
 		contextService := &fakeContextService{resolveErr: expected}
 
-		_, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "missing"})
+		_, _, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "missing"})
 		if !errors.Is(err, expected) {
 			t.Fatalf("expected propagated error %v, got %v", expected, err)
 		}
@@ -854,7 +858,7 @@ func TestBuildOrchestratorValidationAndErrors(t *testing.T) {
 			},
 		}
 
-		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "invalid"})
+		orch, _, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "invalid"})
 		if err != nil {
 			t.Fatalf("expected missing repository to be allowed, got error: %v", err)
 		}
@@ -888,7 +892,7 @@ func TestBuildOrchestratorValidationAndErrors(t *testing.T) {
 			},
 		}
 
-		_, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "invalid-managed-service"})
+		_, _, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "invalid-managed-service"})
 		if err == nil {
 			t.Fatal("expected error")
 		}
