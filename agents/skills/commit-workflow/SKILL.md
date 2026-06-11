@@ -17,14 +17,9 @@ Use ONLY when the user explicitly asks for commit help or commit creation after 
 3. Scan the diff for secrets (keys, tokens, private keys, `.env` values); stop and escalate before staging anything suspicious.
 4. If the repo is mid-rebase/merge or on a detached HEAD, describe it and ask before continuing.
 
-## Confirm
-1. Summarize the changed files and intent; flag separable changes that could be multiple commits.
-2. Ask "Do you want me to create a git commit for these changes?" and wait for an explicit yes/no. Do not stage or commit while waiting.
-
-## On yes
-1. Write a Conventional Commit message per `agents/reference/commit-instructions.md`.
-2. Propose these in order, each executed only after the host approval button: `git status --porcelain` → `git diff --stat` → `git add -A` → `git commit -m "<message>"` → `git show --stat`.
-3. Never `git push` unless the user explicitly asks.
-
-## On no
-Leave the working tree and index untouched; ask how they want to proceed.
+## Commit
+1. The user asking for commit help is the go-ahead — proceed autonomously, no separate yes/no gate. The git commands below are pre-authorized; run them directly rather than proposing them.
+2. Write a single-line Conventional Commit message per `agents/reference/commit-instructions.md`.
+3. Run in order: `git status --porcelain` → `git diff --stat` → `git add -A` → `git commit -m "<message>"` → `git show --stat`. Split separable concerns into multiple commits when the diff warrants it.
+4. Stop and escalate instead of committing only when a safety check trips (secrets in the diff, mid-rebase/merge or detached HEAD, unexpected large/binary files) or a required verification gate is blocked.
+5. Never `git push` unless the user explicitly asks; pushing reaches the remote and always needs a fresh go-ahead.
