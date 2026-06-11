@@ -142,6 +142,12 @@ Invariants:
 1. `Bytes` MUST be treated as opaque and MUST NOT assume UTF-8 text semantics.
 2. Structured CLI output MUST serialize this as a base64 wrapper object, not raw byte arrays.
 
+### Type: `resource.PayloadDescriptor`
+Describes how a payload is encoded. Fields: `PayloadType`, `MediaType`, `Extension`.
+
+### Type: `resource.Content`
+Canonical payload-plus-descriptor pair exchanged across orchestrator read/write boundaries. Fields: `Value` (`resource.Value`), `Descriptor` (`resource.PayloadDescriptor`). `resource.Value` is the bare payload element; `resource.Content` couples it with its descriptor so encoding survives transport.
+
 ### Type: `metadata.ResourceMetadata`
 Behavior directives for a resource or collection. Structure/precedence owned by metadata.md; this lists the contract groups.
 1. `selector.descendants`: persisted collection-selector scope; accepted only on collection metadata; MUST NOT be a mergeable resolved directive.
@@ -279,8 +285,8 @@ Required:
 3. `LocalAlias`: alias resolved for local storage.
 4. `RemoteID`: identity used for remote path resolution.
 5. `ResolvedRemotePath`: concrete remote operation path.
-6. `Metadata`: fully resolved `metadata.ResourceMetadata`.
-7. `Payload`: `resource.Value` content.
+6. `Payload`: `resource.Value` content.
+7. `PayloadDescriptor`: `resource.PayloadDescriptor` describing the payload type, media type, and extension.
 
 Invariants:
 1. Logical path MUST be absolute and normalized.
@@ -372,7 +378,7 @@ Responsibilities: read/write metadata; resolve layered metadata; render template
 
 Method families: `Get/Set/Unset`; `ResolveForPath`; `RenderOperationSpec`.
 
-Composition: composes `metadata.MetadataStore`, `metadata.MetadataResolver`, `metadata.OperationSpecRenderer`.
+Composition (required): composes `metadata.MetadataStore`, `metadata.MetadataResolver`, `metadata.OperationSpecRenderer`. Providers MAY additionally implement the optional capabilities `metadata.ResourceOperationSpecRenderer`, `metadata.DefaultsArtifactStore`, `metadata.CollectionChildrenResolver`, and `metadata.CollectionWildcardResolver`; callers discover these by type assertion, not through `MetadataService`.
 
 ### Interface: `metadata.MetadataStore`
 Responsibilities: read/persist metadata overrides by logical path; preserve raw persisted include placeholders for `resource.defaults`.
@@ -437,12 +443,12 @@ Method families: `DetectSecretCandidates`.
 ### Interface: `orchestrator.Orchestrator`
 Responsibilities: orchestrate repository-store, metadata, managed-service, and secret-provider workflows; apply desired state to remote; refresh local state from remote; compute explain/diff/list outputs.
 
-Method families:
-1. `GetLocal/GetRemote/Request/GetOpenAPISpec/Save/Apply(policy)/ApplyWithValue(policy)/Create/Update/Delete`.
+Method families (read/write payloads use `resource.Content`):
+1. `GetLocal/GetRemote/Request/GetOpenAPISpec/Save/Apply(policy)/ApplyWithContent(content, policy)/Create/Update/Delete`.
 2. `ListLocal(policy)/ListRemote(policy)`.
-3. `Explain/Diff/Template`.
+3. `Diff/Template`.
 
-Composition: composes `orchestrator.LocalReader`, `orchestrator.RemoteReader`, `orchestrator.OpenAPISpecReader`, `orchestrator.RequestExecutor`, `orchestrator.RepositoryWriter`, `orchestrator.ResourceMutator`, `orchestrator.DiffReader`, `orchestrator.TemplateRenderer`.
+Composition: composes `orchestrator.LocalReader`, `orchestrator.RemoteReader`, `orchestrator.OpenAPISpecReader`, `orchestrator.ManagedRequestExecutor`, `orchestrator.ResourceSaver`, `orchestrator.ResourceApplier`, `orchestrator.ResourceDiffer`, `orchestrator.TemplateRenderer`.
 
 ### Interface: `orchestrator.CompletionService`
 Responsibilities: provide read-only local/remote/OpenAPI capabilities for CLI path completion and template-path expansion.

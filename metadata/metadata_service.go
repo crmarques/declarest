@@ -51,6 +51,14 @@ type ResourceOperationSpecRenderer interface {
 	RenderOperationSpecForResource(ctx context.Context, resource ResourceOperationSpecInput, operation Operation) (OperationSpec, error)
 }
 
+// MetadataService is the required metadata contract every provider MUST satisfy:
+// metadata read/write (MetadataStore), layered resolution (MetadataResolver),
+// and operation-spec rendering (OperationSpecRenderer).
+//
+// Providers MAY additionally implement the optional capabilities below, which
+// callers discover by type assertion rather than through this interface:
+// ResourceOperationSpecRenderer, DefaultsArtifactStore,
+// CollectionChildrenResolver, and CollectionWildcardResolver.
 type MetadataService interface {
 	MetadataStore
 	MetadataResolver

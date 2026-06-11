@@ -81,6 +81,11 @@ type TemplateRenderer interface {
 	Template(ctx context.Context, logicalPath string, content resource.Content) (resource.Content, error)
 }
 
+// Orchestrator is the domain contract for resource orchestration. This package
+// owns only the interfaces and their shared types; the default implementation
+// lives in internal/orchestrator and is wired by internal/bootstrap. Callers
+// depend on this interface (or one of its narrower embedded interfaces), never
+// on the concrete implementation.
 type Orchestrator interface {
 	LocalReader
 	RemoteReader

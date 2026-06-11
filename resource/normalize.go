@@ -25,6 +25,14 @@ import (
 	"github.com/crmarques/declarest/faults"
 )
 
+// Normalize canonicalizes a payload into the deterministic value space the rest
+// of the system compares and serializes against. Numbers are canonicalized so
+// equivalent inputs from different sources collapse to one representation: every
+// signed/unsigned integer kind and integral json.Number becomes int64, every
+// float kind and non-integral json.Number becomes float64, and []byte becomes
+// resource.BinaryValue. Inputs that would lose precision (uint64 above MaxInt64,
+// big integers beyond int64, NaN/Inf) are rejected as ValidationError rather
+// than silently truncated. Maps and slices are normalized recursively.
 func Normalize(value Value) (Value, error) {
 	normalized, err := normalizeValue(value)
 	if err != nil {
