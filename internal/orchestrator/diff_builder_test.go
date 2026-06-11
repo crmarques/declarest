@@ -62,6 +62,43 @@ func TestBuildDiffEntriesUsesResourcePathAndJSONPointerPaths(t *testing.T) {
 	}
 }
 
+func TestBuildDiffEntriesTreatsIntegerAndFloatScalarsAsEqual(t *testing.T) {
+	t.Parallel()
+
+	items := buildDiffEntries(
+		"/customers/acme",
+		map[string]any{
+			"count": int64(1),
+			"ratio": float64(2),
+		},
+		map[string]any{
+			"count": float64(1),
+			"ratio": int64(2),
+		},
+	)
+
+	if len(items) != 0 {
+		t.Fatalf("expected no diff for numerically equal int/float scalars, got %#v", items)
+	}
+}
+
+func TestBuildDiffEntriesReportsRealNumericDifference(t *testing.T) {
+	t.Parallel()
+
+	items := buildDiffEntries(
+		"/customers/acme",
+		map[string]any{"count": int64(1)},
+		map[string]any{"count": float64(1.5)},
+	)
+
+	if len(items) != 1 {
+		t.Fatalf("expected one diff entry for a real numeric difference, got %#v", items)
+	}
+	if items[0].Path != "/count" || items[0].Operation != "replace" {
+		t.Fatalf("expected replace at /count, got %#v", items[0])
+	}
+}
+
 func TestBuildDiffEntriesRootReplaceUsesEmptyPointer(t *testing.T) {
 	t.Parallel()
 

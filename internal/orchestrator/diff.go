@@ -164,7 +164,30 @@ func collectDiffEntries(entries *[]resource.DiffEntry, logicalPath string, point
 		return
 	}
 
+	if scalarsNumericallyEqual(local, remote) {
+		return
+	}
+
 	appendDiffEntry(entries, logicalPath, pointer, "replace", local, remote)
+}
+
+// scalarsNumericallyEqual reports whether two normalized scalars represent the
+// same number across the int64/float64 split that resource.Normalize can
+// produce (for example a local YAML integer 1 stored as int64 versus a remote
+// JSON 1.0 decoded as float64). An integer is considered equal to its exact
+// float64 representation only.
+func scalarsNumericallyEqual(local any, remote any) bool {
+	if localInt, ok := local.(int64); ok {
+		if remoteFloat, ok := remote.(float64); ok {
+			return float64(localInt) == remoteFloat
+		}
+	}
+	if localFloat, ok := local.(float64); ok {
+		if remoteInt, ok := remote.(int64); ok {
+			return float64(remoteInt) == localFloat
+		}
+	}
+	return false
 }
 
 func appendDiffEntry(
