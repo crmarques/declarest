@@ -64,7 +64,9 @@ type SecretStoreFileEncryption struct {
 
 type SecretStoreFileSpec struct {
 	// +kubebuilder:validation:MinLength=1
-	Path       string                    `json:"path"`
+	Path string `json:"path"`
+	// Deprecated: ignored by the v1alpha1 operator. File secret stores resolve
+	// under the manager state volume at /var/lib/declarest.
 	Storage    StorageSpec               `json:"storage"`
 	Encryption SecretStoreFileEncryption `json:"encryption"`
 }

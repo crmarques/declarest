@@ -49,8 +49,10 @@ type GitRepositorySpec struct {
 	// +kubebuilder:validation:MinLength=1
 	URL string `json:"url"`
 	// +kubebuilder:default="main"
-	Branch  string                    `json:"branch,omitempty"`
-	Auth    ResourceRepositoryAuth    `json:"auth"`
+	Branch string                 `json:"branch,omitempty"`
+	Auth   ResourceRepositoryAuth `json:"auth"`
+	// Deprecated: use RepositoryWebhook resources. The embedded webhook
+	// configuration is retained for v1alpha1 compatibility only.
 	Webhook *GitRepositoryWebhookSpec `json:"webhook,omitempty"`
 }
 
@@ -73,7 +75,9 @@ type ResourceRepositorySpec struct {
 	Type         ResourceRepositoryType `json:"type"`
 	PollInterval metav1.Duration        `json:"pollInterval"`
 	Git          *GitRepositorySpec     `json:"git,omitempty"`
-	Storage      StorageSpec            `json:"storage"`
+	// Deprecated: ignored by the v1alpha1 operator. Repository state is stored
+	// on the manager state volume at /var/lib/declarest.
+	Storage StorageSpec `json:"storage"`
 }
 
 type ResourceRepositoryStatus struct {

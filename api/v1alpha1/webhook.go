@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/envref"
+	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -53,6 +54,13 @@ func (s *SyncPolicy) SetupWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
+// +kubebuilder:webhook:path=/validate-declarest-io-v1alpha1-repositorywebhook,mutating=false,failurePolicy=Fail,sideEffects=None,groups=declarest.io,resources=repositorywebhooks,verbs=create;update;delete,versions=v1alpha1,name=vrepositorywebhook-v1alpha1.declarest.io,admissionReviewVersions=v1
+func (r *RepositoryWebhook) SetupWebhookWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewWebhookManagedBy(mgr, r).
+		WithValidator(&repositoryWebhookValidator{Client: mgr.GetClient()}).
+		Complete()
+}
+
 // +kubebuilder:webhook:path=/validate-declarest-io-v1alpha1-metadatabundle,mutating=false,failurePolicy=Fail,sideEffects=None,groups=declarest.io,resources=metadatabundles,verbs=create;update;delete,versions=v1alpha1,name=vmetadatabundle-v1alpha1.declarest.io,admissionReviewVersions=v1
 func (b *MetadataBundle) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, b).
@@ -77,7 +85,7 @@ func (v *resourceRepositoryValidator) ValidateCreate(_ context.Context, obj *Res
 	candidate := obj.DeepCopy()
 	envref.ExpandExactEnvPlaceholdersInPlace(&candidate.Spec)
 	candidate.Default()
-	return nil, candidate.ValidateSpec()
+	return resourceRepositoryWarnings(candidate), candidate.ValidateSpec()
 }
 
 func (v *resourceRepositoryValidator) ValidateUpdate(ctx context.Context, _ *ResourceRepository, newObj *ResourceRepository) (admission.Warnings, error) {
@@ -102,7 +110,7 @@ func (v *managedServiceValidator) ValidateCreate(ctx context.Context, obj *Manag
 	envref.ExpandExactEnvPlaceholdersInPlace(&candidate.Spec)
 	candidate.Default()
 	if err := candidate.ValidateSpec(); err != nil {
-		return nil, err
+		return managedServiceWarnings(candidate), err
 	}
 	if ref := candidate.Spec.Metadata.BundleRef; ref != nil && strings.TrimSpace(ref.Name) != "" {
 		bundle := &MetadataBundle{}
@@ -114,7 +122,7 @@ func (v *managedServiceValidator) ValidateCreate(ctx context.Context, obj *Manag
 			return nil, fmt.Errorf("spec.metadata.bundleRef %q is being deleted", ref.Name)
 		}
 	}
-	return nil, nil
+	return managedServiceWarnings(candidate), nil
 }
 
 func (v *managedServiceValidator) ValidateUpdate(ctx context.Context, _ *ManagedService, newObj *ManagedService) (admission.Warnings, error) {
@@ -146,43 +154,40 @@ func (v *metadataBundleValidator) ValidateUpdate(ctx context.Context, _ *Metadat
 }
 
 func (v *metadataBundleValidator) ValidateDelete(ctx context.Context, obj *MetadataBundle) (admission.Warnings, error) {
-	// Delete-gate via controller finalizer — webhook cannot return pending.
-	// Surface a warning when dependents still reference the bundle.
-	var warnings admission.Warnings
+	var refs []string
 	services := &ManagedServiceList{}
-	if err := v.Client.List(ctx, services, client.InNamespace(obj.Namespace)); err == nil {
-		for idx := range services.Items {
-			svc := &services.Items[idx]
-			if svc.DeletionTimestamp != nil {
-				continue
-			}
-			if ref := svc.Spec.Metadata.BundleRef; ref != nil && strings.TrimSpace(ref.Name) == obj.Name {
-				warnings = append(warnings, fmt.Sprintf(
-					"MetadataBundle %q is still referenced by ManagedService %q; deletion will be blocked by the controller finalizer until the reference is removed",
-					obj.Name, svc.Name,
-				))
-			}
+	if err := v.Client.List(ctx, services, client.InNamespace(obj.Namespace)); err != nil {
+		return nil, fmt.Errorf("unable to verify ManagedService references for MetadataBundle %q: %w", obj.Name, err)
+	}
+	for idx := range services.Items {
+		svc := &services.Items[idx]
+		if svc.DeletionTimestamp != nil {
+			continue
+		}
+		if ref := svc.Spec.Metadata.BundleRef; ref != nil && strings.TrimSpace(ref.Name) == obj.Name {
+			refs = append(refs, "ManagedService/"+svc.Name)
 		}
 	}
 	generators := &CRDGeneratorList{}
-	if err := v.Client.List(ctx, generators, client.InNamespace(obj.Namespace)); err == nil {
-		for idx := range generators.Items {
-			gen := &generators.Items[idx]
-			if gen.DeletionTimestamp != nil {
-				continue
-			}
-			for _, version := range gen.Spec.Versions {
-				if strings.TrimSpace(version.MetadataBundleRef.Name) == obj.Name {
-					warnings = append(warnings, fmt.Sprintf(
-						"MetadataBundle %q is still referenced by CRDGenerator %q (version %q); deletion will be blocked by the controller finalizer until the reference is removed",
-						obj.Name, gen.Name, version.Name,
-					))
-					break
-				}
+	if err := v.Client.List(ctx, generators, client.InNamespace(obj.Namespace)); err != nil {
+		return nil, fmt.Errorf("unable to verify CRDGenerator references for MetadataBundle %q: %w", obj.Name, err)
+	}
+	for idx := range generators.Items {
+		gen := &generators.Items[idx]
+		if gen.DeletionTimestamp != nil {
+			continue
+		}
+		for _, version := range gen.Spec.Versions {
+			if strings.TrimSpace(version.MetadataBundleRef.Name) == obj.Name {
+				refs = append(refs, "CRDGenerator/"+gen.Name+":"+version.Name)
+				break
 			}
 		}
 	}
-	return warnings, nil
+	if len(refs) > 0 {
+		return nil, fmt.Errorf("cannot delete MetadataBundle %q: referenced by %s", obj.Name, strings.Join(refs, ", "))
+	}
+	return nil, nil
 }
 
 // --- CRDGenerator Validator ---
@@ -212,8 +217,7 @@ func (v *crdGeneratorValidator) ValidateDelete(_ context.Context, _ *CRDGenerato
 func (v *crdGeneratorValidator) validateNoGroupKindConflict(ctx context.Context, candidate *CRDGenerator) error {
 	generators := &CRDGeneratorList{}
 	if err := v.Client.List(ctx, generators); err != nil {
-		// Allow operation but the controller will also guard via Conflicting condition.
-		return nil
+		return fmt.Errorf("unable to verify CRDGenerator group/kind conflicts: %w", err)
 	}
 	for idx := range generators.Items {
 		existing := &generators.Items[idx]
@@ -246,7 +250,7 @@ type secretStoreValidator struct {
 func (v *secretStoreValidator) ValidateCreate(_ context.Context, obj *SecretStore) (admission.Warnings, error) {
 	candidate := obj.DeepCopy()
 	envref.ExpandExactEnvPlaceholdersInPlace(&candidate.Spec)
-	return nil, candidate.ValidateSpec()
+	return secretStoreWarnings(candidate), candidate.ValidateSpec()
 }
 
 func (v *secretStoreValidator) ValidateUpdate(ctx context.Context, _ *SecretStore, newObj *SecretStore) (admission.Warnings, error) {
@@ -287,8 +291,7 @@ func (v *syncPolicyValidator) ValidateDelete(context.Context, *SyncPolicy) (admi
 func (v *syncPolicyValidator) validateNoOverlap(ctx context.Context, syncPolicy *SyncPolicy) (admission.Warnings, error) {
 	policies := &SyncPolicyList{}
 	if err := v.Client.List(ctx, policies, client.InNamespace(syncPolicy.Namespace)); err != nil {
-		// If we cannot list, allow the operation but warn.
-		return admission.Warnings{"unable to verify SyncPolicy overlap, proceeding"}, nil
+		return nil, fmt.Errorf("unable to verify SyncPolicy overlap: %w", err)
 	}
 	for idx := range policies.Items {
 		item := &policies.Items[idx]
@@ -309,6 +312,64 @@ func (v *syncPolicyValidator) validateNoOverlap(ctx context.Context, syncPolicy 
 			)
 		}
 	}
+	generators := &CRDGeneratorList{}
+	if err := v.Client.List(ctx, generators, client.InNamespace(syncPolicy.Namespace)); err != nil {
+		return nil, fmt.Errorf("unable to verify CRDGenerator overlap: %w", err)
+	}
+	for idx := range generators.Items {
+		generator := &generators.Items[idx]
+		if generator.DeletionTimestamp != nil {
+			continue
+		}
+		for _, version := range generator.Spec.Versions {
+			if HasPathOverlap(version.CollectionPath, syncPolicy.Spec.Source.Path) {
+				return nil, fmt.Errorf(
+					"sync policy scope overlaps with CRDGenerator %s/%s version %q (%q)",
+					generator.Namespace,
+					generator.Name,
+					version.Name,
+					NormalizeOverlapPath(version.CollectionPath),
+				)
+			}
+		}
+	}
+	return nil, nil
+}
+
+// --- RepositoryWebhook Validator ---
+
+type repositoryWebhookValidator struct {
+	Client client.Reader
+}
+
+func (v *repositoryWebhookValidator) ValidateCreate(ctx context.Context, obj *RepositoryWebhook) (admission.Warnings, error) {
+	candidate := obj.DeepCopy()
+	candidate.Default()
+	if err := candidate.ValidateSpec(); err != nil {
+		return nil, err
+	}
+	repo := &ResourceRepository{}
+	if err := v.Client.Get(ctx, client.ObjectKey{Namespace: candidate.Namespace, Name: candidate.Spec.RepositoryRef.Name}, repo); err != nil {
+		return nil, fmt.Errorf("spec.repositoryRef %q: %w", candidate.Spec.RepositoryRef.Name, err)
+	}
+	if repo.DeletionTimestamp != nil {
+		return nil, fmt.Errorf("spec.repositoryRef %q is being deleted", candidate.Spec.RepositoryRef.Name)
+	}
+	secret := &corev1.Secret{}
+	if err := v.Client.Get(ctx, client.ObjectKey{Namespace: candidate.Namespace, Name: candidate.Spec.SecretRef.Name}, secret); err != nil {
+		return nil, fmt.Errorf("spec.secretRef %q: %w", candidate.Spec.SecretRef.Name, err)
+	}
+	if _, ok := secret.Data[candidate.Spec.SecretRef.Key]; !ok {
+		return nil, fmt.Errorf("spec.secretRef.key %q is not present in Secret %q", candidate.Spec.SecretRef.Key, candidate.Spec.SecretRef.Name)
+	}
+	return repositoryWebhookWarnings(candidate), nil
+}
+
+func (v *repositoryWebhookValidator) ValidateUpdate(ctx context.Context, _ *RepositoryWebhook, newObj *RepositoryWebhook) (admission.Warnings, error) {
+	return v.ValidateCreate(ctx, newObj)
+}
+
+func (v *repositoryWebhookValidator) ValidateDelete(context.Context, *RepositoryWebhook) (admission.Warnings, error) {
 	return nil, nil
 }
 
@@ -327,8 +388,7 @@ func checkDependencyRef(
 ) (admission.Warnings, error) {
 	policies := &SyncPolicyList{}
 	if err := reader.List(ctx, policies, client.InNamespace(namespace)); err != nil {
-		// If we cannot verify, allow deletion but warn.
-		return admission.Warnings{fmt.Sprintf("unable to verify SyncPolicy references for %s %q, deletion allowed", kind, name)}, nil
+		return nil, fmt.Errorf("unable to verify SyncPolicy references for %s %q: %w", kind, name, err)
 	}
 	var refs []string
 	for idx := range policies.Items {
@@ -351,4 +411,69 @@ func checkDependencyRef(
 		)
 	}
 	return nil, nil
+}
+
+func resourceRepositoryWarnings(repo *ResourceRepository) admission.Warnings {
+	if repo == nil || repo.Spec.Git == nil {
+		return nil
+	}
+	var warnings admission.Warnings
+	if hasHTTPURL(repo.Spec.Git.URL) {
+		warnings = append(warnings, "spec.git.url uses insecure HTTP; use HTTPS or SSH unless cluster policy explicitly permits it")
+	}
+	if repo.Spec.Git.Auth.SSHSecretRef != nil && repo.Spec.Git.Auth.SSHSecretRef.InsecureIgnoreHostKey {
+		warnings = append(warnings, "spec.git.auth.sshSecretRef.insecureIgnoreHostKey disables SSH host key verification")
+	}
+	if repo.Spec.Git.Webhook != nil {
+		warnings = append(warnings, "spec.git.webhook is deprecated; use RepositoryWebhook resources")
+	}
+	return warnings
+}
+
+func managedServiceWarnings(service *ManagedService) admission.Warnings {
+	if service == nil {
+		return nil
+	}
+	var warnings admission.Warnings
+	if hasHTTPURL(service.Spec.HTTP.BaseURL) {
+		warnings = append(warnings, "spec.http.baseURL uses insecure HTTP; use HTTPS unless cluster policy explicitly permits it")
+	}
+	if hasHTTPURL(service.Spec.OpenAPI.URL) {
+		warnings = append(warnings, "spec.openapi.url uses insecure HTTP; use HTTPS unless cluster policy explicitly permits it")
+	}
+	if hasHTTPURL(service.Spec.Metadata.URL) {
+		warnings = append(warnings, "spec.metadata.url uses insecure HTTP; use HTTPS unless cluster policy explicitly permits it")
+	}
+	if service.Spec.HTTP.TLS != nil && service.Spec.HTTP.TLS.InsecureSkipVerify {
+		warnings = append(warnings, "spec.http.tls.insecureSkipVerify disables TLS certificate verification")
+	}
+	return warnings
+}
+
+func secretStoreWarnings(store *SecretStore) admission.Warnings {
+	if store == nil || store.Spec.Vault == nil {
+		return nil
+	}
+	var warnings admission.Warnings
+	if hasHTTPURL(store.Spec.Vault.Address) {
+		warnings = append(warnings, "spec.vault.address uses insecure HTTP; use HTTPS unless cluster policy explicitly permits it")
+	}
+	if store.Spec.Vault.TLS != nil && store.Spec.Vault.TLS.InsecureSkipVerify {
+		warnings = append(warnings, "spec.vault.tls.insecureSkipVerify disables TLS certificate verification")
+	}
+	return warnings
+}
+
+func repositoryWebhookWarnings(webhook *RepositoryWebhook) admission.Warnings {
+	if webhook == nil {
+		return nil
+	}
+	if len(webhook.Spec.Events) == 0 {
+		return admission.Warnings{"spec.events is defaulted to push; set events explicitly when ping deliveries should be accepted"}
+	}
+	return nil
+}
+
+func hasHTTPURL(raw string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(raw)), "http://")
 }

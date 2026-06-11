@@ -42,6 +42,11 @@ const (
 	// so the operator ClusterRole aggregates them via matchLabels.
 	AggregateToOperatorLabel      = "declarest.io/aggregate-to-operator"
 	AggregateToOperatorLabelValue = "true"
+
+	GeneratedResourceManagedServiceAnnotation = "declarest.io/managed-service"
+	GeneratedResourceCollectionPathAnnotation = "declarest.io/collection-path"
+	GeneratedResourceLogicalPathAnnotation    = "declarest.io/logical-path"
+	GeneratedResourceRemoteIDAnnotation       = "declarest.io/remote-id"
 )
 
 var (
