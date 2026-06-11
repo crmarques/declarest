@@ -25,6 +25,16 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// requestThrottleGate bounds outbound request concurrency and rate. Each field
+// is nil when its corresponding limit is unset:
+//
+//   - inFlight is a semaphore capping concurrent in-flight requests.
+//   - queue is a bounded waiting room in front of inFlight. A queue slot is held
+//     only while waiting for an inFlight slot and released as soon as one is
+//     acquired, so queue is meaningful only when inFlight is also set; that
+//     precondition is enforced by buildRequestThrottle. A full queue fails fast
+//     with a ConflictError instead of blocking.
+//   - limiter caps the steady-state requests-per-second rate.
 type requestThrottleGate struct {
 	limiter  *rate.Limiter
 	inFlight chan struct{}

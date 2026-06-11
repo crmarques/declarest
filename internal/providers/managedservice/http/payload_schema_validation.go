@@ -28,6 +28,12 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
+// maxSchemaDepth bounds OpenAPI schema and $ref recursion so cyclic or
+// pathologically nested schemas terminate. Every schema-walking helper shares
+// it so field-name gathering never truncates earlier than the validation
+// recursion it feeds.
+const maxSchemaDepth = 96
+
 func (g *Client) validateOperationSchemaRef(
 	ctx context.Context,
 	payload resource.Value,
@@ -249,7 +255,7 @@ func resolveOpenAPIValueRef(
 	visited map[string]struct{},
 	depth int,
 ) (any, bool) {
-	if depth > 64 {
+	if depth > maxSchemaDepth {
 		return nil, false
 	}
 
@@ -320,7 +326,7 @@ func validateValueAgainstOpenAPISchema(
 	extraKnownProperties map[string]struct{},
 	depth int,
 ) error {
-	if depth > 96 {
+	if depth > maxSchemaDepth {
 		return fmt.Errorf("%s schema nesting exceeds supported depth", location)
 	}
 
@@ -361,7 +367,7 @@ func resolveSchemaValue(
 	visitedRefs map[string]struct{},
 	depth int,
 ) (map[string]any, error) {
-	if depth > 96 {
+	if depth > maxSchemaDepth {
 		return nil, fmt.Errorf("schema reference depth exceeded")
 	}
 
@@ -404,7 +410,7 @@ func topLevelSchemaObjectFieldNames(
 	visitedRefs map[string]struct{},
 	depth int,
 ) map[string]struct{} {
-	if depth > 24 {
+	if depth > maxSchemaDepth {
 		return nil
 	}
 
