@@ -19,6 +19,7 @@ import (
 	"io"
 	"strings"
 
+	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
 	"github.com/crmarques/declarest/internal/promptauth"
 	"github.com/spf13/cobra"

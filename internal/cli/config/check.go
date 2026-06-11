@@ -22,8 +22,10 @@ import (
 	"os"
 	"strings"
 
+	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
+	managedservicedomain "github.com/crmarques/declarest/managedservice"
 	"github.com/spf13/cobra"
 )
 
