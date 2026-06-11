@@ -1,117 +1,59 @@
 # Contexts and Configuration
 
 ## Purpose
-Define the canonical context catalog schema, file location, validation rules, credential indirection model, and context-resolution behavior.
-
-## In Scope
-1. YAML context catalog structure.
-2. Top-level reusable credentials and `credentialsRef` injection.
-3. Validation and one-of constraints.
-4. Catalog path resolution, runtime overrides, and environment placeholder expansion.
-
-## Out of Scope
-1. Operator CRD wire shapes.
-2. Managed-service transport implementation details.
-3. Secret payload values stored in repository resources.
+Define the context catalog YAML schema, credential indirection, proxy model, `${ENV_VAR}` expansion, metadata-source selection, and catalog path/precedence. Config type field-lists are owned by `agents/reference/interfaces.md`; this file owns their wire schema, semantics, and validation.
 
 ## Normative Rules
-1. Context catalogs MUST be stored at `~/.declarest/configs/contexts.yaml` by default.
-2. Environment override `DECLAREST_CONTEXTS_FILE` MAY replace the default path.
-3. Persisted YAML keys MUST use camelCase.
-4. Catalog readers MUST reject legacy aliases and any other unknown YAML keys.
-5. `contexts` MUST be a list of full context objects.
-6. `currentContext` MUST reference an existing context when contexts are present, and MUST be empty when `contexts` is empty.
-7. Context names MUST be unique and non-empty.
-8. Every context MUST define at least one of `repository` or `managedService`.
-9. Validation MUST fail fast when one-of blocks are missing or ambiguous.
-10. Config precedence MUST be: runtime flags, environment placeholders, persisted context values, engine defaults.
-11. Exact-match string values in the form `${ENV_VAR}` MUST resolve from the process environment before runtime validation, defaulting, and active-context resolution, while persisted YAML MUST keep the placeholder text unchanged.
-12. `credentials` MAY be omitted; when present, credential names MUST be unique.
-13. Each `credentials[*]` entry MUST define `name`, `username`, and `password`.
-14. Each credential attribute (`username` or `password`) MUST be either a non-empty string or an object with `prompt: true`; `persistInSession` MAY be set only on the prompt object.
-15. `persistInSession: true` MUST reuse prompted values across later `declarest` commands only when the shell session exported `DECLAREST_PROMPT_AUTH_SESSION_ID` (for example via `declarest context session-hook bash|zsh`) and `XDG_RUNTIME_DIR` is available.
-16. When `persistInSession: true` is set, new prompt-auth cache files MUST be written only under `XDG_RUNTIME_DIR/declarest/prompt-auth/` and MUST NOT fall back to `~/.declarest/sessions`.
-17. When a component defines `credentialsRef`, runtime MUST inject the referenced credential object into that location while omitting the credential `name` field.
-18. Referenced prompt-backed credential attributes MUST prompt only when the owning component first needs that attribute at runtime.
-19. Non-interactive execution MUST fail when a required prompt-backed credential attribute has no cached session value.
-20. `context clean --credentials-in-session` MUST remove the detected prompt-auth session cache file under `XDG_RUNTIME_DIR/declarest/prompt-auth/` and any matching legacy `~/.declarest/sessions` cache file so later `declarest` commands in that shell session no longer reuse those cached values.
-21. Persisted context YAML MUST use `basic.credentialsRef` for reusable basic-auth credentials; inline persisted username/password pairs in those context auth blocks are invalid.
-22. Proxy blocks (`managedService.http.proxy`, `repository.git.remote.proxy`, `secretStore.vault.proxy`, `metadata.proxy`) MAY define any subset of `http`, `https`, `noProxy`, and `auth`; an empty `proxy: {}` block explicitly disables inherited or environment proxy settings for that component.
-23. Proxy auth, when provided, MUST define `basic.credentialsRef`.
-24. Proxy precedence MUST be: process environment (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, plus lowercase aliases), then component-local proxy fields overriding only the fields they define, then shared-context inheritance where the first configured concrete proxy becomes the default for components that do not define their own proxy block.
-25. `metadata` MUST define at most one source: `baseDir`, `bundle`, or `bundleFile`. `metadata.bundle` accepts four canonical reference forms (in priority order): `oci://<registry>/<repository>:<tag|@digest>` (OCI registry artifact — default for published bundles), `<name>:<version>` (GitHub-release shorthand), `http`/`https` URL to a `.tar.gz`, or an absolute path to a local `.tar.gz` archive.
-26. `metadata.baseDir` MUST default to the selected repository baseDir when all metadata sources are unset.
-27. Persisted context YAML MUST omit `metadata.baseDir` when it equals repository baseDir.
-28. When `managedService.http.openapi` is empty and `metadata.bundle` or `metadata.bundleFile` is configured, startup MUST resolve OpenAPI from bundle hints in order: `bundle.yaml declarest.openapi`, then peer `openapi.yaml` at the bundle root. The persisted `bundle.yaml` shape and its strict-decode plus compatibility-gate rules are owned by `agents/reference/metadata-bundle.md`.
-29. `repository.git.remote.autoSync` MAY be omitted; when omitted, repository-mutation commands MUST treat it as enabled and only an explicit `false` disables automatic push behavior.
-30. `managedService.http.healthCheck` MAY be configured as a relative path or an absolute `http|https` URL, and it MUST NOT include query parameters.
-31. Changes to the canonical persisted context or catalog wire shape MUST update `schemas/context.schema.json` and `schemas/contexts.schema.json` in the same change.
 
-## Data Contracts
+### Catalog location and shape
+1. Context catalogs MUST be stored at `~/.declarest/configs/contexts.yaml` by default; `DECLAREST_CONTEXTS_FILE` MAY override the path.
+2. Persisted YAML keys MUST use camelCase. Readers MUST reject legacy aliases and any unknown YAML key.
+3. `contexts` MUST be a list of full context objects with unique, non-empty `name` values.
+4. `currentContext` MUST reference an existing context when `contexts` is non-empty, and MUST be empty when `contexts` is empty.
+5. Each context MUST define at least one of `repository` or `managedService`, and MAY define `secretStore`, `metadata`, `preferences`. The catalog MAY define top-level `defaultEditor` and `credentials`.
+6. Validation MUST fail fast when any one-of block (below) is missing or ambiguous.
+7. Changes to the persisted context or catalog wire shape MUST update `schemas/context.schema.json` and `schemas/contexts.schema.json` in the same change.
 
-### Catalog fields
-1. `contexts`: list of context objects.
-2. `currentContext`: active context name.
-3. `defaultEditor`: optional editor command used by editor-opening CLI workflows.
-4. `credentials`: optional list of reusable named credentials.
+### One-of constraints
+8. `repository` MUST set exactly one of `git` or `filesystem`.
+9. `repository.git.remote.auth`, when configured, MUST set exactly one of `basic`, `ssh`, `accessKey`.
+10. `managedService` MUST define `http`, and `http.url` is required.
+11. `managedService.http.auth` MUST set exactly one of `oauth2`, `basic`, `customHeaders`. Each `customHeaders[*]` MUST define `header` and `value`; `prefix` is optional.
+12. `secretStore` MUST set exactly one of `file` or `vault`. `secretStore.file` MUST set exactly one of `key`, `keyFile`, `passphrase`, `passphraseFile`. `secretStore.vault.auth` MUST set exactly one of `token`, `password`, `appRole`.
 
-### Credential contract
-1. `credentials[*].name` identifies the reusable credential.
-2. `credentials[*].username` and `credentials[*].password` accept either a literal string or:
-```yaml
-prompt: true
-persistInSession: true
-```
-3. `persistInSession` MAY be omitted and MUST default to `false`.
-4. `persistInSession: true` SHOULD be paired with `eval "$(declarest context session-hook bash)"` or `eval "$(declarest context session-hook zsh)"` when cross-command reuse inside one shell session is desired.
-5. `credentialsRef` is a placeholder object:
-```yaml
-credentialsRef:
-  name: shared-name
-```
-6. Resolved components MUST behave as though the referenced credential content was inserted at that location, minus the credential `name`.
+### Credentials and credentialsRef
+13. `credentials` MAY be omitted; when present, credential names MUST be unique, and each entry MUST define `name`, `username`, `password`.
+14. Each credential attribute (`username`/`password`) MUST be either a non-empty string or an object `{prompt: true}`; `prompt: false` on such an object is invalid. `persistInSession` MAY be set only on the prompt object and defaults to `false`.
+15. All persisted basic-auth (`repository.git.remote.auth.basic`, `managedService.http.auth.basic`, `secretStore.vault.auth.password`, any proxy `auth.basic`) MUST use `credentialsRef: {name: <catalog credential>}`; inline username/password pairs in those blocks are invalid.
+16. `credentialsRef.name` MUST match a catalog credential, else validation fails.
+17. When a component defines `credentialsRef`, runtime MUST inject the referenced credential object at that location, omitting the credential `name` field.
+18. `secretStore.vault.auth.password.mount` is optional and defaults to `userpass` at runtime.
 
-### Per-context fields
-1. `name`.
-2. optional `repository`.
-3. optional `managedService`.
-4. optional `secretStore`.
-5. optional `metadata`; `metadata.proxy` participates in the shared proxy behavior.
-6. optional `preferences`.
+### Prompt-backed credentials and session cache
+19. A referenced prompt-backed attribute MUST prompt only when the owning component first needs it at runtime.
+20. Non-interactive execution MUST fail when a required prompt-backed attribute has no cached session value.
+21. `persistInSession: true` MUST reuse prompted values across later `declarest` commands only when the shell exported `DECLAREST_PROMPT_AUTH_SESSION_ID` (e.g. via `declarest context session-hook bash|zsh`) and `XDG_RUNTIME_DIR` is available. When set, new cache files MUST be written only under `XDG_RUNTIME_DIR/declarest/prompt-auth/` and MUST NOT fall back to `~/.declarest/sessions`.
+22. `context clean --credentials-in-session` MUST remove the detected `XDG_RUNTIME_DIR/declarest/prompt-auth/` cache file and any matching legacy `~/.declarest/sessions` cache file so later commands in that shell no longer reuse them.
 
-### Repository contract
-1. Exactly one of `repository.git` or `repository.filesystem` MUST be set.
-2. `repository.git.remote.auth` MUST define exactly one of `basic`, `ssh`, or `accessKey` when configured.
-3. `repository.git.remote.auth.basic` MUST define `credentialsRef`.
-4. `repository.git.remote.proxy` inherits the shared proxy when unset and an empty block disables the inherited proxy for git operations.
+### Proxy model
+23. Proxy blocks (`managedService.http.proxy`, `repository.git.remote.proxy`, `secretStore.vault.proxy`, `metadata.proxy`) MAY define any subset of `http`, `https`, `noProxy`, `auth`. An empty `proxy: {}` MUST explicitly disable inherited and environment proxy for that component only.
+24. Proxy `auth`, when present, MUST define `basic.credentialsRef`.
+25. Proxy precedence MUST be: process environment (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, plus lowercase aliases), then component-local proxy fields overriding only the fields they define, then shared-context inheritance where the first configured concrete proxy becomes the default for components that do not define their own proxy block.
 
-### Managed-service contract
-1. `managedService` MUST define `http`.
-2. `managedService.http.url` is required.
-3. `managedService.http.auth` MUST define exactly one of `oauth2`, `basic`, or `customHeaders`.
-4. `managedService.http.auth.basic` MUST define `credentialsRef`.
-5. `managedService.http.auth.customHeaders[*]` entries MUST define `header` and `value`; `prefix` is optional.
-6. `managedService.http.proxy` follows the shared proxy contract and uses `http` / `https` keys.
-7. `managedService.http.healthCheck`, when omitted, defaults probe commands to the normalized `managedService.http.url` path.
+### Metadata source
+26. `metadata` MUST define at most one of `baseDir`, `bundle`, `bundleFile`.
+27. `metadata.bundle` accepts four reference forms, in priority order: `oci://<registry>/<repository>:<tag|@digest>` (default for published bundles), `<name>:<version>` (GitHub-release shorthand), `http`/`https` URL to a `.tar.gz`, or an absolute path to a local `.tar.gz`.
+28. `metadata.baseDir` MUST default to the selected repository baseDir when all metadata sources are unset, and MUST be omitted from persisted YAML when it equals the repository baseDir.
+29. When `managedService.http.openapi` is empty and `metadata.bundle`/`metadata.bundleFile` is set, startup MUST resolve OpenAPI from bundle hints in order: `bundle.yaml declarest.openapi`, then peer `openapi.yaml` at the bundle root. `bundle.yaml` shape, strict decode, and compatibility gates are owned by `agents/reference/metadata-bundle.md`.
 
-### Secret-store contract
-1. Exactly one of `secretStore.file` or `secretStore.vault` MUST be set.
-2. `secretStore.file` MUST define exactly one of `key`, `keyFile`, `passphrase`, `passphraseFile`.
-3. `secretStore.vault.auth` MUST define exactly one of `token`, `password`, or `appRole`.
-4. `secretStore.vault.auth.password` MUST define `credentialsRef`; `mount` is optional and defaults to `userpass` at runtime.
-5. `secretStore.vault.proxy` follows the shared proxy contract.
+### Other component rules
+30. `repository.git.remote.autoSync` MAY be omitted and MUST be treated as enabled; only an explicit `false` disables automatic push.
+31. `managedService.http.healthCheck` MAY be a relative path or an absolute `http|https` URL and MUST NOT include query parameters; when omitted it defaults to the normalized `managedService.http.url` path.
 
-### Runtime override keys
-1. `repository.git.local.baseDir`
-2. `repository.filesystem.baseDir`
-3. `managedService.http.url`
-4. `managedService.http.healthCheck`
-5. `managedService.http.proxy.http`
-6. `managedService.http.proxy.https`
-7. `managedService.http.proxy.noProxy`
-8. `metadata.baseDir`
-9. `metadata.bundle`
-10. `metadata.bundleFile`
+### Resolution and precedence
+32. Config precedence MUST be: runtime flags, environment placeholders, persisted context values, engine defaults.
+33. Exact-match string values of the form `${ENV_VAR}` MUST resolve from the process environment before validation, defaulting, and active-context resolution; persisted YAML MUST keep the placeholder text unchanged. A required placeholder resolving to empty/invalid content MUST fail.
+34. Runtime overrides MUST be limited to these keys; any other override key MUST fail: `repository.git.local.baseDir`, `repository.filesystem.baseDir`, `managedService.http.url`, `managedService.http.healthCheck`, `managedService.http.proxy.http`, `managedService.http.proxy.https`, `managedService.http.proxy.noProxy`, `metadata.baseDir`, `metadata.bundle`, `metadata.bundleFile`. Overrides MUST NOT mutate the catalog file.
 
 ## Canonical YAML Template
 ```yaml
@@ -121,83 +63,51 @@ credentials:
   - name: shared
     username: change-me
     password: change-me
-  - name: prompt-shared
-    username:
-      prompt: true
-      persistInSession: true
-    password:
-      prompt: true
-      persistInSession: true
+  - name: prompt-shared            # username and/or password may prompt independently
+    username: { prompt: true, persistInSession: true }
+    password: { prompt: true }
 
 contexts:
   - name: dev
     repository:
       git:
-        local:
-          baseDir: /path/to/repo
+        local: { baseDir: /path/to/repo }
         remote:
           url: https://example.com/org/repo.git
           branch: main
           provider: github
-          auth:
-            basic:
-              credentialsRef:
-                name: shared
-          proxy:
+          auth: { basic: { credentialsRef: { name: shared } } }
+          proxy:                   # empty `proxy: {}` disables inherited/env proxy
             http: http://proxy.example.com:3128
             https: http://proxy.example.com:3128
             noProxy: localhost,127.0.0.1
-            auth:
-              basic:
-                credentialsRef:
-                  name: prompt-shared
-
+            auth: { basic: { credentialsRef: { name: prompt-shared } } }
     managedService:
       http:
         url: https://example.com/api
         healthCheck: /health
-        auth:
-          basic:
-            credentialsRef:
-              name: shared
-
+        auth: { basic: { credentialsRef: { name: shared } } }
     secretStore:
       vault:
         address: https://vault.example.com
         auth:
           password:
-            credentialsRef:
-              name: prompt-shared
+            credentialsRef: { name: prompt-shared }
             mount: userpass
-
     metadata:
       bundle: keycloak-bundle:0.0.1
 ```
 
 ## Failure Modes
-1. Duplicate context names.
-2. Duplicate credential names.
-3. Unknown YAML keys or legacy aliases.
-4. Missing or ambiguous one-of blocks.
-5. `credentialsRef.name` does not match any catalog credential.
-6. A credential attribute uses a prompt object with `prompt: false`.
-7. A required credential attribute resolves to empty.
-8. `managedService.http.healthCheck` is invalid or includes query parameters.
-9. Runtime override key is not in the supported override-key list.
-10. A required `${ENV_VAR}` placeholder resolves to empty or invalid content.
-
-## Edge Cases
-1. Empty catalog with `contexts: []` and `currentContext: ""` is valid.
-2. Repository-only contexts remain valid and still default `metadata.baseDir` from the repository.
-3. A context may define only `managedService.http.proxy.noProxy` and inherit `http` / `https` from environment or the shared proxy.
-4. `proxy: {}` disables inherited and environment proxy settings for that component only.
-5. One credential may be reused by multiple components through different `credentialsRef` locations.
-6. One credential may prompt for `username` while keeping a literal `password`, or the reverse.
+1. Duplicate context names; duplicate credential names; unknown key or legacy alias.
+2. Missing/ambiguous one-of block; `credentialsRef.name` matches no catalog credential; prompt object with `prompt: false`.
+3. Required credential attribute or required `${ENV_VAR}` resolves to empty.
+4. `healthCheck` invalid or carries query parameters; runtime override key not in the supported list.
 
 ## Examples
-1. `ResolveContext({Name: "", Overrides: nil})` loads the context named by `currentContext`.
-2. `ResolveContext({Name: "dev", Overrides: {"managedService.http.url":"https://staging.example.com"}})` applies the runtime override without mutating the catalog file.
-3. A top-level credential named `prompt-shared` referenced by both `managedService.http.auth.basic` and `repository.git.remote.proxy.auth.basic` prompts each component only when first used.
-4. `Validate` rejects a context where `managedService.http.auth.basic.credentialsRef.name` points to a missing catalog credential.
-5. `declarest context clean --credentials-in-session` clears prompt-backed credential session cache files even when no current context is configured.
-6. When `XDG_RUNTIME_DIR` is unavailable, `persistInSession: true` still allows reuse inside one running `declarest` process but later commands prompt again because no cross-command cache file is created.
+1. `ResolveContext({Name:"", Overrides:nil})` loads the context named by `currentContext`. Empty catalog (`contexts: []`, `currentContext: ""`) is valid.
+2. `ResolveContext({Name:"dev", Overrides:{"managedService.http.url":"https://staging.example.com"}})` applies the override without mutating the catalog.
+3. A credential `prompt-shared` referenced by both `managedService.http.auth.basic` and `repository.git.remote.proxy.auth.basic` prompts each component only when first used; one credential may prompt `username` while keeping a literal `password`.
+4. A context defining only `proxy.noProxy` inherits `http`/`https` from env or the shared proxy; `proxy: {}` disables both for that component only.
+5. A repository-only context still defaults `metadata.baseDir` from the repository.
+6. `context clean --credentials-in-session` clears prompt cache files even with no current context. When `XDG_RUNTIME_DIR` is unavailable, `persistInSession: true` reuses within one running process but later commands re-prompt (no cross-command cache file is created).

@@ -1,109 +1,84 @@
 # Resource Repository Layout and Safety
 
 ## Purpose
-Define local repository semantics for resource persistence, metadata storage, path safety, and optional Git synchronization/history capabilities.
-
-## In Scope
-1. Logical path normalization.
-2. Resource and metadata on-disk layout.
-3. Git/FS repository lifecycle and sync behavior.
-4. Safety invariants for filesystem operations.
-
-## Out of Scope
-1. Remote HTTP execution.
-2. CLI user interaction details.
-3. Secret backend protocols.
+Define local repository semantics for resource/metadata on-disk layout, path safety, payload-file discovery, defaults-artifact layout, and Git/FS lifecycle and sync.
 
 ## Normative Rules
-1. All paths MUST be normalized logical absolute paths before IO.
+
+### Path safety
+1. All paths MUST be normalized to logical absolute paths before IO.
 2. Filesystem joins MUST reject traversal outside configured roots.
-3. Reserved segment `_` MUST be treated as metadata namespace.
-4. Resource payload type MUST be explicit for new-file writes, using metadata/file discovery before falling back to the repository default (`json`, `yaml`, `xml`, `hcl`, `ini`, `properties`, `text`, or `octet-stream`); opaque input files with unknown suffixes MUST preserve the provided suffix and use `.bin` only when no suffix or stronger payload hint is available.
-5. Save operations MUST be atomic at file level.
-6. Repository sync conflicts MUST surface typed conflict errors with remediation hints.
-7. Push operations MUST never leak credentials in error output.
-8. Repository operations MUST be idempotent for repeated equivalent inputs.
-9. Git-backed repositories MAY expose optional local commit/history capabilities; filesystem repositories MUST report history as unsupported.
-10. Git-backed repository operations that require a local VCS repository state (for example status, history, commit, sync operations) MUST initialize the local git repository automatically when it is missing before continuing operation-specific logic.
-11. `clean` MUST remove uncommitted tracked and untracked worktree changes for git repositories and MUST be a no-op for filesystem repositories.
-12. Git-backed repositories MAY configure authenticated webhook signaling; repository webhook receivers MUST verify provider-specific signatures/tokens before triggering reconcile (detailed receiver behavior is defined in `agents/reference/k8s-operator.md`).
-13. Resource and collection metadata sidecars MUST support `metadata.yaml` and `metadata.json`, MUST prefer `metadata.yaml` when both exist, and SHOULD write `metadata.yaml` by default.
-14. When `resource save --secret` is selected or metadata-driven whole-resource secret handling applies, the repository payload file MUST preserve the original descriptor-derived suffix and MUST contain only the exact root placeholder encoded for that payload type (for example raw `{{secret .}}` bytes for octet-stream files).
-15. Metadata-owned defaults artifacts MAY exist under collection selector directories as `<collection-path>/_/defaults.<ext>` and `<collection-path>/_/defaults-<profile>.<ext>` and under resource selector directories as `<logical-path>/defaults.<ext>` and `<logical-path>/defaults-<profile>.<ext>`.
-16. Repository payload discovery MUST ignore metadata-owned defaults artifacts and MUST treat `resource.<ext>` as the only canonical repository payload file for one logical resource.
-17. Repository backends MUST reserve the entire `defaults` filename prefix for metadata-owned defaults artifacts so repository payload artifacts cannot collide with metadata defaults management.
-18. Repository reads and writes MUST operate on raw payload files only; effective defaults merge/compaction belongs to metadata-aware orchestrator and CLI workflows, not repository payload discovery itself.
-19. Resource delete workflows MUST remove `resource.<ext>` overrides but MUST NOT remove metadata-owned defaults artifacts referenced by selector metadata.
-20. Sidecar artifact writes MUST reject reserved sibling payload names such as `resource.<ext>` or names beginning with `defaults` so artifact workflows cannot overwrite canonical payloads or metadata-managed defaults files.
+3. Segment `_` MUST be treated as the reserved metadata-namespace directory (see domain.md for `_` semantics).
+
+### On-disk layout
+4. Canonical resource payload MUST live at `<logical-path>/resource.<ext>`; this is the only canonical payload file per logical resource.
+5. Resource/collection metadata sidecars MUST support both `metadata.yaml` and `metadata.json`, MUST prefer `metadata.yaml` when both exist, and SHOULD write `metadata.yaml` by default. Collection metadata lives at `<collection-path>/_/metadata.<yaml|json>`; resource metadata at `<logical-path>/metadata.<yaml|json>`.
+6. Metadata-owned defaults artifacts MAY exist at selector-local deterministic names: collection scope `<collection-path>/_/defaults.<ext>` and `<collection-path>/_/defaults-<profile>.<ext>`; resource scope `<logical-path>/defaults.<ext>` and `<logical-path>/defaults-<profile>.<ext>`, where `<ext>` is `json|yaml|yml|properties`. Defaults SEMANTICS (merge/precedence/profiles/includes) are owned by metadata.md; this file only fixes their file layout and reserves their names.
+7. Repository backends MUST reserve the entire `defaults` filename prefix for metadata-owned defaults artifacts so payload artifacts cannot collide with them. Backends MAY keep control artifacts under a repo-specific hidden directory; such directories MUST be excluded from payload/metadata discovery and from `tree`.
+
+### Payload type resolution
+8. New-file writes MUST resolve payload type explicitly: use metadata/file discovery first, then fall back to the repository default (`json`, `yaml`, `xml`, `hcl`, `ini`, `properties`, `text`, or `octet-stream`).
+9. Opaque input files with unknown suffixes MUST preserve the provided suffix and treat the payload as octet-stream; `.bin` MUST be used only when no suffix or stronger payload hint is available.
+
+### Payload discovery and isolation
+10. Payload discovery MUST ignore metadata-owned defaults artifacts and MUST treat `resource.<ext>` as the only canonical payload file.
+11. Repository reads and writes MUST operate on raw payload files only; effective-defaults merge/compaction belongs to metadata-aware orchestrator/CLI workflows, not to repository discovery.
+
+### Save / delete / sidecar writes
+12. Save operations MUST be atomic at file level.
+13. When `resource save --secret` is selected, or metadata-driven whole-resource secret handling applies, the payload file MUST preserve the original descriptor-derived suffix and MUST contain only the exact root placeholder encoded for that payload type (for example raw `{{secret .}}` bytes for octet-stream). `{{secret .}}` key mapping is owned by secrets.md.
+14. Resource delete MUST remove `resource.<ext>` overrides and MUST NOT remove metadata-owned defaults artifacts referenced by selector metadata.
+15. Sidecar artifact writes MUST reject reserved sibling names (`resource.<ext>` or any name beginning with `defaults`) so they cannot overwrite canonical payloads or metadata-managed defaults.
+
+### Listing and inspection policy
+16. `list` MUST default to direct-children listing and MAY traverse descendants when `ListPolicy.Recursive=true`.
+17. `delete` MUST default to removing only direct resources in a collection and MUST preserve subcollections unless `DeletePolicy.Recursive=true`.
+18. `tree` MUST return deterministic, lexicographically sorted, repository-relative directory paths; MUST omit files; and MUST omit hidden control directories (for example `.git`) and reserved `_` metadata directories.
+
+### Git/FS lifecycle and sync
+19. Repository operations MUST be idempotent for repeated equivalent inputs.
+20. Git-backed repositories MAY expose optional local commit/history; filesystem repositories MUST report history as unsupported.
+21. Git-backed operations requiring local VCS state (status, history, commit, sync) MUST auto-initialize the local git repository when missing before running operation-specific logic.
+22. `clean` MUST remove uncommitted tracked and untracked worktree changes for git repositories and MUST be a no-op for filesystem repositories.
+23. Sync conflicts MUST surface typed conflict errors with remediation hints.
+24. Push operations MUST never leak credentials in error output.
+25. Git-backed repositories MAY configure authenticated webhook signaling via `spec.git.webhook` (`provider`, `secretRef`); receivers MUST verify provider-specific signatures/tokens before triggering reconcile. Receiver internals are defined in k8s-operator.md.
 
 ## Data Contracts
-Layout contract:
-1. Canonical resource payload at `<logical-path>/resource.<ext>`.
-2. Collection metadata at `<collection-path>/_/metadata.yaml` by default, with `metadata.json` also accepted.
-3. Resource metadata at `<logical-path>/metadata.yaml` by default, with `metadata.json` also accepted.
-4. Optional metadata-owned defaults artifacts at selector-local deterministic names `defaults.<ext>` and `defaults-<profile>.<ext>`, where `<ext>` is `json|yaml|yml|properties`.
-5. Optional repository control artifacts under repo-specific hidden directory.
-6. Optional git webhook contract under `spec.git.webhook` (`provider`, `secretRef`) for operator-triggered refresh signaling.
-
-Manager method families:
+Manager method families (Go signatures owned by interfaces.md):
 1. Resource IO: save/get/delete/list/move/exists.
-2. Repository lifecycle: init/check/refresh/clean/reset.
+2. Lifecycle: init/check/refresh/clean/reset.
 3. Sync: push (with options)/status.
-4. Optional VCS capabilities: commit/history.
-5. Optional inspection capabilities: directory tree (`tree`).
-
-Policy contracts:
-1. `list` MUST default to direct-children listing and MAY traverse descendants when `ListPolicy.Recursive=true`.
-2. `delete` MUST default to removing only direct resources in a collection and MUST preserve subcollections unless `DeletePolicy.Recursive=true`.
-3. Optional directory-tree inspection MUST return deterministic lexicographically sorted repository-relative directory paths, omit files, omit hidden control directories (for example `.git`), and omit reserved metadata namespace directories named `_`.
+4. Optional VCS: commit/history.
+5. Optional inspection: directory `tree`.
 
 ## Failure Modes
-1. Traversal attempt using relative path segments.
-2. Multiple payload files matching `resource.*` under one logical path.
-3. Unknown payload suffix without metadata/default type guidance.
-4. Push rejected due to remote divergence.
-5. Missing remote configuration for sync operation.
-6. History requested from a repository backend that does not support local VCS history.
-7. Push requested on a freshly auto-initialized git repo without a local HEAD/commit.
-8. Webhook payload rejected due to invalid provider signature/token.
-9. A metadata-owned defaults artifact uses an unsupported payload type or non-object shape.
-10. Multiple deterministic defaults artifacts of the same role match one selector scope.
-11. An artifact write attempts to use a reserved payload sidecar name such as `defaults.yaml`.
+1. Traversal via relative segments -> rejected.
+2. Multiple files matching `resource.*` under one logical path -> ambiguous payload error.
+3. Unknown payload suffix without metadata/default guidance -> unresolved type error.
+4. Push rejected due to remote divergence; or push on a freshly auto-initialized repo with no local HEAD/commit.
+5. Sync requested with no remote configured -> `state: no_remote`.
+6. History requested from a non-VCS (filesystem) backend -> not-supported, no mutation.
+7. Webhook payload with invalid provider signature/token -> rejected.
+8. Defaults artifact with unsupported type or non-object shape, or two same-role defaults artifacts matching one selector scope -> rejected.
+9. Sidecar write to a reserved name (`resource.<ext>`, `defaults*`) -> rejected.
 
 ## Edge Cases
-1. Rename required after alias change while keeping payload unchanged.
+1. Alias change renames the payload directory while payload content is unchanged.
 2. Simultaneous metadata and resource path updates in one operation.
 3. Empty collection list with metadata present.
 4. Reset requested with uncommitted local changes.
-5. Existing payload suffix is unknown but concrete metadata `resource.format` still resolves runtime behavior.
-6. Opaque file input uses an unknown suffix (for example `.key`) and persistence keeps `resource.key` with octet-stream semantics instead of rewriting to `resource.bin`.
-7. Whole-resource secret saves keep the original payload suffix while replacing the repository payload with an exact root placeholder.
-8. Auto-commit-enabled CLI repository mutations run while unrelated git worktree changes are present.
-9. First repo interaction runs against an existing repository base directory that has resource files but no `.git/` directory yet.
-10. Clean requested on a git repo with both tracked edits and untracked files/directories.
-11. Clean requested on a filesystem repository context.
-12. Valid push webhook arrives for a branch that does not match the configured repository branch and is ignored without mutation.
-13. Both `metadata.yaml` and `metadata.json` exist for one selector path; repository-backed metadata resolution uses the YAML sidecar deterministically.
-14. `customers/_/metadata.yaml` references `defaults.yaml` with an object field that `customers/acme/resource.yaml` explicitly sets to `null`; the effective payload MUST keep the explicit `null` override instead of restoring the default.
-15. A collection has `_/metadata.yaml` referencing `defaults.yaml` and a child resource compacts entirely to defaults; repository persistence still keeps an explicit empty `resource.<ext>` override file so the logical resource remains present.
-16. A resource metadata file at `customers/acme/metadata.yaml` references `defaults-prod.yaml`; repository payload discovery ignores that file, while defaults-aware workflows still resolve it through metadata.
+5. Concrete metadata `resource.format` resolves runtime behavior even when the on-disk suffix is unknown.
+6. A child resource that compacts entirely to defaults still keeps an explicit (possibly empty) `resource.<ext>` so the logical resource remains present.
+7. An explicit `null` override in `resource.<ext>` MUST win over a defaults value (merge invariant owned by metadata.md).
+8. Push webhook for a branch not matching the configured branch is ignored without mutation.
 
 ## Examples
-1. Save `/customers/acme` in JSON context writes `/customers/acme/resource.json`.
-2. Save `/projects/platform/readme` as plain text writes `/projects/platform/readme/resource.txt`.
-3. Save `/certificates/ca` as octet-stream without an existing file writes `/certificates/ca/resource.bin`.
-4. Save `/projects/platform/secrets/private-key` from input file `private.key` writes `/projects/platform/secrets/private-key/resource.key` and still treats the payload as octet-stream.
-5. Save `/projects/platform/secrets/private-key --secret` from input file `private.key` writes `/projects/platform/secrets/private-key/resource.key` containing only `{{secret .}}` while the original payload bytes live in the secret store.
-6. Set collection metadata for `/customers` writes `/customers/_/metadata.yaml`.
-7. Alias change from `acme` to `acme-inc` moves payload from `/customers/acme/resource.*` to `/customers/acme-inc/resource.*`.
-8. `status` on a repository without remote configuration returns `state: no_remote` with zero ahead/behind counts.
-9. `repository history` on a filesystem repository prints a deterministic not-supported message and performs no repository mutation.
-10. `repository history --path customers --grep fix --max-count 5` returns only local commits matching the combined filters when the backend is git.
-11. `repository status` on a git context with an existing base directory but no `.git/` auto-initializes the local git repository and then returns a deterministic sync status report.
-12. `repository clean` on a git repository discards tracked worktree edits and removes untracked files/directories.
-13. `repository clean` on a filesystem repository succeeds without mutating repository files.
-14. `repository tree` returns directories like `admin/realms/acme/user-registry/AD PRD` and omits `.git/`, `_/`, and payload/metadata files.
-15. A valid authenticated git push webhook updates repository webhook receipt annotations and triggers immediate repository reconcile without waiting for the next poll interval.
-16. When `/customers/_/metadata.yaml` and `/customers/_/metadata.json` both exist, metadata reads resolve `/customers/_/metadata.yaml` deterministically.
-17. `/customers/_/metadata.yaml` plus `/customers/_/defaults.yaml` and `/customers/acme/resource.yaml` behave as one logical resource in metadata-aware workflows; repository `Get(/customers/acme)` still returns the raw payload, while orchestrator-backed reads return the merged object and saves compact back into `resource.yaml`.
-18. `/customers/acme/metadata.yaml` can reference `/customers/acme/defaults-prod.properties` through `resource.defaults.profiles.prod: "{{include defaults-prod.properties}}"`, and metadata-aware workflows merge that profile just like JSON or YAML defaults objects.
+1. Save `/customers/acme` in a JSON context writes `/customers/acme/resource.json`; saving `/certificates/ca` as octet-stream with no existing file writes `/certificates/ca/resource.bin`.
+2. Save `/projects/platform/secrets/private-key` from input `private.key` writes `resource.key` with octet-stream semantics (suffix preserved, not rewritten to `.bin`); adding `--secret` writes `resource.key` containing only `{{secret .}}` while the real bytes go to the secret store.
+3. Set collection metadata for `/customers` writes `/customers/_/metadata.yaml`; when both `metadata.yaml` and `metadata.json` exist, reads resolve the YAML sidecar deterministically.
+4. Alias change `acme` -> `acme-inc` moves payload from `/customers/acme/resource.*` to `/customers/acme-inc/resource.*`.
+5. `repository status` with no remote returns `state: no_remote` (zero ahead/behind); against a base dir lacking `.git/` it auto-initializes git, then returns a deterministic status report.
+6. `repository history` on a filesystem backend prints a deterministic not-supported message with no mutation; on git, `--path customers --grep fix --max-count 5` returns only local commits matching the combined filters.
+7. `repository clean` on git discards tracked edits and removes untracked files/directories; on filesystem it succeeds without mutating files. `repository tree` returns directories like `admin/realms/acme/user-registry/AD PRD` and omits `.git/`, `_/`, and payload/metadata files.
+8. With `/customers/_/metadata.yaml` plus `/customers/_/defaults.yaml` and `/customers/acme/resource.yaml`: repository `Get(/customers/acme)` returns the raw payload, payload discovery ignores `defaults*` (including a referenced `defaults-prod.properties`), and only orchestrator-backed reads merge defaults and compact saves back into `resource.yaml`. A valid authenticated push webhook updates webhook-receipt annotations and triggers immediate reconcile.

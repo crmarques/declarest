@@ -1,15 +1,16 @@
-Use Conventional Commits: <type>(<scope>): <description>
+# Commit Instructions
 
-Generate ONLY one short subject line (no body). Max 72 chars
+## Purpose
+Own the commit subject-line format used for final handoff and explicit commit messages.
 
-For a successful standard request handoff, output ONLY that one subject line.
-Do NOT append summaries, file lists, verification details, or commit questions.
-If request processing is blocked or required verification cannot complete, report the blocker instead.
+## Normative Rules
+1. A commit subject MUST be a single line in Conventional Commits form: `<type>(<scope>): <description>`.
+2. The subject MUST be <= 72 characters.
+3. `<type>` MUST be one of: `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
+4. `<scope>` SHOULD name the affected package/module/folder when obvious, and MAY be omitted otherwise.
+5. A standard successful handoff MUST emit ONLY the subject line: no body, summaries, file lists, verification details, or commit questions.
+6. When request processing is blocked or required verification cannot complete, the agent MUST report the blocker instead of emitting a subject line.
 
-Allowed types: feat, fix, docs, refactor, perf, test, build, ci, chore, revert
-
-Use a scope when obvious (package/module/folder)
-
-Examples:
+## Examples
 - Success: `docs(agents): shorten standard handoff`
-- Blocked corner case: `Blocked: go test -race ./... could not complete`
+- Blocked: `Blocked: go test -race ./... could not complete`

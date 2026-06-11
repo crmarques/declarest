@@ -1,963 +1,153 @@
-# Use Cases and Corner Cases
+# Use Cases
 
 ## Purpose
-Provide implementation-ready scenarios that make expected behavior and failure handling unambiguous.
+Capture cross-domain end-to-end scenarios that no single domain file's Examples section owns; per-feature scenarios live in their owner file.
 
-## In Scope
-1. End-to-end workflow examples.
-2. High-risk corner cases.
-3. Acceptance expectations by scenario.
-
-## Out of Scope
-1. Adapter implementation details.
-2. Full CLI help text.
-3. Non-essential narrative context.
+## Scenario Template
+Each scenario MUST state: Goal / Inputs / Execution / Expected outputs / Failure expectation. Execution steps MUST map to types in `agents/reference/interfaces.md`. Failure paths MUST name the expected error category. Expected outputs MUST be deterministic. Single-domain scenarios belong in the owner file's Examples; this file keeps only multi-owner flows.
 
 ## Normative Rules
-1. New capabilities MUST include at least one normal scenario and one corner-case scenario.
-2. Each scenario MUST define source of truth, mutation scope, and expected outputs.
-3. Execution steps MUST map to interfaces in `agents/reference/interfaces.md`.
-4. Failure paths MUST name expected error category.
+1. A scenario MUST appear here only when it exercises behavior owned by two or more domain files; otherwise it MUST live in the single owner's Examples section.
+2. Each scenario MUST cross-reference the owning domain files for the rules it exercises; it MUST NOT restate those rules. Identity-template, required-attribute, defaults-merge, and `format:any` invariants are defined in `agents/reference/metadata.md` and `agents/reference/domain.md`; this file only asserts their observable end-to-end effect.
 
-## Data Contracts
-Scenario template:
-1. Name.
-2. Goal.
-3. Inputs.
-4. Preconditions.
-5. Execution steps.
-6. Expected outputs.
-7. Failure expectations.
+## Scenarios
 
-## Failure Modes
-1. Scenario omits mutation scope, hiding side effects.
-2. Scenario references behavior not defined in interfaces/contracts.
-3. Scenario has non-deterministic expected output.
+### Scenario 1: Apply with metadata layering and secret resolution
+Owners exercised: `orchestrator.md`, `metadata.md`, `secrets.md`, `managed-service.md`.
 
-## Edge Cases
-1. Metadata inheritance conflict with alias collision.
-2. Secret masking for nested payloads with mixed sensitivity.
-3. Refresh after remote deletion with stale local alias.
-4. OpenAPI mismatch with explicit metadata override.
-5. CLI receives conflicting positional/flag path inputs.
-
-## Examples
-
-### Example 1: Apply With Metadata and Secrets
-Goal: apply one local resource that contains masked credentials.
+Goal: apply one local resource whose payload contains secret placeholders and metadata-defined operation directives.
 
 Inputs:
 1. Path `/customers/acme`.
-2. Local payload with secret placeholders.
-3. Metadata defining update path and compare suppression.
+2. Local payload with `{{secret .}}`-mapped attributes (secret key mapping per `secrets.md`).
+3. Resolved metadata defining `operations.update` path, compare transforms, and `resource.secretAttributes` (layering per `metadata.md`).
 
 Execution:
-1. `orchestrator.Orchestrator` loads resource and resolved metadata.
-2. `secrets.SecretProvider` resolves placeholders.
-3. `managedservice.ManagedServiceClient` executes update.
-4. Orchestrator returns normalized remote mutation output without implicit local persistence.
+1. `orchestrator.Orchestrator` loads the resource and resolves layered metadata.
+2. `secrets.SecretProvider` resolves placeholders into request-time values.
+3. `managedservice.ManagedServiceClient` builds and executes the update (auth + request construction per `managed-service.md`).
+4. Orchestrator returns normalized remote mutation output with no implicit local persistence.
 
 Expected outputs:
-1. Remote update succeeds.
-2. Local file remains masked.
+1. Remote update succeeds with resolved secret values in the request body only.
+2. Local file remains masked; persisted repository content keeps placeholders.
 3. Immediate diff reports no drift.
 
-### Example 2: 404 Direct Path With Alias Fallback
-Goal: fetch remote resource when direct path is stale.
+Failure expectation:
+1. An unresolved secret key fails with `ValidationError` before any remote request.
+
+### Scenario 2: Remote 404 -> metadata-aware alias/list fallback
+Owners exercised: `orchestrator.md`, `managed-service.md`, `metadata.md`.
+
+Goal: fetch a remote resource deterministically when the direct identity path is stale.
 
 Inputs:
 1. Path `/customers/acme`.
-2. Resolved `operations.get.path` targets stale remote identifier.
+2. Resolved `operations.get.path` targeting a stale remote identifier.
+3. Metadata identity templates `resource.id`/`resource.alias` and a `list-jq` resolver (per `metadata.md` and `managed-service.md`).
 
 Execution:
-1. Direct get returns 404.
-2. Orchestrator performs bounded alias/list fallback.
-3. Matching candidate updates `resource.Resource` identity fields.
+1. Direct get returns HTTP 404.
+2. Orchestrator runs the bounded alias/list fallback (strategy owned by `orchestrator.md`).
+3. The matching list candidate updates `resource.Resource` identity fields via metadata identity rules.
 
 Expected outputs:
-1. Fetch succeeds deterministically on repeated runs.
+1. Fetch succeeds and is identical on repeated runs.
+2. Subsequent operations target the resolved remote identifier.
 
 Failure expectation:
-1. Multiple alias candidates return `ConflictError`.
+1. Multiple alias candidates fail with `ConflictError`.
+2. No candidate after the bounded fallback fails with `NotFoundError`.
 
-### Example 3: Metadata Wildcard/Literal Precedence
-Goal: verify deterministic layered metadata resolution.
+### Scenario 3: Authenticated git webhook -> immediate operator reconcile
+Owners exercised: `k8s-operator.md`, `resource-repo.md`.
 
-Inputs:
-1. Wildcard metadata at `/customers/*`.
-2. Literal metadata at `/customers/acme`.
-
-Execution:
-1. Resolve metadata for `/customers/acme`.
-2. Apply defaults, wildcard, literal, then resource directives.
-
-Expected outputs:
-1. Literal fields override wildcard fields.
-2. Arrays replace inherited arrays.
-3. Resolution order is stable.
-
-### Example 4: Repository Traversal Rejection
-Goal: prevent filesystem escape on save.
+Goal: trigger an immediate repository refresh from a provider webhook before the poll interval deadline.
 
 Inputs:
-1. Path `/customers/../../etc/passwd`.
+1. `ResourceRepository.spec.git.webhook` with provider `gitea` or `gitlab` and `secretRef`.
+2. Operator webhook path `/webhooks/repository/<namespace>/<repository>`.
+3. Push-event payload whose branch ref matches the repository branch.
 
 Execution:
-1. Repository normalizes path and validates safe-join before IO.
+1. Provider sends a signed/tokenized push payload to the operator endpoint.
+2. Operator validates auth headers (`X-Gitea-Signature` or `X-Gitlab-Token`) and event type (webhook receiver owned by `k8s-operator.md`).
+3. Operator patches webhook-receipt annotations to enqueue reconcile; repository sync uses git lifecycle rules from `resource-repo.md`.
 
 Expected outputs:
-1. Operation fails with `ValidationError`.
-2. No filesystem mutation occurs.
-
-### Example 5: CLI Path Conflict
-Goal: reject ambiguous path target selection.
-
-Inputs:
-1. `declarest resource get /customers/acme --path /customers/other`.
-
-Execution:
-1. CLI parses positional and flag path values.
-2. CLI detects mismatch and stops before orchestrator call.
-
-Expected outputs:
-1. Command fails with `ValidationError`.
-
-### Example 6: Repository Status Contract
-Goal: ensure `repository status` is non-mutating and output-stable.
-
-Inputs:
-1. `declarest repository status` with `--output auto|json|yaml`.
-
-Execution:
-1. CLI resolves `repository.RepositorySync` from startup context.
-2. CLI calls `repository.RepositorySync.SyncStatus`.
-
-Expected outputs:
-1. `auto` prints deterministic text summary.
-2. Structured modes expose stable keys: `state`, `ahead`, `behind`, `hasUncommitted`.
-3. Operation performs no repository mutation.
-
-### Example 7: Manual E2E Handoff
-Goal: start local stack and hand control to the user.
-
-Inputs:
-1. `run-e2e.sh --profile manual`.
-
-Execution:
-1. Runner validates selected stack is local-instantiable.
-2. Runner starts components and emits temporary context catalog.
-3. Runner executes optional component `manual-info` hooks and prints access details.
-4. Runner copies selected managed-service `repo-template` into the context repository directory.
-5. Runner generates setup/reset shell scripts and prints follow-up `declarest-e2e` commands, exits, and keeps runtime resources.
-
-Expected outputs:
-1. Temporary context config is usable after sourcing the generated setup script.
-2. Access output includes component-specific or state-derived managed-service details (for example, local keycloak admin console URL and credentials, or local rundeck API URL and auth token).
-3. Context repository directory contains seeded template resources and collection metadata.
-4. Setup script exports runtime env vars, defines alias `declarest-e2e`, and initializes prompt-auth shell-session reuse for prompt-backed credentials; reset script unsets these vars, removes the alias, and restores the prior prompt-auth shell state.
-5. Output includes cleanup commands (`--clean`, `--clean-all`) for explicit teardown.
-6. Remote selections fail validation with actionable guidance.
-
-### Example 8: Resource-Server Fixture Identity and Metadata Expansion
-Goal: validate fixture-tree sync against API-facing identifiers and nested metadata placeholders.
-
-Inputs:
-1. Selected managed-service fixture tree under `repo-template/`.
-2. Metadata using `resource.id`/`resource.alias` identity templates and intermediary placeholder paths (for example `/x/_/y/_/_`).
-
-Execution:
-1. Loader expands metadata placeholders into concrete collection targets.
-2. Orchestrator operations resolve remote paths using API-facing identifiers.
-
-Expected outputs:
-1. Expanded targets are deterministic and contain no unresolved intermediary placeholders.
-2. Apply/diff cycles remain idempotent.
-
-Failure expectation:
-1. Misconfigured route identifier mapping fails with typed validation/transport error and actionable path context.
-
-### Example 9: Resource Get Source Selection
-Goal: read either remote observed state or local desired state deterministically.
-
-Inputs:
-1. Path `/customers/acme`.
-2. CLI source flag `--source` with values `repository` or `managed-service`.
-
-Execution:
-1. `declarest resource get /customers/acme` runs without source flags.
-2. `declarest resource get /customers/acme --source repository` runs with repository override.
-3. `declarest resource get /customers/acme --source both` runs with an invalid source value.
-
-Expected outputs:
-1. Step 1 reads from remote source by default.
-2. Step 2 reads from repository local source.
-
-Failure expectation:
-1. Step 3 fails with `ValidationError` before orchestrator execution.
-
-### Example 10: Resource Save List Fanout
-Goal: persist collection payloads as one file per resource by default.
-
-Inputs:
-1. Path `/customers`.
-2. Input payload list (array or object containing `items` array).
-3. Optional flag `--mode <auto|items|single>`.
-
-Execution:
-1. `declarest resource save /customers` receives a list payload.
-2. CLI resolves item aliases using metadata identity attributes.
-3. CLI saves one resource file per resolved item path.
-4. `declarest resource save /customers --mode single` receives the same list payload.
-
-Expected outputs:
-1. Step 1 runs with the default `--mode auto` behavior and produces one local file per list item under `/customers/<alias>`.
-2. Step 4 persists the payload as a single resource file at `/customers`.
-
-Failure expectation:
-1. `--mode items` with non-list input fails with `ValidationError`.
-2. `--mode invalid` fails with `ValidationError`.
-
-### Example 11: Resource Defaults Infer and Save
-Goal: infer compact baseline defaults for one repository collection without flattening effective desired state.
-
-Inputs:
-1. Target collection path `/api/projects/defaults-sandbox/widgets` or target resource path `/api/projects/defaults-sandbox/widgets/defaults-alpha`.
-2. Two or more sibling repository resources in `/api/projects/defaults-sandbox/widgets`.
-3. Optional `resource defaults infer --save` or `resource defaults infer --check`.
-
-Execution:
-1. CLI resolves the input to the logical collection `/api/projects/defaults-sandbox/widgets`; collection-path inputs with or without a trailing `/` remain equivalent, and concrete resource inputs still resolve to that same collection.
-2. Defaults inference compares direct local sibling resources under the same collection and extracts only equal object fields.
-3. `resource defaults infer --save` persists the inferred object to the collection metadata selector directory as `defaults.<ext>` under the active writable metadata target and updates `resource.defaults.value` to the exact include placeholder for that file, reusing the collection resource payload type when it supports file-backed defaults (for example `/api/projects/defaults-sandbox/widgets/_/defaults.json` plus `resource.defaults.value: "{{include defaults.json}}"` when the widget collection stores `resource.json`).
-4. `resource defaults infer --check` compares the inferred normalized object against the current resolved defaults object for that collection scope and fails when they differ.
-5. `resource defaults get` returns the effective resolved defaults object, while `resource defaults config get` returns the raw persisted `resource.defaults` block with include placeholders intact.
-
-Expected outputs:
-1. Output contains only shared default candidates.
-2. Saving defaults keeps `resource.<ext>` separate from the collection metadata defaults artifact and its `resource.defaults` include reference, writing to explicit `metadata.baseDir` when configured and otherwise to the repo-local overlay for bundle-backed contexts.
-3. `--check` succeeds only when the resolved defaults object matches the inferred normalized object.
-4. Subsequent repository-backed reads still expose the merged effective resource.
-
-### Example 12: Reused Prompt-Backed Credentials
-Goal: reuse one named prompt-backed credential across multiple components without persisting plaintext values in the context blocks.
-
-Inputs:
-1. Catalog credential `shared-login` with prompt-backed `username` and `password`, both using `persistInSession: true`.
-2. Context with `managedService.http.auth.basic.credentialsRef.name=shared-login`, `repository.git.remote.auth.basic.credentialsRef.name=shared-login`, and `managedService.http.proxy.auth.basic.credentialsRef.name=shared-login`.
-3. The user evaluated `declarest context session-hook bash` or `declarest context session-hook zsh` in the current shell before running runtime commands.
-4. One runtime command that uses the managed service and git repository.
-
-Execution:
-1. Startup resolves the context without prompting because prompt-backed credential attributes are deferred.
-2. The first component that needs credentials prompts for username/password and warns that credentials will be reused for later `declarest` commands in the current shell session.
-3. Runtime applies the resolved credential values to the requesting component and persists them only under `XDG_RUNTIME_DIR/declarest/prompt-auth/`.
-4. Later commands on the same shell session reuse the kept credential values for any component that references `shared-login`.
-5. When the shell exits, the registered session-hook cleanup removes the runtime cache file.
-
-Expected outputs:
-1. Persisted catalog YAML still contains only the top-level prompt-backed credential definition plus `credentialsRef` placeholders in context components.
-2. One hooked shell session prompts at most once per prompt-backed credential attribute when runtime session storage is available.
-3. Later commands can reuse the kept credential values without another prompt when session persistence is available.
-4. A new shell session prompts again because the previous session cache file was removed on exit.
-
-Failure expectation:
-1. A non-interactive command with uncached prompt-backed credential attributes fails with `ValidationError`.
-2. When `XDG_RUNTIME_DIR` is unavailable, `persistInSession: true` does not create a cross-command cache file and later `declarest` commands prompt again.
-
-### Example 12: Resource Defaults Managed-Service Probe Safety
-Goal: infer server-added defaults by probing create behavior without leaving orphan temporary resources behind.
-
-Inputs:
-1. Target resource path `/customers/acme`.
-2. `resource defaults infer /customers/acme --managed-service --yes`.
-3. Optional `--wait 2s` when the managed service needs extra time before probe readback stabilizes.
-
-Execution:
-1. CLI validates `--yes` before any remote mutation.
-2. Workflow clones the target local resource payload twice, mutates identity fields to unique temporary values, and creates two temporary remote resources.
-3. When `--wait` is set, workflow pauses for the requested interval after creating the temporary resources and before the first probe readback.
-4. Workflow reads both created resources, subtracts shared explicit input values, infers only stable server-added defaults, and deletes both temporary remote resources without consulting sibling repository resources or current resolved defaults for inferred-value selection.
-
-Expected outputs:
-1. Only stable server-added defaults remain in command output, including stable empty-object fields such as `smtpServer: {}` when the server returns them consistently.
-2. Temporary probe resources are removed before the command returns.
-
-Failure expectation:
-1. Omitting `--yes` fails with `ValidationError` and performs no remote create.
-
-### Example 13: Resource Get and Save With Defaults Pruning
-Goal: compact effective local or remote payloads back to explicit overrides without editing metadata-managed defaults artifacts.
-
-Inputs:
-1. Target resource path `/api/projects/defaults-sandbox/widgets/defaults-alpha`.
-2. Metadata contains `resource.defaults` that resolves through `defaults.<ext>` with stable fields such as `project`, `enabled`, or empty-object defaults like `smtpServer: {}`.
-3. Caller runs `resource get --prune-defaults` or `resource save --prune-defaults`.
-
-Execution:
-1. `resource get --prune-defaults` reads the effective payload from the selected source and compacts it against resolved metadata defaults before output.
-2. Repository and managed-service sources both use the same resolved metadata defaults object for pruning.
-3. `resource save --prune-defaults` compacts the fetched or explicit payload before repository persistence; list saves prune per resolved item path.
-
-Expected outputs:
-1. Printed or saved payload retains only explicit override fields.
-2. When all fields are defaulted, `resource get --prune-defaults` prints `{}` instead of `null`.
-3. The raw metadata `resource.defaults` block and its referenced defaults artifacts remain unchanged.
-
-### Example 14: E2E Manual Handoff With Prompt-Backed Credentials
-Goal: generate a manual E2E context that defers proxy credentials to runtime prompts instead of writing plaintext proxy credentials into the context file.
-
-Inputs:
-1. `run-e2e.sh --profile cli-manual --platform compose --proxy-mode local --proxy-auth-type prompt`.
-2. Default local managed-service selection (`simple-api-server`) and auto-selected helper component `proxy:forward-proxy`.
-
-Execution:
-1. Runner validates that proxy prompt auth is being used only with `cli-manual`.
-2. Proxy helper component generates run-scoped proxy credentials for the local forward proxy.
-3. Context generation writes a top-level prompt-backed credential with `persistInSession: true` and sets `*.proxy.auth.basic.credentialsRef` to that credential while omitting inline proxy credentials.
-4. Manual handoff output prints the generated proxy credentials for testing, and the generated setup script does not export proxy auth bootstrap variables.
-
-Expected outputs:
-1. The generated context file contains top-level prompt-backed credentials plus proxy `basic.credentialsRef` placeholders and no plaintext proxy credentials.
-2. Manual handoff output includes the generated proxy username and password so a tester can enter them at the runtime prompt.
-3. Sourcing the generated setup script leaves proxy auth env vars unset while still enabling prompt-auth shell-session reuse, so runtime behaves like a real prompt-backed credential flow until the user enters credentials and later commands in that shell can reuse the kept values.
-
-Failure expectation:
-1. Combining `--proxy-auth-type prompt` with inline proxy username/password env vars, or selecting proxy prompt auth outside `cli-manual`, fails with actionable validation output before workload execution.
-
-### Example 14: E2E Dependency-Aware Parallel Component Hooks
-Goal: keep metadata-mutating E2E coverage without mutating checked-in component fixtures.
-
-Inputs:
-1. Managed-service component with checked-in `metadata/` fixtures.
-2. E2E case that calls `resource metadata set` or `secret detect --fix`.
-
-Execution:
-1. Runner copies the component metadata tree into `test/e2e/.runs/<run-id>/managed-service-metadata`.
-2. Generated context points `metadata.baseDir` at that run-scoped copy.
-3. Case mutates metadata through CLI commands.
-
-Expected outputs:
-1. Case assertions still observe the metadata changes through the generated context.
-2. Checked-in component metadata directories remain unchanged after the run.
-Goal: run component hooks in parallel when possible without violating dependency constraints.
-
-Inputs:
-1. Selected stack with `repo-type=git`, `git-provider=gitlab`, `managed-service=simple-api-server`, `secret-provider=file`.
-2. Component metadata where `repo-type:git` declares `COMPONENT_DEPENDS_ON="git-provider:*"`.
-
-Execution:
-1. `run-e2e.sh` executes `init` hooks using dependency-aware batching.
-2. `git-provider:gitlab` and `managed-service:simple-api-server` initialize in parallel.
-3. `repo-type:git` initializes only after `git-provider:*` completion.
-4. Runner executes `configure-auth` and `context` hooks through the same dependency graph.
-
-Expected outputs:
-1. Hook batches run in parallel where no dependency edge exists.
-2. Repository component reads provider state without race conditions.
-3. Final context assembly succeeds deterministically.
-
-Failure expectation:
-1. Dependency selector referencing a non-selected component fails with actionable dependency error.
-2. Cyclic dependencies fail fast with an explicit cycle message before workload execution.
-
-### Example 33: E2E Metadata Source Directory Mode
-Goal: select run-scoped managed-service metadata from the component metadata directory.
-
-Inputs:
-1. `run-e2e.sh --profile cli-basic --managed-service simple-api-server --metadata-source dir`.
-2. Selected managed-service component with checked-in `metadata/` fixtures.
-
-Execution:
-1. Runner parses `--metadata-source dir`.
-2. Runner copies the component metadata tree into `test/e2e/.runs/<run-id>/managed-service-metadata`.
-3. Generated context points `metadata.baseDir` at that run-scoped copy.
-4. Runner keeps local `managedService.http.openapi` wiring enabled for the selected component.
-
-Expected outputs:
-1. Generated context uses the run-scoped metadata copy rather than the checked-in fixture directory.
-2. Local OpenAPI wiring remains enabled.
-3. Checked-in component metadata directories remain unchanged after the run.
-
-### Example 34: E2E Metadata Source Validation (Corner)
-Goal: reject invalid metadata-source selections before runtime preparation.
-
-Inputs:
-1. `run-e2e.sh --profile cli-basic --managed-service simple-api-server --metadata-source nope`.
-2. Selected managed-service component with checked-in `metadata/` fixtures.
-
-Execution:
-1. Runner parses the metadata-source flag before runtime preparation.
-2. Runner validates the requested value against the canonical `bundle|dir` set.
-3. Runner exits before preparing the runtime workspace.
-
-Expected outputs:
-1. Command fails with `ValidationError`.
-2. Error output names the allowed metadata-source values.
-
-Failure expectation:
-1. No runtime directories, component startup, or context generation occurs.
-
-### Example 12: Metadata Sidecar YAML Preference With JSON Fallback
-Goal: persist metadata in YAML by default while keeping existing JSON sidecars readable.
-
-Inputs:
-1. Logical path `/customers/acme`.
-2. Existing `metadata.json` sidecar with valid metadata.
-3. Later update through `metadata.MetadataStore.Set`.
-
-Execution:
-1. Metadata resolution reads `/customers/acme/metadata.json`.
-2. A subsequent metadata write persists `/customers/acme/metadata.yaml`.
-3. The write removes the superseded `/customers/acme/metadata.json` sidecar.
-
-Expected outputs:
-1. Reads succeed before migration when only JSON exists.
-2. After the write, only `metadata.yaml` remains for that selector path.
-3. If both sidecars exist before cleanup, metadata resolution uses `metadata.yaml` deterministically.
-
-Failure expectation:
-1. Invalid YAML or JSON sidecars fail with `ValidationError` and do not silently fall back to malformed content.
-
-### Example 13: Save and Apply With Externalized Attributes
-Goal: keep large text fields in sibling files while preserving apply/diff correctness.
-
-Inputs:
-1. Path `/projects/platform`.
-2. Metadata `resource.externalizedAttributes: [{path:["script"], file:"script.sh"}]`.
-3. Remote payload field `script: "echo hello"`.
-
-Execution:
-1. `orchestrator.Orchestrator.Save` persists `/projects/platform/resource.yaml` with `script: "{{include script.sh}}"`.
-2. `repository.ResourceArtifactStore` writes sibling file `script.sh` beside `resource.yaml`.
-3. `orchestrator.Orchestrator.Apply` or `Diff` reloads the local payload and expands `{{include script.sh}}` from the sidecar file before identity resolution, compare transforms, and remote mutation.
-
-Expected outputs:
-1. Repository payload stays compact and deterministic.
-2. Effective apply/diff payload contains `script: "echo hello"`.
-3. Remote compare or mutation does not receive the placeholder string.
-
-### Example 14: Externalized Array Script Attributes (Corner)
-Goal: externalize only script-bearing Rundeck job steps while preserving deterministic filenames for array matches.
-
-Inputs:
-1. Path `/projects/platform/jobs/sync-platform`.
-2. Metadata `resource.externalizedAttributes: [{path:["sequence","commands","*","script"], file:"script.sh"}]`.
-3. Payload `sequence.commands` contains `[{"script":"echo first"},{"exec":"echo inline"},{"script":"echo third"}]`.
-
-Execution:
-1. `orchestrator.Orchestrator.Save` persists placeholders for the matching steps only.
-2. `repository.ResourceArtifactStore` writes `script-0.sh` and `script-2.sh`.
-3. `orchestrator.Orchestrator.Apply` or `Diff` expands those placeholders back into the matching command objects before remote comparison or mutation.
-
-Expected outputs:
-1. The middle `exec` command remains inline and untouched.
-2. Matching script steps use deterministic indexed placeholders and sidecar filenames.
-3. Effective apply/diff payload restores the original script strings at indexes `0` and `2`.
-
-### Example 15: Externalized Attribute Missing File
-Goal: fail fast when a placeholder-backed attribute cannot be expanded.
-
-Inputs:
-1. Path `/projects/platform`.
-2. Metadata `resource.externalizedAttributes: [{path:["script"], file:"script.sh"}]`.
-3. Local payload `script: "{{include script.sh}}"` with no sibling `script.sh`.
-
-Execution:
-1. Repository-backed `resource apply`, `resource update`, or `resource diff` reads the local payload.
-2. Externalized-attribute expansion attempts to load `script.sh`.
-
-Expected outputs:
-1. Workflow stops before remote HTTP execution or diff generation.
-
-Failure expectation:
-1. Missing sidecar file returns `ValidationError` with the configured attribute path and file name.
-
-### Example 12: Simple API OAuth2 Guardrail (Corner)
-Goal: ensure `simple-api-server` denies resource operations without a valid bearer token.
-
-Inputs:
-1. Local stack with `managed-service=simple-api-server`.
-2. Client credentials configured in component state.
-
-Execution:
-1. Call a non-token endpoint (for example `GET /api/projects`) without `Authorization: Bearer`.
-2. Call `/token` with valid `grant_type=client_credentials` and configured client credentials.
-3. Retry `GET /api/projects` with the issued bearer token.
-
-Expected outputs:
-1. Step 1 fails with HTTP `401` and OAuth2 `invalid_token`.
-2. Step 2 returns JSON containing `access_token` and `token_type=Bearer`.
-3. Step 3 succeeds and returns deterministic JSON (`[]` or list payload, based on stored resources).
-
-Failure expectation:
-1. Invalid client credentials at `/token` fail with OAuth2 `invalid_client` and HTTP `401`.
-
-### Example 13: Shared SyncPolicy References With Path Isolation
-Goal: allow multiple SyncPolicies to share dependency references while preventing path/subpath scope collisions.
-
-Inputs:
-1. `SyncPolicy A` references repository `repo-main`, managed service `server-main`, secret store `secrets-main`, source path `/admin/realms/A`.
-2. `SyncPolicy B` references the same dependency objects with source path `/admin/realms/B`.
-3. `SyncPolicy C` references any dependency combination with source path `/admin/realms/A/clients`.
-
-Execution:
-1. Validate `SyncPolicy A` creation.
-2. Validate `SyncPolicy B` creation.
-3. Validate `SyncPolicy C` creation.
-
-Expected outputs:
-1. Steps 1-2 succeed because shared references are allowed for disjoint source paths.
-
-Failure expectation:
-1. Step 3 fails with `ConflictError`/overlap validation because `/admin/realms/A/clients` overlaps `SyncPolicy A` scope.
-
-### Example 14: Smoke vs Full Profile Selection
-Goal: keep basic profiles fast while letting full profiles run exhaustive compatible coverage.
-
-Inputs:
-1. One shared smoke case with `CASE_PROFILES='cli operator'`.
-2. One shared main case with `CASE_PROFILES='cli operator'`.
-3. One CLI-only main case with no `CASE_PROFILES`.
-
-Execution:
-1. `run-e2e.sh --profile cli-basic` collects only `smoke`.
-2. `run-e2e.sh --profile cli-full` collects `smoke`, `main`, and `corner`.
-3. `run-e2e.sh --profile operator-basic` collects `smoke` and `operator-main`.
-4. `run-e2e.sh --profile operator-full` collects compatible `smoke`, compatible `main`, `operator-main`, and `corner`.
-
-Expected outputs:
-1. CLI-only main cases are excluded from operator profiles.
-2. Shared smoke cases run in both CLI and operator basic profiles.
-3. Case ordering remains deterministic across profile families.
-
-Failure expectation:
-1. Invalid `CASE_PROFILES` metadata fails validation before workload execution.
-
-### Example 14: Authenticated Git Webhook Triggers Repository Reconcile
-Goal: trigger immediate repository refresh from provider webhook without waiting for poll interval.
-
-Inputs:
-1. `ResourceRepository.spec.git.webhook` configured with provider `gitea` or `gitlab` and `secretRef`.
-2. Operator webhook request path `/webhooks/repository/<namespace>/<repository>`.
-3. Push-event payload with branch ref matching repository branch.
-
-Execution:
-1. Provider sends signed/tokenized push webhook payload to operator endpoint.
-2. Operator validates auth headers (`X-Gitea-Signature` or `X-Gitlab-Token`) and event type.
-3. Operator patches repository webhook receipt annotations to enqueue reconcile.
-
-Expected outputs:
-1. Repository reconcile starts before next poll interval deadline.
+1. Repository reconcile starts before the next poll deadline.
 2. `declarest.io/webhook-last-received-at` annotation updates deterministically.
 
 Failure expectation:
-1. Invalid signature/token returns authentication failure and no repository annotation mutation.
+1. Invalid signature/token returns an authentication failure with no annotation mutation and no reconcile.
 
-### Example 20: Managed-Service Swagger 2 Compatibility (Corner)
-Goal: keep managed-service OpenAPI-assisted behavior equivalent when `managed-service.http.openapi` points to Swagger 2.0.
+### Scenario 4: E2E manual handoff with prompt-backed credentials
+Owners exercised: `e2e.md`, `context-config.md`.
+
+Goal: hand a local stack to the user with credentials deferred to runtime prompts and reused across the shell session, never written as plaintext into the context file.
 
 Inputs:
-1. Context `managed-service.http.openapi` path pointing to a `swagger: "2.0"` document.
-2. Swagger operation with `consumes`, `produces`, and `parameters[in=body].schema`.
-3. Metadata operation using `validate.schemaRef: openapi:request-body`.
+1. `run-e2e.sh --profile cli-manual`.
+2. Catalog credential `shared-login` with prompt-backed `username`/`password` and `persistInSession: true` (catalog schema + `credentialsRef` owned by `context-config.md`).
+3. Context components referencing `shared-login` via `credentialsRef`.
+4. User evaluated `declarest context session-hook <bash|zsh>` in the current shell.
 
 Execution:
-1. Startup loads and normalizes the Swagger 2.0 document through `managedservice.ManagedServiceClient`.
-2. Request construction resolves missing `Accept`/`ContentType` from normalized operation media definitions.
-3. Payload validation resolves `openapi:request-body` against the normalized Swagger body schema.
+1. Runner validates the stack is local-instantiable, starts components, and emits a temporary context catalog (handoff owned by `e2e.md`).
+2. Runner copies the managed-service `repo-template` into the context repository directory and generates setup/reset scripts.
+3. Startup resolves the context without prompting because prompt-backed attributes are deferred.
+4. The first component needing credentials prompts once and warns about session reuse; values persist only under `XDG_RUNTIME_DIR/declarest/prompt-auth/`.
 
 Expected outputs:
-1. Request defaults match Swagger `consumes`/`produces` media types.
-2. `openapi:request-body` validation accepts payloads that satisfy the Swagger body schema (including path-derived required fields).
-3. Runtime method-support checks behave the same as OpenAPI 3 paths.
+1. Persisted catalog keeps only the prompt-backed definition plus `credentialsRef` placeholders; no plaintext credentials in context blocks.
+2. One hooked shell session prompts at most once per prompt-backed attribute; later commands reuse cached values.
+3. Sourcing the setup script exports runtime env vars, defines alias `declarest-e2e`, and enables session reuse; the reset script restores prior state and removes the alias.
 
 Failure expectation:
-1. If Swagger operation has no body schema (`parameters[in=body].schema` missing), `openapi:request-body` validation fails with `ValidationError`.
+1. A non-interactive command with uncached prompt-backed attributes fails with `ValidationError`.
+2. When `XDG_RUNTIME_DIR` is unavailable, no cross-command cache is created and a new session prompts again.
 
-### Example 13: Compose Platform Runtime
-Goal: run containerized components with compose artifacts explicitly.
+### Scenario 5: Bundle shared metadata + repo-local overlay precedence
+Owners exercised: `metadata.md`, `metadata-bundle.md`, `context-config.md`.
 
-Inputs:
-1. `run-e2e.sh --profile basic --platform compose --repo-type filesystem --managed-service simple-api-server --secret-provider file`.
-
-Execution:
-1. Runner parses platform selection (`compose`).
-2. Component contract validation resolves `compose/compose.yaml` for each selected containerized component.
-3. Start/stop adapters execute compose up/down against run-scoped project names.
-
-Expected outputs:
-1. Local components become reachable via configured loopback ports.
-2. Runtime summary reports `platform: compose`.
-
-Failure expectation:
-1. Missing `compose/compose.yaml` in a selected containerized component fails component validation before startup.
-
-### Example 14: Kubernetes Platform Runtime and Cleanup (Corner)
-Goal: verify kind runtime lifecycle, manual handoff details, and cleanup.
-
-Inputs:
-1. `run-e2e.sh --profile manual --platform kubernetes --repo-type filesystem --managed-service keycloak --secret-provider file`.
-2. Follow-up cleanup command `run-e2e.sh --clean <run-id>`.
-
-Execution:
-1. Runner creates run-scoped kind cluster and namespace (provider-aware for container engine).
-2. Runner applies selected component `k8s/*.yaml` manifests and starts service port-forwards from service annotations.
-3. Manual handoff prints kubeconfig/cluster/namespace details and kubectl examples.
-4. Cleanup reads run runtime state and deletes the recorded kind cluster.
-
-Expected outputs:
-1. `kubectl --kubeconfig <run-kubeconfig> -n <namespace> get pods,svc` succeeds during manual handoff.
-2. `--clean` removes run directory and associated kind cluster.
-
-Failure expectation:
-1. Podman provider preflight failures return actionable errors before runtime creation (`KIND_EXPERIMENTAL_PROVIDER=podman` guidance).
-
-### Example 13: Simple API mTLS Client Certificate Allowlist
-Goal: ensure `simple-api-server` accepts only configured client certificates during TLS handshake when mTLS is enabled.
-
-Inputs:
-1. `managed-service=simple-api-server`.
-2. `ENABLE_MTLS=true`.
-3. One or more allowed client public certificates mounted into the configured cert directory.
-
-Execution:
-1. Start the component with `DECLAREST_E2E_SIMPLE_API_ENABLE_MTLS=true`.
-2. Run one request with the configured client cert/key and CA trust settings.
-3. Run one request with an untrusted client certificate.
-4. Remove all trusted cert files from the configured allowlist directory while the server is running and retry with the previously trusted client certificate.
-5. Add the trusted client cert file back to the allowlist directory and retry again.
-
-Expected outputs:
-1. Step 2 succeeds and the request reaches normal API handling.
-2. Step 3 fails during TLS handshake before API request processing.
-3. Step 4 fails without restarting the service because no client certificates are currently trusted.
-4. Step 5 succeeds again without restarting the service.
-
-Failure expectation:
-1. Missing TLS server cert/key material causes startup/configuration failure with actionable error.
-
-### Example 14: Simple API Basic Auth Guardrail
-Goal: ensure `simple-api-server` rejects unauthenticated requests and accepts configured basic-auth credentials when basic-auth mode is selected.
-
-Inputs:
-1. `managed-service=simple-api-server`.
-2. `--managed-service-auth-type basic`.
-3. Basic auth username/password configured in component state.
-
-Execution:
-1. Call `GET /health` without `Authorization`.
-2. Call `GET /health` with wrong basic credentials.
-3. Call `GET /health` with configured basic credentials.
-
-Expected outputs:
-1. Step 1 fails with HTTP `401`.
-2. Step 2 fails with HTTP `401`.
-3. Step 3 succeeds with HTTP `200`.
-
-Failure expectation:
-1. Selecting `--managed-service-auth-type` unsupported by the selected managed-service component fails run selection before startup.
-
-### Example 15: Secret Detect Metadata Autofix
-Goal: detect secret-like attributes from repository resources or input payload and persist them into metadata.
-
-Inputs:
-1. Local repository resources under `/customers` containing potential secret-like attributes.
-2. Optional payload input with detected keys (for example `/apiToken`, `/password`).
-3. `declarest secret detect` (repository-scan mode, whole repo scope).
-4. `declarest secret detect /customers --fix` (repository-scan scoped metadata autofix).
-5. `declarest secret detect /customers/acme --fix < payload.json` (payload mode metadata autofix).
-6. Optional `--secret-attribute /password`.
-
-Execution:
-1. Without payload input, CLI scans local repository resources recursively under requested path (or `/` when path omitted).
-2. With payload input, CLI detects secret candidates from payload content.
-3. When `--secret-attribute` is provided, CLI filters to exactly one detected attribute.
-4. In `--fix` mode, CLI loads existing metadata for each target path (or initializes empty metadata when missing).
-5. CLI merges filtered detected attributes into `resource.secretAttributes` and persists metadata.
-
-Expected outputs:
-1. Repository-scan output groups detected attributes by logical resource path with deterministic ordering.
-2. Metadata for fixed paths contains deterministic, deduplicated `resource.secretAttributes`.
-3. Existing metadata directives remain preserved.
-
-Failure expectation:
-1. `declarest secret detect --fix < payload.json` without path fails with `ValidationError`.
-2. `declarest secret detect /customers --secret-attribute /unknown` fails with `ValidationError`.
-
-### Example 16: OpenAPI Context Propagation
-Goal: surface a component's `openapi.yaml` (when present) to the generated context so metadata inference uses the stable API definition.
-
-Inputs:
-1. Component `keycloak` (or another) declares an `openapi.yaml` asset under its component directory.
-2. `run-e2e.sh` is invoked with that component selected and a writable run directory.
-
-Execution:
-1. The runner copies each selected component's `openapi.yaml` to the run directory before context hooks execute.
-2. The corresponding `context` hook reads the exported `E2E_COMPONENT_OPENAPI_SPEC` value and emits the appropriate key (for managed services, `managed-service.http.openapi`) pointing at the run-scoped spec file.
-3. `e2e_context_build` aggregates fragments, producing a context YAML that references the copied spec.
-
-Expected outputs:
-1. `test/e2e/.runs/<run-id>/contexts.yaml` contains `managed-service.http.openapi` pointing to `<run-id>/<component-name>-openapi.yaml`.
-2. `declarest context show --context e2e-<profile>` succeeds and can use the spec for metadata inference or `resource metadata infer --openapi`.
-
-Failure expectation:
-1. If the runner cannot copy the declared spec, the context phase fails fast with an actionable error before `resource metadata` commands run.
-
-### Example 17: Repository History by Backend Type (Corner)
-Goal: expose local git history when available while keeping filesystem repos deterministic and non-mutating.
-
-Inputs:
-1. Context `dev-fs` with `repository.filesystem`.
-2. Context `dev-git` with `repository.git` and a repository base dir that may exist without `.git/` initialized yet.
-3. Optional filters `--max-count`, `--author`, `--grep`, `--since`, `--until`, `--path`, `--oneline`.
-
-Execution:
-1. Run `declarest --context dev-fs repository history`.
-2. Run `declarest --context dev-git repository history --oneline --max-count 5 --author alice --grep fix --path customers`.
-
-Expected outputs:
-1. Step 1 prints a stable not-supported message for filesystem repositories and exits successfully.
-2. Step 2 auto-initializes the local git repo when needed and prints filtered local git commit history (empty on a fresh repo) without additional unexpected mutations.
-
-Failure expectation:
-1. Invalid `--since` or `--until` date input fails with `ValidationError` before repository history lookup.
-
-### Example 18: Git Auto-Commit for Repository Mutations
-Goal: commit repository changes after local mutation commands while protecting against unrelated worktree changes.
-
-Inputs:
-1. Git repository context with clean worktree.
-2. `resource save` or `resource delete --source repository`.
-3. Optional commit-message flag `--message`.
-
-Execution:
-1. Run `declarest resource save /customers/acme --payload '/id=acme,/name=Acme' --force --message ticket-123`.
-2. Run `declarest resource delete /customers/acme --yes --source repository --message 'cleanup customer'`.
-3. Re-run one command after creating an unrelated uncommitted change in the repo.
-4. Run one command with `--message '   '`.
-
-Expected outputs:
-1. Step 1 saves repository content and creates one local commit whose message is exactly `ticket-123`.
-2. Step 2 deletes local repository content and creates one local commit using the override message exactly.
-
-Failure expectation:
-1. Step 3 fails with `ValidationError` before mutation because auto-commit commands require a clean git worktree.
-2. Step 4 fails with `ValidationError` because `--message` cannot be empty after trimming.
-
-### Example 19: Shared E2E Proxy Context Injection
-Goal: ensure E2E shared proxy selection writes complete proxy blocks into every eligible CLI context section.
-
-Inputs:
-1. `run-e2e.sh --proxy-mode external`.
-2. At least one proxy URL env var (`DECLAREST_E2E_PROXY_HTTP_URL` or `DECLAREST_E2E_PROXY_HTTPS_URL`).
-3. Optional proxy auth vars (`DECLAREST_E2E_PROXY_AUTH_USERNAME` and `DECLAREST_E2E_PROXY_AUTH_PASSWORD`).
-
-Execution:
-1. Start the runner with `--proxy-mode external` and proxy env vars set.
-2. Let context assembly complete and inspect `test/e2e/.runs/<run-id>/contexts.yaml`.
-3. Repeat with `--proxy-mode external` and no proxy URL env vars.
-
-Expected outputs:
-1. Step 2 context contains explicit proxy blocks for `managedService.http`, `repository.git.remote` when the remote URL uses `http|https`, `secretStore.vault`, and `metadata` when bundle-backed metadata is downloaded remotely.
-2. Each injected proxy block contains configured `http`/`https`, optional `noProxy`, and optional `auth` fields.
-3. Unrelated auth and TLS blocks remain unchanged.
-
-Failure expectation:
-1. Step 3 fails argument validation before runtime startup with actionable guidance about missing proxy URL env vars.
-
-### Example 30: Operator Profile Manual Reconciliation
-Goal: run operator profile end-to-end and manually verify repository-to-managed-service reconciliation.
-
-Inputs:
-1. `run-e2e.sh --profile operator-manual --managed-service simple-api-server --repo-type git --git-provider gitea --secret-provider file`.
-2. Local toolchain supports `kind`, `kubectl`, and selected container engine.
-
-Execution:
-1. Runner initializes selected local components and config context.
-2. Runner seeds fixture repository content, initializes git, commits/pushes seed content to the selected git provider, applies vendored OLM core YAML when needed, installs the operator through `CatalogSource`/`OperatorGroup`/`Subscription`, waits for the OLM-managed CSV and Deployment, and applies generated operator CRs.
-3. User sources the generated setup script and runs the printed commands to save one new resource, commit/push it, and read the same logical path from the managed service.
-
-Expected outputs:
-1. Operator resources (`resourcerepository`, `managedservice`, `secretstore`, `syncpolicy`) become `Ready`.
-2. Manual verification command returns the created resource from the managed service at the same logical path.
-3. Runtime artifacts and shell reset script remain available until explicit cleanup.
-
-Failure expectation:
-1. OLM core, CatalogSource, Subscription, CSV, or operator Deployment readiness failures surface actionable logs and abort before CR application.
-
-### Example 31: Operator Profile Invalid Selection (Corner)
-Goal: reject unsupported operator profile selections before runtime startup.
-
-Inputs:
-1. `run-e2e.sh --profile operator --repo-type filesystem`.
-2. `run-e2e.sh --profile operator --repo-type git --git-provider git`.
-3. `run-e2e.sh --profile operator --secret-provider none`.
-
-Execution:
-1. Runner parses args and applies profile defaults.
-2. Runner validates profile rules in `Initializing`.
-
-Expected outputs:
-1. Each command fails fast with `ValidationError` and actionable guidance indicating the required operator constraints.
-
-Failure expectation:
-1. Any command reaching component startup after violating operator profile constraints is a contract breach.
-
-### Example 32: Resource Required Attributes Before Transforms (Corner)
-Goal: reject structured mutations that omit metadata-required identity fields even when operation transforms would later remove those fields from the outgoing body.
-
-Inputs:
-1. Metadata with `resource.alias: "{{/clientId}}"`, `resource.requiredAttributes: [/realm]`, and `operations.update.transforms: [{excludeAttributes:["/clientId"]}]`.
-2. Structured update payload that omits `/clientId` but includes `/realm`.
-
-Execution:
-1. User runs `resource update` or metadata-resolved `resource request put` for the target logical path.
-2. Runtime validates resource-level required attributes before applying operation transforms.
-
-Expected outputs:
-1. Command fails with `ValidationError` that references missing `/clientId`.
-2. No remote HTTP request is sent.
-
-Failure expectation:
-1. If the runtime validates only the transformed outgoing body or allows the missing alias to pass, the contract is breached.
-
-### Example 35: Collection Save With `resource.format: any`
-Goal: preserve mixed child payload formats during one collection save.
-
-Inputs:
-1. Collection metadata at `/customers/_` with `resource.format: any`.
-2. Incoming collection payload whose items resolve to `/customers/acme` and `/customers/beta`.
-3. Existing repository state where `/customers/acme/resource.yaml` already exists and `/customers/beta/resource.json` already exists, or item descriptors explicitly identify different formats.
-
-Execution:
-1. User runs `resource save /customers` with the mixed collection payload.
-2. Runtime resolves one logical child path per item using metadata identity rules.
-3. Repository persistence preserves each child item's explicit or existing payload descriptor instead of coercing the whole collection to one format.
-
-Expected outputs:
-1. `/customers/acme/resource.yaml` remains YAML and `/customers/beta/resource.json` remains JSON after the save.
-2. Collection save succeeds without rewriting both children to one shared suffix.
-
-Failure expectation:
-1. If one collection-level descriptor rewrites every child to the same suffix despite `format: any`, the contract is breached.
-
-### Example 36: Metadata View vs Rendered Metadata Snapshot
-Goal: keep `resource metadata get` and `resource get --show-metadata` boundaries explicit for payload-aware helper tokens.
-
-Inputs:
-1. Metadata containing `operations.get.accept: "{{payload_media_type .}}"` and `operations.create.headers.X-Content-Type: "{{index . \"contentType\"}}"`.
-2. Resource payload stored or fetched as raw text or octet-stream.
-
-Execution:
-1. User runs `resource metadata get <path>`.
-2. User runs `resource get <path> --show-metadata`.
-
-Expected outputs:
-1. `resource metadata get` prints the canonical metadata view with helper placeholders still present.
-2. `resource get --show-metadata` prints a rendered metadata snapshot where payload-aware helper tokens resolve from the active descriptor (for example `text/plain`, `application/octet-stream`, or an explicit extension-backed descriptor).
-3. Non-payload templates that still depend on unresolved payload fields remain untouched in `resource metadata get`.
-
-### Example 37: Repo-Local Metadata Overlay Overrides Bundle Metadata
 Goal: let repository-local metadata refine bundle metadata without mutating the extracted bundle source.
 
 Inputs:
-1. Bundle-provided shared metadata defines `/customers/_/metadata.yaml` with `resource.id: "{{/id}}"` and `resource.format: yaml`.
-2. Repository-local overlay defines `/customers/acme/metadata.yaml` with `resource.alias: "{{/name}}"` and `resource.format: json`.
+1. Bundle-provided shared metadata `/customers/_/metadata.yaml` with `resource.id: "{{/id}}"` and `resource.format: yaml` (bundle ref/resolution per `metadata-bundle.md`; bundle source selected via context per `context-config.md`).
+2. Repository-local overlay `/customers/acme/metadata.yaml` with `resource.alias: "{{/name}}"` and `resource.format: json`.
 
 Execution:
-1. Runtime resolves metadata for `/customers/acme`.
-2. User edits metadata for `/customers/acme` through `resource metadata set` or `resource metadata edit`.
+1. Runtime resolves metadata for `/customers/acme` (layering/precedence owned by `metadata.md`).
+2. User edits metadata via `resource metadata set`/`edit`.
 
 Expected outputs:
-1. Resolved metadata keeps `resource.id` from the shared source and overrides `resource.alias` plus `resource.format` from the repo-local overlay.
-2. Metadata mutation writes only the repo-local sidecar and leaves the extracted bundle metadata source unchanged.
+1. Resolved metadata keeps `resource.id` from the shared source and overrides `resource.alias` and `resource.format` from the repo-local overlay.
+2. Metadata mutation writes only the repo-local sidecar; the extracted bundle source is unchanged.
 
 Failure expectation:
-1. If resolution ignores the repo-local override or metadata mutation rewrites the extracted bundle source, the contract is breached.
+1. Resolution ignoring the overlay, or mutation rewriting the extracted bundle source, breaches the contract.
 
-Failure expectation:
-1. If `resource metadata get` renders payload-aware helpers, or `resource get --show-metadata` falls back to JSON for raw text/octet-stream payloads, the contract is breached.
+### Scenario 6: Descendant-scoped nested secret paths
+Owners exercised: `metadata.md`, `managed-service.md`.
 
-### Example 38: Descendant-Scoped Rundeck Secret Paths
 Goal: support nested secret folders under one collection selector without slashful resource IDs.
 
 Inputs:
-1. Collection metadata at `/projects/_/secrets/_/metadata.yaml` with `selector.descendants: true`.
+1. Collection metadata `/projects/_/secrets/_/metadata.yaml` with `selector.descendants: true` (descendant selectors owned by `metadata.md`).
 2. `resource.remoteCollectionPath: /storage/keys/project/{{/project}}{{/descendantCollectionPath}}`.
-3. Relative operation paths such as `operations.get.path: ./{{/id}}` and `operations.list.path: .`.
-4. Logical targets `/projects/platform/secrets/db-password`, `/projects/platform/secrets/path/to/db-password`, and `/projects/platform/secrets/path/to`.
+3. Relative operation paths `operations.get.path: ./{{/id}}` and `operations.list.path: .` (request building owned by `managed-service.md`).
+4. Logical targets `/projects/platform/secrets/db-password`, `/projects/platform/secrets/path/to/db-password`, `/projects/platform/secrets/path/to`.
 
 Execution:
 1. Metadata resolution matches the `/projects/_/secrets/_` selector at concrete root `/projects/platform/secrets`.
-2. Render scope derives `project=platform`, `descendantPath`, and `descendantCollectionPath` from that matched root instead of from the full nested logical suffix.
-3. Managed-service request building renders relative operation paths against the descendant-aware remote collection path.
+2. Render scope derives `project`, `descendantPath`, and `descendantCollectionPath` from the matched root, not the full nested suffix.
+3. Request building renders relative operation paths against the descendant-aware remote collection path.
 
 Expected outputs:
 1. `/projects/platform/secrets/db-password` renders `/storage/keys/project/platform/db-password`.
 2. `/projects/platform/secrets/path/to/db-password` renders `/storage/keys/project/platform/path/to/db-password`.
 3. `resource list /projects/platform/secrets/path/to` renders `/storage/keys/project/platform/path/to`.
-4. `resource.id` stays segment-safe (`db-password`) and never becomes `path/to/db-password`.
+4. `resource.id` stays segment-safe (`db-password`), never `path/to/db-password`.
 
 Failure expectation:
-1. If nested secret paths inherit without `selector.descendants: true`, derive bogus plural fields such as `secret=path`, or require slashful `resource.id` values, the contract is breached.
-
-### Example 39: Recursive Grouped Resource Diff
-Goal: review drift for one collection subtree without noise from unchanged resources.
-
-Inputs:
-1. Requested path `/customers`.
-2. Local repository resources `/customers/acme`, `/customers/beta`, and `/customers/nested/gamma`.
-3. Compare results where `/customers/acme` is changed, `/customers/beta` is unchanged, and `/customers/nested/gamma` is missing on the managed service.
-
-Execution:
-1. User runs `declarest resource diff /customers --recursive`.
-2. CLI resolves recursive repository targets in stable logical-path order.
-3. Diff output renders one unified-diff section for `/customers/acme` and one grouped section for `/customers/nested/gamma`.
-
-Expected outputs:
-1. `/customers/beta` is omitted from text sections because it has no drift.
-2. Output order is `/customers/acme` before `/customers/nested/gamma`.
-3. Final summary reports deterministic counts for changed, removed, and unchanged resources.
-
-### Example 40: Diff List-Only Mode (Corner)
-Goal: produce path-only drift output for automation without rendering full unified diffs.
-
-Inputs:
-1. Requested path `/customers`.
-2. Recursive repository targets with both changed and unchanged resources.
-3. Command `declarest resource diff /customers --recursive --list --output json`.
-
-Execution:
-1. CLI resolves recursive repository targets.
-2. CLI computes compare results for each target.
-3. CLI filters out unchanged resources and serializes only the remaining logical paths.
-
-Expected outputs:
-1. Text output prints one logical path per line in stable order.
-2. Structured output is a stable array of path strings.
-3. No full unified-diff sections are rendered in `--list` mode.
-
-Failure expectation:
-1. Invalid `--color` values fail with `ValidationError` before diff rendering.
-
-### Example 41: Parallel E2E Matrix Execution
-Goal: run multiple `run-e2e.sh` workloads concurrently without losing per-run failure visibility.
-
-Inputs:
-1. `test/e2e/run-e2e-parallel.sh`.
-2. A matrix file or stdin payload containing one `./test/e2e/run-e2e.sh ...` command per line.
-3. At least one local-stack command that requires host port allocation.
-
-Execution:
-1. The parallel launcher reads the command list, ignoring blank lines and comments.
-2. The launcher starts one child shell per line and writes each child output to its own log file.
-3. Each child `run-e2e.sh` reserves any selected host ports for the lifetime of the run and releases them during finalize or cleanup.
-4. The launcher waits for every child process and aggregates their exit codes.
-
-Expected outputs:
-1. All child runs execute concurrently and keep their own run directories, logs, compose project names, and Kubernetes runtime names.
-2. The launcher prints one `PASS` or `FAIL` summary line per child log.
-3. The launcher exits `0` only when every child command exits `0`.
-
-Failure expectation:
-1. Any one child `run-e2e.sh` failure makes the launcher exit non-zero after reporting the failing job log path.
+1. Inheriting nested paths without `selector.descendants: true`, deriving bogus fields (e.g. `secret=path`), or requiring slashful `resource.id` breaches the contract.

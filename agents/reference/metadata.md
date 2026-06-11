@@ -1,165 +1,134 @@
 # Metadata Semantics, Layering, and Templates
 
 ## Purpose
-Define deterministic metadata behavior for operation routing, transform rules, and template rendering.
-
-## In Scope
-1. Metadata structure and supported directives.
-2. Layering and precedence algorithm.
-3. Template rendering and context resolution.
-4. Metadata inference from OpenAPI hints.
-
-## Out of Scope
-1. HTTP transport implementation internals.
-2. Secret store backend behavior.
-3. CLI output formatting specifics.
+Define deterministic metadata structure, layering/precedence, template rendering, inference, defaults, identity, format, secret declaration, externalized attributes, and descendant selectors. This file OWNS these concepts; other files reference it.
 
 ## Normative Rules
+
+### Resolution and precedence
 1. Metadata resolution MUST be deterministic and reproducible.
-2. Metadata source precedence MUST be: engine defaults, configured shared metadata source (`metadata.baseDir|bundle|bundleFile`), then repo-local metadata overlays rooted at the active repository baseDir.
-3. Inside one metadata source, precedence MUST be: inherited collection layers, wildcard layers, literal layers, resource layer.
-4. At the same depth inside one metadata source, wildcard candidates MUST be applied before literal candidates when establishing defaults.
-5. At the same precedence level, merge order MUST be stable and lexicographic.
-6. Resource-level directives MUST override inherited directives inside the same source, and repo-local overlays MUST override shared-source directives for the same logical path.
-7. Template rendering failures MUST return typed validation errors with path context.
-8. Compare transforms MUST run before diff generation.
-9. Inference from OpenAPI SHOULD propose method/path defaults, SHOULD infer `resource.format` from managed-service payload formats (using `any` when more than one deterministic format is advertised), but MUST NOT overwrite explicit user metadata unless explicitly requested.
-10. Metadata persistence MUST omit nil directive fields from stored files instead of writing `null`.
-11. Metadata persistence MUST preserve explicit empty arrays/maps when they are provided for replacement semantics.
-12. Metadata persistence MUST preserve raw `resource.defaults` include placeholders on read/write and MUST NOT inline included defaults objects into stored `metadata.yaml|json`.
-13. Metadata persistence MUST read selector sidecars from `metadata.yaml` or `metadata.json`, MUST prefer `metadata.yaml` when both exist, MUST treat repo-local resource metadata as `metadata.yaml|json` sidecars next to `resource.<ext>`, MUST treat repo-local collection metadata as `/<collection>/_/metadata.yaml|json`, and SHOULD write `metadata.yaml` by default while removing a superseded sibling sidecar after successful persistence.
-14. Metadata mutation workflows (`get/set/unset/edit` plus defaults-artifact writes) MUST target the explicit `metadata.baseDir` source when one is configured, even when a repository baseDir also exists; when the active shared source comes from `metadata.bundle` or `metadata.bundleFile` and a repository baseDir exists, those workflows MUST target the repo-local overlay instead and MUST leave the bundle cache read-only; when metadata source defaults to repository baseDir, mutations MUST target that repository-local tree.
-15. Metadata resolution MUST expand include-backed `resource.defaults.value` and `resource.defaults.profiles[*]` from selector-local deterministic files named `defaults.<ext>` or `defaults-<profile>.<ext>`, MUST support only `json|yaml|yml|properties`, and MUST require structured object payloads.
-16. `resource.defaults.mode` MUST support `inherit`, `ignore`, and `replace`; `ignore` drops inherited baseline defaults and inherited selected profiles while keeping ancestor profile catalogs available for explicit local `useProfiles`, and `replace` drops inherited baseline defaults, inherited selected profiles, and ancestor profile catalogs.
-17. `resource.defaults.useProfiles` MUST inherit when omitted, MUST clear when explicitly empty, and selected profiles MUST apply in listed order before local `resource.defaults.value`.
-18. `resource.defaults.value` and each `resource.defaults.profiles[*]` entry MUST accept either one inline structured object or one exact include placeholder; profile names MUST be filename-safe and deterministic because include filenames derive from the profile key.
-19. Inference MUST accept metadata selector paths containing intermediary `_` segments and trailing collection markers (for example `/admin/realms/_/clients/`).
-20. Selector-path inference SHOULD use OpenAPI path templates when available to infer operation paths and identity templates, and non-template-safe OpenAPI parameter names MUST fall back to deterministic placeholder names from fallback inference.
-21. Inference output SHOULD omit directives that are equal to deterministic fallback defaults so CLI responses focus on meaningful overrides.
-22. Until recursive metadata inference traversal is implemented, inference requests with `recursive=true` MUST return a typed validation error and MUST NOT persist metadata changes.
-23. `resource.remoteCollectionPath` templates MUST support indirection by resolving template fields from the handled logical path when payload attributes are absent.
-24. When `resource.remoteCollectionPath` is omitted, the effective remote collection path MUST default to the handled logical collection path.
-25. Operation paths starting with `.` (for example `.` or `./{{/id}}`) MUST resolve relative to the rendered effective collection path.
-26. When an operation path is omitted, defaults MUST be `.` for `create` and `list`, and `./{{/id}}` for `get`, `update`, `delete`, and `compare`.
-27. List-operation `transforms[*].jqExpression` entries MAY call `resource("<logical-path>")`; when used, resolution MUST target the same active source as the primary list workflow and return normalized JSON payload.
-28. Metadata template-rendered string fields MUST support canonical JSON Pointer placeholders such as `{{/id}}`, MUST accept one-level shorthand such as `{{id}}` as equivalent to `{{/id}}`, MAY continue accepting legacy dot notation such as `{{.id}}` for compatibility, and MUST support `{{payload_type .}}`, `{{payload_media_type .}}`, and `{{payload_extension .}}`, which resolve from the active resource payload descriptor without forcing a media default when no concrete descriptor is available.
-29. Metadata template scopes MUST expose `logicalCollectionPath` as the handled logical collection path and MUST expose `remoteCollectionPath` as the effective remote collection path.
-30. Metadata template scopes MUST expose `contentType` as the active payload media type when the payload itself does not already define `contentType`, so media-aware templates work for raw text or octet-stream payloads.
-31. Metadata defaults MUST leave media header selection to payload-type-aware request building unless explicit metadata overrides are present.
-32. Operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be preserved through metadata merge/render/serialization and MUST remain operation-scoped.
-33. OpenAPI-backed inference SHOULD populate `operations.create/update.validate.schemaRef` as `openapi:request-body` when request-body schemas exist and MAY populate `validate.requiredAttributes` from deterministic schema `required` fields.
-34. `resource.format` MAY define one concrete payload format or `any`; concrete values MUST support `json`, `yaml`, `xml`, `hcl`, `ini`, `properties`, `text`, and `octet-stream`, concrete values MAY drive default repository save suffix selection and request media defaults when no explicit descriptor/header wins, and `format: any` MUST preserve mixed repository/request descriptors instead of coercing one collection to one format.
-35. `resource.secret: true` MAY declare one whole-resource secret save/read contract for that scope, MUST remain distinct from attribute-scoped secret masking, and MUST be mutually exclusive with `resource.secretAttributes`.
-36. `resource.id` and `resource.alias` MUST be identity template strings, MUST NOT accept legacy identity fields, MUST accept raw JSON Pointer shorthand such as `/id` as equivalent to `{{/id}}`, MUST accept one-level shorthand such as `{{id}}` as equivalent to `{{/id}}`, and MAY embed one or more RFC 6901 JSON Pointer expressions plus helper functions such as `uppercase`, `lowercase`, `trim`, `substring`, and `default`.
-37. When `resource.id` or `resource.alias` is omitted, identity resolution MUST default that field to `/id`.
-38. `resource.requiredAttributes` MUST be preserved through metadata merge/render/serialization and MUST remain resource-scoped.
-39. Body-bearing resource mutation workflows MUST validate the structured source payload against the effective resource required-attribute set before operation-specific payload transforms run; the effective set MUST include every JSON Pointer referenced by explicitly configured `resource.alias`, and non-create mutation workflows MUST also include every JSON Pointer referenced by explicitly configured `resource.id`, even when `resource.requiredAttributes` omits those pointers; create MAY omit metadata-derived `resource.id` pointers unless they are explicitly declared by `resource.requiredAttributes` or operation validation.
-40. When concrete `resource.format` resolves to a non-structured payload type, `resource.defaults`, `resource.id`, `resource.alias`, `resource.requiredAttributes`, `resource.secretAttributes`, and `resource.externalizedAttributes` MUST fail validation because they depend on structured payload traversal; `resource.format: any` MUST defer that validation until a concrete descriptor is known.
-41. `resource.externalizedAttributes` MUST default unspecified `template|mode|saveBehavior|renderBehavior|enabled` fields deterministically and MUST validate duplicate enabled `path` or `file` entries before persistence or workflow use.
-42. Enabled `resource.externalizedAttributes` entries MUST treat `path` as one JSON Pointer traversal path, MUST traverse object keys by pointer token, MUST traverse arrays only through zero-based numeric tokens or `*` wildcard tokens, MUST reject empty paths/files and repository-escaping relative files, MUST externalize only text/string payload values in MVP scope, and MUST leave disabled entries inert.
-43. When an enabled externalized-attribute `path` uses one or more `*` wildcard array tokens, repository workflows MUST materialize concrete artifact file names deterministically by appending matched wildcard indices before the configured file extension (for example `script.sh` -> `script-0.sh`), and placeholder rendering/expansion MUST use that concrete file path.
-44. Repository-backed payload workflows (`save`, `apply`, `create`, `update`, `diff`) MUST replace configured include placeholders with sidecar file contents before downstream payload transforms or identity resolution when the stored payload value matches the configured placeholder template exactly.
-45. Changes to the persisted metadata wire shape or metadata validation contract MUST update `schemas/metadata.schema.json` in the same change; that schema MUST describe the canonical nested metadata structure and MUST NOT reintroduce legacy flat aliases.
-46. `selector.descendants` MAY be persisted only on collection metadata, MUST default to disabled, and MUST opt a non-root matched collection selector into deeper descendant inheritance beyond its exact collection root and immediate resource items.
-47. Non-root collection metadata without `selector.descendants: true` MUST apply only to the matched collection root and its immediate resource items; the root selector `/` remains global.
-48. When multiple descendant-enabled collection selectors apply, render-time descendant scope MUST use the deepest matched collection root after normal source and specificity precedence.
-49. Descendant-enabled template scope MUST expose `descendantPath` and `descendantCollectionPath` as slash-prefixed suffixes from the matched collection root to the handled target path or target collection path, and MUST expose `""` when the handled target is exactly at that root.
-50. Descendant scope fields MUST remain render-only helpers and MUST NOT be merged into payload mutation input, required-attribute validation input, or effective resolved metadata snapshots returned by `ResolveForPath`.
+2. Source precedence MUST be: engine defaults, then configured shared source (`metadata.baseDir|bundle|bundleFile`), then repo-local overlays rooted at the active repository baseDir. Repo-local overlays MUST override shared-source directives for the same logical path.
+3. Inside one source, precedence MUST be: inherited collection layers, wildcard layers, literal layers, resource layer. Resource-level directives MUST override inherited directives in the same source.
+4. At the same depth, wildcard candidates MUST be applied before literal candidates. At the same precedence level, merge order MUST be stable and lexicographic.
+5. Template rendering failures MUST return typed validation errors with path context.
+6. Compare transforms MUST run before diff generation.
+
+### Persistence and schema
+7. Persistence MUST omit nil directive fields (never write `null`) and MUST preserve explicit empty arrays/maps (replacement semantics).
+8. Persistence MUST preserve raw `resource.defaults` include placeholders on read/write and MUST NOT inline included defaults objects into stored `metadata.yaml|json`.
+9. Repo-local resource metadata MUST be `metadata.yaml|json` sidecars next to `resource.<ext>`; repo-local collection metadata MUST be `/<collection>/_/metadata.yaml|json`. When both extensions exist, `metadata.yaml` MUST win on read. Persistence SHOULD write `metadata.yaml` by default and remove a superseded sibling sidecar after success.
+10. Mutation workflows (`get/set/unset/edit` plus defaults-artifact writes) MUST target: the explicit `metadata.baseDir` source when configured (even if a repository baseDir also exists); otherwise, when the active shared source is `metadata.bundle|bundleFile` and a repository baseDir exists, the repo-local overlay (leaving the bundle cache read-only); otherwise the repository-local tree.
+11. Changes to the persisted metadata wire shape or validation contract MUST update `schemas/metadata.schema.json` in the same change; that schema MUST describe the canonical nested structure and MUST NOT reintroduce legacy flat aliases.
+
+### Defaults (`resource.defaults`)
+12. Resolution MUST expand include-backed `resource.defaults.value` and `resource.defaults.profiles[*]` from selector-local deterministic files named `defaults.<ext>` or `defaults-<profile>.<ext>`, MUST support only `json|yaml|yml|properties`, and MUST require structured object payloads.
+13. `value` and each `profiles[*]` entry MUST accept either one inline structured object or one exact include placeholder; profile names MUST be filename-safe and deterministic because include filenames derive from the profile key.
+14. `mode` MUST support `inherit`, `ignore`, `replace`. `ignore` drops inherited baseline defaults and inherited selected profiles while keeping ancestor profile catalogs available for explicit local `useProfiles`. `replace` additionally drops ancestor profile catalogs.
+15. `useProfiles` MUST inherit when omitted, MUST clear when explicitly empty (`[]`), and selected profiles MUST apply in listed order before local `resource.defaults.value`.
+
+### Identity (`resource.id`, `resource.alias`)
+16. `resource.id` and `resource.alias` MUST be identity template strings, MUST NOT accept legacy identity fields, MUST accept raw JSON Pointer shorthand `/id` and one-level shorthand `{{id}}` as equivalent to `{{/id}}`, and MAY embed one or more RFC 6901 JSON Pointer expressions plus helpers `uppercase`, `lowercase`, `trim`, `substring`, `default`.
+17. When `resource.id` or `resource.alias` is omitted, identity resolution MUST default that field to `/id`.
+18. Identity rendering MUST fail with a typed validation error when a referenced pointer is missing unless a helper such as `default` handles it. Complex multi-pointer templates MUST support forward rendering but MUST NOT be reverse-mapped; reverse mapping is limited to single-pointer templates such as `{{/id}}`.
+
+### Format (`resource.format`)
+19. `resource.format` MAY define one concrete payload format or `any`. Concrete values MUST support `json`, `yaml`, `xml`, `hcl`, `ini`, `properties`, `text`, `octet-stream`; concrete values MAY drive default repository save suffix and request media defaults when no explicit descriptor/header wins. `format: any` MUST preserve mixed repository/request descriptors instead of coercing one collection to one format.
+20. When concrete `resource.format` resolves to a non-structured payload type, `resource.defaults`, `resource.id`, `resource.alias`, `resource.requiredAttributes`, `resource.secretAttributes`, and `resource.externalizedAttributes` MUST fail validation (they require structured traversal). `format: any` MUST defer that validation until a concrete descriptor is known.
+
+### Required attributes (declaration side)
+21. `resource.requiredAttributes` MUST be preserved through merge/render/serialization and MUST remain resource-scoped.
+22. Body-bearing mutation workflows MUST validate the structured source payload against the effective required-attribute set before operation-specific payload transforms run. The effective set MUST include every pointer referenced by explicitly configured `resource.alias`; non-create mutations MUST also include every pointer referenced by explicitly configured `resource.id`, even when `resource.requiredAttributes` omits them. Create MAY omit metadata-derived `resource.id` pointers unless explicitly declared by `resource.requiredAttributes` or operation validation.
+
+### Secret declaration side
+23. `resource.secret: true` MAY declare one whole-resource secret save/read contract for that scope, MUST remain distinct from attribute-scoped secret masking, and MUST be mutually exclusive with `resource.secretAttributes`. Secret lifecycle/masking semantics are owned by secrets.md.
+
+### Externalized attributes (`resource.externalizedAttributes`)
+24. Entries MUST default unspecified `template|mode|saveBehavior|renderBehavior|enabled` deterministically and MUST validate duplicate enabled `path` or `file` entries before persistence or workflow use.
+25. Enabled entries MUST treat `path` as one JSON Pointer traversal path, traversing object keys by token and arrays only through zero-based numeric tokens or `*` wildcard tokens; MUST reject empty paths/files and repository-escaping relative files; MUST externalize only text/string payload values (MVP scope); MUST leave disabled entries inert.
+26. When an enabled `path` uses one or more `*` wildcard array tokens, repository workflows MUST materialize concrete artifact file names deterministically by appending matched wildcard indices before the configured extension (for example `script.sh` -> `script-0.sh`), and placeholder rendering/expansion MUST use that concrete file path.
+27. Repository-backed payload workflows (`save`, `apply`, `create`, `update`, `diff`) MUST replace configured include placeholders with sidecar file contents before downstream payload transforms or identity resolution, only when the stored value matches the configured placeholder template exactly. A configured-but-missing sidecar file MUST fail with a typed validation error before remote HTTP execution.
+
+### Operations, paths, and templates
+28. `resource.remoteCollectionPath` templates MUST support indirection by resolving template fields from the handled logical path when payload attributes are absent. When omitted, the effective remote collection path MUST default to the handled logical collection path.
+29. Operation paths starting with `.` (for example `.` or `./{{/id}}`) MUST resolve relative to the rendered effective collection path. When an operation path is omitted, defaults MUST be `.` for `create` and `list`, and `./{{/id}}` for `get`, `update`, `delete`, `compare`.
+30. Template-rendered string fields MUST support canonical JSON Pointer placeholders `{{/id}}`, MUST accept one-level shorthand `{{id}}` as equivalent, MAY accept legacy dot notation `{{.id}}` for compatibility, and MUST support `{{payload_type .}}`, `{{payload_media_type .}}`, `{{payload_extension .}}`, which resolve from the active payload descriptor without forcing a media default when no concrete descriptor is available.
+31. Template scopes MUST expose `logicalCollectionPath` (handled logical collection path) and `remoteCollectionPath` (effective remote collection path), and MUST expose `contentType` as the active payload media type when the payload does not already define `contentType` (so media-aware templates work for raw text/octet-stream payloads).
+32. Metadata defaults MUST leave media header selection to payload-type-aware request building unless explicit metadata overrides are present.
+33. List-operation `transforms[*].jqExpression` MAY call `resource("<logical-path>")`; resolution MUST target the same active source as the primary list workflow and return normalized JSON payload.
+
+### Operation validation directives
+34. `validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef` MUST be preserved through merge/render/serialization and MUST remain operation-scoped.
+
+### Inference
+35. Inference SHOULD propose method/path defaults and SHOULD infer `resource.format` from managed-service payload formats (using `any` when more than one deterministic format is advertised), but MUST NOT overwrite explicit user metadata unless explicitly requested.
+36. Inference MUST accept selector paths with intermediary `_` segments and trailing collection markers (for example `/admin/realms/_/clients/`).
+37. Selector-path inference SHOULD use OpenAPI path templates to infer operation paths and identity templates; non-template-safe OpenAPI parameter names MUST fall back to deterministic placeholder names from fallback inference.
+38. Inference output SHOULD omit directives equal to deterministic fallback defaults.
+39. OpenAPI-backed inference SHOULD populate `operations.create/update.validate.schemaRef` as `openapi:request-body` when request-body schemas exist and MAY populate `validate.requiredAttributes` from deterministic schema `required` fields.
+40. Until recursive traversal is implemented, inference requests with `recursive=true` MUST return a typed validation error and MUST NOT persist metadata changes.
+
+### Descendant selectors (`selector.descendants`)
+41. `selector.descendants` MAY be persisted only on collection metadata, MUST default to disabled, and MUST opt a non-root matched collection selector into deeper descendant inheritance beyond its exact collection root and immediate resource items.
+42. Non-root collection metadata without `selector.descendants: true` MUST apply only to the matched collection root and its immediate resource items; the root selector `/` remains global.
+43. When multiple descendant-enabled collection selectors apply, render-time descendant scope MUST use the deepest matched collection root after normal source and specificity precedence.
+44. Descendant-enabled template scope MUST expose `descendantPath` and `descendantCollectionPath` as slash-prefixed suffixes from the matched collection root to the handled target path or target collection path, and MUST expose `""` when the handled target is exactly at that root.
+45. Descendant scope fields MUST remain render-only helpers and MUST NOT be merged into payload mutation input, required-attribute validation input, or effective resolved metadata snapshots returned by `ResolveForPath`.
 
 ## Data Contracts
-Supported metadata groups:
-1. `selector`: persisted collection-selector directives (`descendants`) that control deep inheritance eligibility but do not merge into resolved metadata.
+Metadata groups (beyond interfaces.md):
+1. `selector`: persisted collection-selector directives (`descendants`) that gate deep inheritance but do not merge into resolved metadata.
 2. `resource`: identity, required-attribute, format, defaults, whole-resource-secret, secret-attribute, and collection directives.
-3. `resource.defaults`: defaults layering directives (`mode`, `useProfiles`, `value`, `profiles`), where `value` and `profiles[*]` accept one inline object or one deterministic include placeholder.
-4. `resource.externalizedAttributes[*]`: sidecar payload directives (`path`, `file`, optional `template|mode|saveBehavior|renderBehavior|enabled`), where `path` is one JSON Pointer string and arrays use numeric or `*` wildcard tokens.
-5. `operations.create/update/delete/get/compare/list`: operation-specific directives.
-6. `operations.defaults.transforms`: shared ordered transform pipeline applied before operation-specific pipelines.
-7. Operation wire fields: `path`, `method`, `query`, `headers`, `body` (including media headers such as `Accept` and `Content-Type` as `headers` entries).
-8. Transform wire fields: `transforms[*].selectAttributes`, `transforms[*].excludeAttributes`, `transforms[*].jqExpression`.
-9. Operation validation wire fields: `validate.requiredAttributes`, `validate.assertions[*].message`, `validate.assertions[*].jq`, `validate.schemaRef`.
-10. Resource-level attribute requirement fields: `requiredAttributes`.
-11. Resource-level secret detection fields: `secret`, `secretAttributes`.
+3. `resource.defaults`: `mode`, `useProfiles`, `value`, `profiles`; `value` and `profiles[*]` accept one inline object or one deterministic include placeholder.
+4. `resource.externalizedAttributes[*]`: `path` (one JSON Pointer; arrays use numeric or `*` tokens), `file`, optional `template|mode|saveBehavior|renderBehavior|enabled`.
+5. `operations.create/update/delete/get/compare/list`: operation-specific directives. `operations.defaults.transforms`: shared ordered pipeline applied before operation-specific pipelines.
+6. Operation wire fields: `path`, `method`, `query`, `headers`, `body` (media headers `Accept`/`Content-Type` are `headers` entries).
+7. Transform wire fields: `selectAttributes`, `excludeAttributes`, `jqExpression`.
+8. Operation validation wire fields: `validate.requiredAttributes`, `validate.assertions[*].{message,jq}`, `validate.schemaRef`.
+9. Resource-level fields: `requiredAttributes`, `secret`, `secretAttributes`.
 
-Operation selector contract:
-1. API boundaries MUST use typed `metadata.Operation` values.
-2. Allowed operation values are `get`, `create`, `update`, `delete`, `list`, and `compare`.
+Operation selector: API boundaries MUST use typed `metadata.Operation`; allowed values are `get`, `create`, `update`, `delete`, `list`, `compare`.
 
-Infer options contract:
-1. `apply`: whether inferred directives are persisted.
-2. `recursive`: reserved for future traversal support; current behavior MUST reject `true` with a validation error.
+Infer options: `apply` (whether inferred directives persist); `recursive` (reserved — current behavior MUST reject `true`).
 
-Template context contract:
-1. Current resource payload fields.
-2. Ancestor resource payload fields.
-3. Context attributes: logical path, logical collection path, effective remote collection path, alias, remote ID.
-4. Relative references allowed with `../` traversal semantics bound to ancestor levels.
-5. Canonical JSON Pointer placeholders such as `{{/id}}`, one-level shorthand such as `{{id}}`, and helper functions `payload_type`, `payload_media_type`, and `payload_extension` with root-scope call form `{{... .}}`.
-6. Descendant-enabled collection selectors add `descendantPath` and `descendantCollectionPath` as render-only helpers derived from the deepest matched collection root.
-7. Compatibility alias `contentType` populated from the active payload media type when the payload map does not already define `contentType`.
+Template context: current and ancestor payload fields; context attributes (logical path, logical collection path, effective remote collection path, alias, remote ID); `../` ancestor traversal; placeholder/helper forms per rules 30-31; descendant helpers per rule 44; `contentType` alias per rule 31.
 
 ## Layering Algorithm
 1. Start with engine defaults.
 2. Collect matching collection metadata candidates from root to target collection.
 3. Apply root selector `/` globally.
 4. For each depth, apply wildcard then literal candidate in stable order.
-5. Non-root collection selectors apply only at their matched collection root and immediate resource items unless `selector.descendants` is enabled.
+5. Non-root collection selectors apply only at their matched root and immediate resource items unless `selector.descendants` is enabled.
 6. Apply target resource metadata last.
-7. Normalize merged result and validate required fields for requested operation.
+7. Normalize merged result and validate required fields for the requested operation.
 
 ## Failure Modes
 1. Missing required operation path after all layers resolve.
-2. Invalid template variables or unresolved relative references.
-3. Transform expressions that produce invalid payload shapes.
+2. Invalid/unresolvable template variables or relative references exceeding ancestor depth.
+3. Transform expressions producing invalid payload shapes.
 4. Conflicting metadata causing ambiguous identity resolution.
+5. Externalized-attribute `file` paths containing `../`, or duplicate enabled `file`/`path` entries, fail validation deterministically before repository IO.
+6. Identity templates referencing a missing pointer without a `default` helper (rule 18).
 
 ## Edge Cases
-1. Wildcard metadata matches multiple nested collections with partial overrides.
-2. Relative template references exceed available ancestor depth.
-3. Compare suppression removes all fields and yields empty normalized payload.
-4. Explicit null directive intended to clear inherited field.
-5. `secretAttributes` points to missing payload fields and SHOULD not fail metadata resolution.
-6. Metadata update writes from CLI commands remove nil keys while keeping explicit empty arrays/maps, default to `metadata.yaml`, and still read legacy `metadata.json` sidecars.
-7. Selector-path inference without OpenAPI data still returns deterministic fallback metadata hints.
-8. Remote-collection-path indirection uses selector/logical-path-derived attributes (for example `{{/realm}}`) even when the payload omits those attributes, and plural logical collection segments (for example `/projects/<project>/...`) remain available as fallback template fields when payload attributes are absent.
-9. `resource("<logical-path>")` lookups used by list `jq` can resolve parent resources through metadata-aware alias/id fallback and then filter candidates deterministically by referenced fields.
-10. Invalid metadata template helper usage (for example `{{payload_type "yaml"}}`) returns a typed validation error.
-11. Raw octet-stream or text payloads can still render templates that read `contentType`; when the payload is not a map object, that alias resolves from the active payload descriptor instead of failing on a missing key.
-12. `resource.format: octet-stream` disables structured payload transforms and validation rules for that scope.
-13. `resource.format: text` or `resource.format: octet-stream` can still use `resource.secret: true`, but `resource.secretAttributes`, identity templates, and externalized attributes fail validation for that scope.
-14. Externalized-attribute file paths containing `../` or duplicate enabled `file`/`path` entries fail metadata validation deterministically before repository IO.
-15. Wildcard array externalization can skip elements that do not contain the targeted attribute while still materializing indexed sidecars for matching siblings only.
-16. Repository payloads MAY keep inline values for configured externalized attributes; expansion only occurs when the stored value matches the configured placeholder string exactly.
-17. Identity-template rendering MUST fail with a typed validation error when a referenced JSON Pointer is missing unless a helper such as `default` handles that case explicitly.
-18. Complex identity templates (for example `{{/name}}-{{/version}}`) MUST support forward rendering but MUST NOT be reverse-mapped into payload fields; reverse mapping is limited to simple single-pointer templates such as `{{/id}}`.
-19. Metadata string-template rendering MUST treat one-level shorthand placeholders such as `{{id}}` as equivalent to canonical JSON Pointer placeholders such as `{{/id}}`.
-20. Machine-readable schema maintenance remains nested-only: adding or changing a persisted metadata field (for example `resource.format`) requires a matching `schemas/metadata.schema.json` update without reintroducing flat legacy aliases.
-21. Structured create payloads MAY omit metadata-derived `resource.id` values when the remote server assigns IDs, but non-create mutations still require those `resource.id` pointers unless explicit validation rules provide them another way.
-22. `resource.defaults.useProfiles: []` MUST clear inherited profile selection while leaving inherited baseline defaults intact when `mode` remains `inherit`.
-23. `resource.defaults.mode: ignore` can still select ancestor-defined profiles explicitly, while `mode: replace` cannot because ancestor profile catalogs are removed from resolution.
-24. Nested descendant paths under a descendant-enabled collection selector MUST keep plural path-field inference anchored to the matched collection root so logical suffix folders do not create bogus fields such as `secret=path`.
+1. `secretAttributes` pointing to missing payload fields SHOULD NOT fail metadata resolution.
+2. Explicit null directive clears an inherited field; compare suppression removing all fields yields an empty normalized payload.
+3. Selector-path inference without OpenAPI data still returns deterministic fallback hints, anchored to the matched collection root so logical suffix folders under a descendant-enabled selector do not create bogus fields (for example `secret=path`).
+4. `resource("<logical-path>")` list-jq lookups resolve parent resources through metadata-aware alias/id fallback, then filter candidates deterministically by referenced fields.
+5. Wildcard array externalization skips elements lacking the targeted attribute while still materializing indexed sidecars for matching siblings only.
+6. Repository payloads MAY keep inline values for configured externalized attributes; expansion occurs only when the stored value matches the configured placeholder string exactly.
+7. `format: octet-stream` disables structured payload transforms and validation for that scope; `text`/`octet-stream` MAY use `resource.secret: true` but reject `resource.secretAttributes`, identity templates, and externalized attributes.
+8. Invalid helper usage (for example `{{payload_type "yaml"}}`) returns a typed validation error.
 
 ## Examples
-1. `/customers/_` defines `operations.get.path: /api/customers/{{/id}}`; `/customers/acme/metadata` overrides only `operations.get.headers`.
-2. `operations.compare.transforms: [{excludeAttributes:["/updatedAt","/version"]}]` excludes those fields from diff output.
-3. `operations.list.path` inferred from OpenAPI, then manually overridden with custom query defaults.
-4. Inference for `/admin/realms/_/clients/` can propose `resource.id: {{/id}}`, `resource.alias: {{/clientId}}`, and templated operation paths from OpenAPI selectors.
-5. For selector `/admin/realms/_/user-registry` with `resource.remoteCollectionPath: /admin/realms/{{/realm}}/components` and `operations.get.path: ./{{/id}}`, rendering `/admin/realms/platform/user-registry` with `id=123456` resolves to `/admin/realms/platform/components/123456`.
-6. For selector `/projects/_/jobs/_`, omitting `resource.remoteCollectionPath` would default remote collection access to `/projects/{{/project}}/jobs`; when the managed-service collection is actually `/project/{{/project}}/jobs`, metadata MUST set `resource.remoteCollectionPath` to that remote value while `project` still resolves from the logical collection path.
-7. For selector `/admin/realms/_/user-registry/_/mappers/`, `operations.list.transforms: [{jqExpression:"..."}]` MAY use `resource("/admin/realms/{{/realm}}/user-registry/{{/provider}}/")` and compare mapper `parentId` with the resolved parent `.id`.
-8. `resource metadata infer /admin/realms/ --recursive` MUST fail with a validation error and MUST NOT write metadata files until recursive traversal is implemented.
-9. `resource metadata get` preserves payload-aware helper tokens in metadata string fields (for example `{{payload_media_type .}}`) while preserving unrelated templates such as `{{/id}}`; `resource get --show-metadata` renders those helper tokens against the active payload descriptor.
-10. `operations.create.validate.requiredAttributes: ["/realm"]` is satisfied for `/admin/realms/platform/...` when `realm` is derived from the logical path template context.
-11. OpenAPI inference for an endpoint with `application/octet-stream` request or response media infers `resource.format: octet-stream` when explicit metadata is absent.
-12. `/customers/_/metadata.yaml` can declare `resource.defaults.value: "{{include defaults.yaml}}"` plus `resource.defaults.profiles.prod: "{{include defaults-prod.yaml}}"`, and metadata resolution expands those files into structured objects before repository/orchestrator workflows merge them with `resource.yaml`.
-13. Child metadata with `resource.defaults.useProfiles: []` clears inherited profile selection while still inheriting the baseline defaults object.
-14. Child metadata with `resource.defaults.mode: ignore` can select one ancestor profile explicitly, while `mode: replace` must redefine any needed profile locally.
-15. `resource.externalizedAttributes: [{path:"/script", file:"script.sh"}]` plus `resource.yaml script: "{{include script.sh}}"` stores script content in a sibling `script.sh` file and expands that file back into the effective payload for apply/diff.
-16. `resource.externalizedAttributes: [{path:"/sequence/commands/*/script", file:"script.sh"}]` plus a payload with script commands stores placeholders such as `{{include script-0.sh}}` and `{{include script-2.sh}}` for the matching array elements only.
-17. When `resource.yaml` contains `script: "{{include script.sh}}"` but `script.sh` is absent, repository-backed mutation workflows fail with a typed validation error before remote HTTP execution.
-18. `resource.format: text` plus `resource.secret: true` is valid for a whole-file secret, while `resource.secretAttributes: ["/password"]` at that same scope fails validation because text payloads are not structured.
-19. Rundeck-style metadata can render `{{index . "contentType"}}` for a raw `resource.key` payload because the template scope injects `contentType: application/octet-stream` from the active descriptor.
-20. `resource.requiredAttributes: ["/realm"]` plus `resource.alias: "{{/clientId}}"` still requires `/clientId` in a structured mutation payload even when `operations.update.transforms` later excludes `/clientId` from the transmitted body.
-21. `operations.get.path: /api/customers/{{id}}` is valid shorthand for `/api/customers/{{/id}}`, but docs and inferred output SHOULD prefer the canonical `{{/id}}` form.
-22. `resource.format: any` on `/customers/_` allows `/customers/acme/resource.yaml` and `/customers/beta/resource.json` to coexist, and collection save workflows MUST not coerce both children to one repository format.
-23. `resource.id: "{{/id}}"`, `resource.alias: "{{/clientId}}"`, and `resource.requiredAttributes: ["/realm"]` allow a structured create payload with `/realm` and `/clientId` only when the server assigns `/id`, while update for that same scope still requires `/id` unless operation validation already declares a different source.
-24. For selector `/projects/_/secrets/_` with `selector.descendants: true`, `resource.remoteCollectionPath: /storage/keys/project/{{/project}}{{/descendantCollectionPath}}`, and `operations.get.path: ./{{/id}}`, rendering `/projects/platform/secrets/path/to/db-password` resolves to `/storage/keys/project/platform/path/to/db-password` while `operations.list.path: .` on `/projects/platform/secrets/path/to` resolves to `/storage/keys/project/platform/path/to`.
+1. `/customers/_` defines `operations.get.path: /api/customers/{{/id}}`; `/customers/acme/metadata` overrides only `operations.get.headers`. Compare suppression: `operations.compare.transforms: [{excludeAttributes:["/updatedAt","/version"]}]`.
+2. Inference for `/admin/realms/_/clients/` proposes `resource.id: {{/id}}`, `resource.alias: {{/clientId}}`, and templated operation paths from OpenAPI selectors. `--recursive` MUST fail with a validation error and write nothing.
+3. Selector `/admin/realms/_/user-registry` with `resource.remoteCollectionPath: /admin/realms/{{/realm}}/components` and `operations.get.path: ./{{/id}}`: rendering `/admin/realms/platform/user-registry` with `id=123456` resolves to `/admin/realms/platform/components/123456`.
+4. Selector `/projects/_/jobs/_`: omitting `resource.remoteCollectionPath` defaults remote access to `/projects/{{/project}}/jobs`; if the remote is `/project/{{/project}}/jobs`, metadata MUST set `resource.remoteCollectionPath` to that value while `project` still resolves from the logical collection path.
+5. Selector `/admin/realms/_/user-registry/_/mappers/`: `operations.list.transforms: [{jqExpression:"..."}]` MAY call `resource("/admin/realms/{{/realm}}/user-registry/{{/provider}}/")` and compare mapper `parentId` with resolved parent `.id`.
+6. Selector `/projects/_/secrets/_` with `selector.descendants: true`, `resource.remoteCollectionPath: /storage/keys/project/{{/project}}{{/descendantCollectionPath}}`, `operations.get.path: ./{{/id}}`: rendering `/projects/platform/secrets/path/to/db-password` resolves to `/storage/keys/project/platform/path/to/db-password`; `operations.list.path: .` on `/projects/platform/secrets/path/to` resolves to `/storage/keys/project/platform/path/to`.
+7. `/customers/_/metadata.yaml` declares `resource.defaults.value: "{{include defaults.yaml}}"` plus `resource.defaults.profiles.prod: "{{include defaults-prod.yaml}}"`; resolution expands those files into structured objects before merge with `resource.yaml`. Child `useProfiles: []` clears inherited profile selection while keeping the inherited baseline. Child `mode: ignore` MAY select one ancestor profile explicitly; `mode: replace` must redefine any needed profile locally.
+8. `resource.externalizedAttributes: [{path:"/script", file:"script.sh"}]` plus `script: "{{include script.sh}}"` stores content in sibling `script.sh` and expands it back for apply/diff; a missing `script.sh` fails with a typed validation error before remote HTTP. Wildcard `path:"/sequence/commands/*/script"` stores `{{include script-0.sh}}`, `{{include script-2.sh}}` for matching elements only.
+9. `resource.format: text` plus `resource.secret: true` is valid (whole-file secret); `resource.secretAttributes: ["/password"]` at that scope fails validation. `format: any` on `/customers/_` lets `/customers/acme/resource.yaml` and `/customers/beta/resource.json` coexist without coercion.
+10. `resource.id: "{{/id}}"`, `resource.alias: "{{/clientId}}"`, `resource.requiredAttributes: ["/realm"]`: create with `/realm` and `/clientId` succeeds when the server assigns `/id`, but update still requires `/id` unless operation validation provides another source. The alias pointer `/clientId` stays required even when `operations.update.transforms` later excludes it from the transmitted body.
+11. `operations.get.path: /api/customers/{{id}}` is valid shorthand for `{{/id}}`; docs and inferred output SHOULD prefer canonical `{{/id}}`. `resource metadata get` preserves helper tokens (for example `{{payload_media_type .}}`); `resource get --show-metadata` renders them against the active payload descriptor.
+12. Raw `resource.key` payload renders `{{index . "contentType"}}` because the scope injects `contentType: application/octet-stream` from the active descriptor. OpenAPI inference for `application/octet-stream` media infers `resource.format: octet-stream` when explicit metadata is absent. `operations.create.validate.requiredAttributes: ["/realm"]` is satisfied for `/admin/realms/platform/...` when `realm` derives from the logical path template context.
