@@ -21,7 +21,7 @@ Run all `git` commands with `-C <repo-root>` (the git repo is the `declarest/` d
 
 ## 2. Implement and commit
 1. Make the code changes inside the worktree only.
-2. Commit in small, logical units. Subject line MUST follow `agents/reference/commit-instructions.md`: one line, `<type>(<scope>): <description>`, ≤72 chars. Append the `Co-Authored-By` trailer required by the environment; add no other body.
+2. Commit in small, logical units. The message MUST follow `agents/reference/commit-instructions.md`: a single subject line, `<type>(<scope>): <description>`, ≤72 chars, with no body and no trailers.
    `git -C "$WT/<branch>" add -A && git -C "$WT/<branch>" commit -m "<type>(<scope>): <description>"`
 3. Keep secrets out of commits; scan the diff before committing.
 
