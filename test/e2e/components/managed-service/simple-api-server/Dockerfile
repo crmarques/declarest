@@ -1,4 +1,4 @@
-FROM docker.io/library/python:3.15.0a8-alpine3.22
+FROM docker.io/library/python:3.15.0b2-alpine3.22
 
 WORKDIR /app
 COPY app/server.py /app/server.py

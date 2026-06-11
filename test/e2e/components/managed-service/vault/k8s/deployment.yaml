@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: vault
-          image: docker.io/hashicorp/vault:2.0.0
+          image: docker.io/hashicorp/vault:2.0.2
           securityContext:
             capabilities:
               add:
