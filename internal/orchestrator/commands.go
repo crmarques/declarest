@@ -92,23 +92,40 @@ func (r *Orchestrator) ApplyWithContent(
 	return r.applyDesiredState(ctx, logicalPath, content, policy)
 }
 
+// prepareResourceForRemote resolves a logical path into a remote-ready resource:
+// it builds the resource info and metadata, then resolves the payload for remote
+// transmission (secret and descriptor directive resolution). Apply, Create, and
+// Update share this prelude.
+func (r *Orchestrator) prepareResourceForRemote(
+	ctx context.Context,
+	logicalPath string,
+	content resource.Content,
+) (resource.Resource, metadata.ResourceMetadata, error) {
+	resolvedResource, resourceMd, err := r.buildResourceInfo(ctx, logicalPath, content)
+	if err != nil {
+		return resource.Resource{}, metadata.ResourceMetadata{}, err
+	}
+
+	resolvedPayload, err := r.resolvePayloadForRemote(ctx, resolvedResource.LogicalPath, contentFromResource(resolvedResource))
+	if err != nil {
+		return resource.Resource{}, metadata.ResourceMetadata{}, err
+	}
+	resolvedResource.Payload = resolvedPayload.Value
+	resolvedResource.PayloadDescriptor = resolvedPayload.Descriptor
+
+	return resolvedResource, resourceMd, nil
+}
+
 func (r *Orchestrator) applyDesiredState(
 	ctx context.Context,
 	logicalPath string,
 	content resource.Content,
 	policy orchestrator.ApplyPolicy,
 ) (resource.Resource, error) {
-	resolvedResource, resourceMd, err := r.buildResourceInfo(ctx, logicalPath, content)
+	resolvedResource, resourceMd, err := r.prepareResourceForRemote(ctx, logicalPath, content)
 	if err != nil {
 		return resource.Resource{}, err
 	}
-
-	resolvedPayload, err := r.resolvePayloadForRemote(ctx, resolvedResource.LogicalPath, contentFromResource(resolvedResource))
-	if err != nil {
-		return resource.Resource{}, err
-	}
-	resolvedResource.Payload = resolvedPayload.Value
-	resolvedResource.PayloadDescriptor = resolvedPayload.Descriptor
 
 	if policy.Conflict != nil {
 		check := orchestrator.ConflictCheck{
@@ -166,33 +183,19 @@ func (r *Orchestrator) applyDesiredState(
 }
 
 func (r *Orchestrator) Create(ctx context.Context, logicalPath string, content resource.Content) (resource.Resource, error) {
-	resolvedResource, resourceMd, err := r.buildResourceInfo(ctx, logicalPath, content)
+	resolvedResource, resourceMd, err := r.prepareResourceForRemote(ctx, logicalPath, content)
 	if err != nil {
 		return resource.Resource{}, err
 	}
-
-	resolvedPayload, err := r.resolvePayloadForRemote(ctx, resolvedResource.LogicalPath, contentFromResource(resolvedResource))
-	if err != nil {
-		return resource.Resource{}, err
-	}
-	resolvedResource.Payload = resolvedPayload.Value
-	resolvedResource.PayloadDescriptor = resolvedPayload.Descriptor
 
 	return r.executeRemoteMutation(ctx, resolvedResource, resourceMd, metadata.OperationCreate)
 }
 
 func (r *Orchestrator) Update(ctx context.Context, logicalPath string, content resource.Content) (resource.Resource, error) {
-	resolvedResource, resourceMd, err := r.buildResourceInfo(ctx, logicalPath, content)
+	resolvedResource, resourceMd, err := r.prepareResourceForRemote(ctx, logicalPath, content)
 	if err != nil {
 		return resource.Resource{}, err
 	}
-
-	resolvedPayload, err := r.resolvePayloadForRemote(ctx, resolvedResource.LogicalPath, contentFromResource(resolvedResource))
-	if err != nil {
-		return resource.Resource{}, err
-	}
-	resolvedResource.Payload = resolvedPayload.Value
-	resolvedResource.PayloadDescriptor = resolvedPayload.Descriptor
 
 	return r.executeRemoteMutation(ctx, resolvedResource, resourceMd, metadata.OperationUpdate)
 }
