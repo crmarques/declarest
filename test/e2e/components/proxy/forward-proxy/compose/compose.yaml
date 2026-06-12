@@ -1,6 +1,6 @@
 services:
   forward-proxy:
-    image: docker.io/library/python:3.14.5-alpine3.22
+    image: docker.io/library/python:3.15.0b2-alpine3.22
     network_mode: host
     command:
       - python
